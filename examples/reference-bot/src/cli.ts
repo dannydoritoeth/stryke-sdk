@@ -136,7 +136,12 @@ const runLiveGate = async () => {
   };
   const result = liveAction === "buy"
     ? await runReviewedLiveBuy(liveInput)
-    : await runReviewedTerminalAction(liveInput);
+    : await runReviewedTerminalAction({
+        ...liveInput,
+        ...(process.env.STRYKE_TERMINAL_POSITION_ID
+          ? { positionId: process.env.STRYKE_TERMINAL_POSITION_ID }
+          : {}),
+      });
   const execution = result as {
     clientActionId?: string;
     signature?: string;

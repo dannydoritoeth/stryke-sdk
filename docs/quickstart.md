@@ -118,6 +118,7 @@ path and the same wallet-local signer:
 
 ```bash
 STRYKE_LIVE_ACTION=terminal \
+STRYKE_TERMINAL_POSITION_ID='<tokenMint>:pyth_oracle:<collateralMint>:five_minute:<expiryTs>:<targetValue>' \
 STRYKE_CHECKPOINT_PATH=.stryke/reference-bot-terminal.json \
 npm run start:live -w @stryke/reference-bot
 ```

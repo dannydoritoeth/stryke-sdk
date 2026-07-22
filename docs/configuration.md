@@ -24,6 +24,8 @@ the invited `STRYKE_API_BASE_URL` and devnet `STRYKE_SOLANA_RPC_URL`.
 `STRYKE_CHECKPOINT_PATH` defaults to `.stryke/reference-bot-action.json`.
 `STRYKE_LIVE_ACTION` defaults to `buy`; set it to `terminal` after settlement
 to execute the first authoritative claimable or refundable position.
+Set `STRYKE_TERMINAL_POSITION_ID` to the SDK `positionId` when the wallet has
+more than one actionable position.
 
 Signer custody stays inside the supplied wallet module, whose default export is
 an `@solana/kit` `TransactionSigner`. Seed phrases, private keys, secret keys,

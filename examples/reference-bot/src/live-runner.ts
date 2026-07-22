@@ -154,7 +154,10 @@ export const runReviewedTerminalAction = async ({
   signer,
   checkpointPath,
   clientActionId = `pilot-${crypto.randomUUID()}`,
-}: Pick<LiveBuyInput, "client" | "rpc" | "signer" | "checkpointPath" | "clientActionId">) => {
+  positionId,
+}: Pick<LiveBuyInput, "client" | "rpc" | "signer" | "checkpointPath" | "clientActionId"> & {
+  positionId?: string;
+}) => {
   const positions = new PositionsClient(client);
   const transactions = new TransactionsClient(client, rpc);
   const checkpoint = new FileActionCheckpointStore(checkpointPath);
@@ -170,6 +173,7 @@ export const runReviewedTerminalAction = async ({
   if (await checkpoint.load()) return executor.resume();
 
   const position = (await positions.list(signer.address)).find((candidate) => {
+    if (positionId && candidate.positionId !== positionId) return false;
     try {
       terminalActionFor(candidate);
       return true;
