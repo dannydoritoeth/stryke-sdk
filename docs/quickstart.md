@@ -112,3 +112,12 @@ remote signers can instead implement the same `TransactionSigner` boundary.
 
 If an action becomes `submitted` or `unknown`, stop and reconcile it. Never
 create a new action ID merely because confirmation is slow.
+
+After the position becomes claimable or refundable, use a fresh checkpoint
+path and the same wallet-local signer:
+
+```bash
+STRYKE_LIVE_ACTION=terminal \
+STRYKE_CHECKPOINT_PATH=.stryke/reference-bot-terminal.json \
+npm run start:live -w @stryke/reference-bot
+```

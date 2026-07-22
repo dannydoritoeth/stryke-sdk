@@ -5,8 +5,11 @@ import {
   QuotesClient,
   ReviewedTransactionExecutor,
   SolanaReviewedExecutionAdapter,
+  StrykeSdkError,
   TransactionsClient,
   createPilotIntentHash,
+  createTerminalIntentHash,
+  terminalActionFor,
   type LatestBlockhashRpc,
   type PilotAsset,
   type PilotExpiryFamily,
@@ -143,4 +146,53 @@ export const runReviewedLiveBuy = async ({
     maximumSlippageBps,
     clientActionId,
   });
+};
+
+export const runReviewedTerminalAction = async ({
+  client,
+  rpc,
+  signer,
+  checkpointPath,
+  clientActionId = `pilot-${crypto.randomUUID()}`,
+}: Pick<LiveBuyInput, "client" | "rpc" | "signer" | "checkpointPath" | "clientActionId">) => {
+  const positions = new PositionsClient(client);
+  const transactions = new TransactionsClient(client, rpc);
+  const checkpoint = new FileActionCheckpointStore(checkpointPath);
+  const adapter = new SolanaReviewedExecutionAdapter({
+    rpc,
+    signer,
+    refresh: async ({ clientActionId: actionId }) => ({
+      action: await transactions.reconcile(actionId),
+      positions: await positions.list(signer.address),
+    }),
+  });
+  const executor = new ReviewedTransactionExecutor(transactions, checkpoint, adapter);
+  if (await checkpoint.load()) return executor.resume();
+
+  const position = (await positions.list(signer.address)).find((candidate) => {
+    try {
+      terminalActionFor(candidate);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  if (!position) {
+    throw new StrykeSdkError("position_state", "No claimable or refundable pilot position was found");
+  }
+  const action = terminalActionFor(position);
+  const intentHash = await createTerminalIntentHash({
+    clientActionId,
+    owner: signer.address,
+    market: position.market as Record<string, unknown>,
+    action,
+  });
+  const prepared = await transactions.prepareTerminal({
+    owner: signer.address,
+    position,
+    action,
+    clientActionId,
+    intentHash,
+  });
+  return executor.execute(prepared);
 };

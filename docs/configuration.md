@@ -22,6 +22,8 @@ The CLI maps `STRYKE_READ_ONLY_MODE`, `STRYKE_LIVE_TRADING_ENABLED`,
 Boolean values must be exactly `true` or `false`. Live execution also requires
 the invited `STRYKE_API_BASE_URL` and devnet `STRYKE_SOLANA_RPC_URL`.
 `STRYKE_CHECKPOINT_PATH` defaults to `.stryke/reference-bot-action.json`.
+`STRYKE_LIVE_ACTION` defaults to `buy`; set it to `terminal` after settlement
+to execute the first authoritative claimable or refundable position.
 
 Signer custody stays inside the supplied wallet module, whose default export is
 an `@solana/kit` `TransactionSigner`. Seed phrases, private keys, secret keys,

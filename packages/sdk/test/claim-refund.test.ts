@@ -44,6 +44,7 @@ const prepareTerminal = async (
       contractProfile: "minimal_pyth",
       cluster: "devnet",
     },
+    metadata: { environment: { solanaCluster: "devnet" } },
   };
   const client = {
     capabilities: { contract: { programId: SUPPORTED_PROGRAM_ID } },

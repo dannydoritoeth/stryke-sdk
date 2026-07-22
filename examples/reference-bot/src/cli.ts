@@ -17,7 +17,7 @@ import { decideEntry } from "./entry.js";
 import { emitDecision } from "./logging.js";
 import { estimateFairProbability } from "./strategy.js";
 import { loadWalletForLiveTrading } from "./wallet.js";
-import { runReviewedLiveBuy } from "./live-runner.js";
+import { runReviewedLiveBuy, runReviewedTerminalAction } from "./live-runner.js";
 
 const compatibility = {
   sdkVersion: SDK_VERSION,
@@ -124,12 +124,19 @@ const runLiveGate = async () => {
     throw new StrykeSdkError("configuration", "Live trading requires API and Solana RPC URLs");
   }
   const client = await StrykeClient.connect({ apiBaseUrl });
-  const result = await runReviewedLiveBuy({
+  const liveAction = process.env.STRYKE_LIVE_ACTION ?? "buy";
+  if (liveAction !== "buy" && liveAction !== "terminal") {
+    throw new StrykeSdkError("configuration", "STRYKE_LIVE_ACTION must be buy or terminal");
+  }
+  const liveInput = {
     client,
     rpc: createSolanaRpc(rpcUrl),
     signer,
     checkpointPath: process.env.STRYKE_CHECKPOINT_PATH ?? ".stryke/reference-bot-action.json",
-  });
+  };
+  const result = liveAction === "buy"
+    ? await runReviewedLiveBuy(liveInput)
+    : await runReviewedTerminalAction(liveInput);
   const execution = result as {
     clientActionId?: string;
     signature?: string;
@@ -138,6 +145,7 @@ const runLiveGate = async () => {
   };
   console.log(JSON.stringify({
     event: "live_action_complete",
+    action: liveAction,
     ...compatibility,
     clientActionId: execution.clientActionId,
     signature: execution.signature,
