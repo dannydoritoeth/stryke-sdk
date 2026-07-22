@@ -24,3 +24,7 @@ raw payloads.
 Market and position lifecycle evidence uses
 `stryke.pilotLifecycle.v1`. Normalized state is always accompanied by the raw
 status, raw reason, observation timestamp, and optional observed slot.
+
+See the workspace [quickstart](../../docs/quickstart.md) and
+[typed-error recovery guide](../../docs/troubleshooting.md) for recovery
+preconditions and the deliberately gated reference flow.

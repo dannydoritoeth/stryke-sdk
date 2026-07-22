@@ -1,10 +1,51 @@
 # Market Mechanics
 
-Stryke pilot markets ask whether BTC or SOL finishes strictly above an on-chain
-strike. Equality resolves NO. Market state and resolution are authoritative
-only when returned by Stryke; a locally observed Pyth price is an estimator
-input, not proof of settlement.
+## Exact market and time
 
-Executable buy and sell quotes can change before transaction confirmation.
-Clients must respect quote expiry, market-state version, minimum output, and
-recent-blockhash validity.
+A market identity includes asset/token mint, source, collateral mint, expiry
+family, expiry timestamp, and the on-chain `target_value` exposed by the SDK as
+`strikePrice`. The strike is not assumed to be a period opening price.
+
+Solana Clock is authoritative for instruction timing. Local wall time is only a
+scheduling aid. Trading closes at `expiry_ts`; one-minute automation needs an
+extra drift margin and remains experimentally labelled.
+
+## Pyth and resolution
+
+Pyth supplies the estimator's configured BTC/USD or SOL/USD current price and
+bounded history. Missing, stale, wrong-feed, or unverified data blocks the bot;
+there is no fallback source. A locally observed Pyth price never marks a Stryke
+market or position resolved.
+
+Settlement uses the first verified update crossing expiry:
+`prev_publish_time < expiry_ts <= publish_time`, no later than
+`expiry_ts + 300`. Feed identity and verification must match. YES wins only when
+the normalized resolved value is strictly greater than the strike. Equality
+resolves NO.
+
+## Quotes and reviewed transactions
+
+An executable quote is bound to one exact market, action, side, amount, quote
+ID, expiry, market-state version/slot, fee, price impact, and minimum output.
+Quote state is not guaranteed through confirmation. Before signing, refresh if
+the quote expired or market-state version changed. Before signing and again
+before submission, reject an expired recent blockhash/last-valid-block-height.
+Minimum output is the on-chain slippage boundary, not an estimate to discard.
+
+A signature is evidence of submission, not confirmation. Only confirmed,
+refreshed activity and position evidence completes the action.
+
+## Positions, claims, refunds, and restart
+
+The SDK preserves authoritative normalized state together with the raw API
+state/reason, observation time, and slot. Claim only a `claimable` winning
+position. Refund only an API-authored `refundable` underfunded or zero-winner
+position. Losing, unresolved, claimed, refunded, sold, or deadline-expired
+positions are not actionable. The SDK never invents a failed-resolution refund.
+
+The atomic action checkpoint contains only `clientActionId`, intent hash,
+reconciliation state, and signature when known. On restart, reconcile before
+retrying. `submitted` and `unknown` block duplicate trades and terminal actions;
+they are never permission to retry. Authoritative `failed` or `expired` evidence
+can close the checkpoint, while `confirmed` requires refreshed activity and
+position state.
