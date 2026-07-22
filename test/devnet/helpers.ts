@@ -5,26 +5,33 @@ export const matrixEvidence = evidence;
 
 const rpcUrl = process.env.STRYKE_DEVNET_RPC_URL ?? "https://api.devnet.solana.com";
 
+export const devnetRpc = async <T>(method: string, params: unknown[] = []): Promise<T> => {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const response = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    });
+    if (response.status === 429 && attempt < 5) {
+      await new Promise((resolve) => setTimeout(resolve, (attempt + 1) * 1_000));
+      continue;
+    }
+    if (!response.ok) throw new Error(`Devnet RPC status ${response.status}`);
+    const body = (await response.json()) as { error?: unknown; result?: T };
+    if (body.error || body.result === undefined) throw new Error("Devnet RPC request failed");
+    return body.result;
+  }
+  throw new Error("Devnet RPC retry budget exhausted");
+};
+
 export const verifyFinalized = async (signatures: readonly string[]) => {
-  const response = await fetch(rpcUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "getSignatureStatuses",
-      params: [signatures, { searchTransactionHistory: true }],
-    }),
-  });
-  if (!response.ok) throw new Error(`Devnet RPC status ${response.status}`);
-  const body = (await response.json()) as {
-    error?: unknown;
-    result?: { value?: Array<{ err: unknown; confirmationStatus?: string } | null> };
-  };
-  if (body.error || body.result?.value?.length !== signatures.length) {
+  const result = await devnetRpc<{
+    value?: Array<{ err: unknown; confirmationStatus?: string } | null>;
+  }>("getSignatureStatuses", [signatures, { searchTransactionHistory: true }]);
+  if (result.value?.length !== signatures.length) {
     throw new Error("Devnet RPC returned incomplete signature evidence");
   }
-  for (const status of body.result.value) {
+  for (const status of result.value) {
     if (!status || status.err !== null || status.confirmationStatus !== "finalized") {
       throw new Error("Devnet lifecycle signature is not finalized successfully");
     }
