@@ -9,6 +9,8 @@ import {
   type ExecutableQuote,
 } from "@stryke/sdk";
 import { createSolanaRpc, isTransactionSigner, type TransactionSigner } from "@solana/kit";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { parseReferenceBotConfig } from "./config.js";
 import { decideEntry } from "./entry.js";
@@ -101,7 +103,7 @@ const runLiveGate = async () => {
     ...(walletAdapterPath === undefined ? {} : { walletAdapterPath }),
   });
   const signer = await loadWalletForLiveTrading<TransactionSigner>(config, async (path) => {
-    const module = (await import(path)) as { default?: unknown };
+    const module = (await import(pathToFileURL(resolve(path)).href)) as { default?: unknown };
     if (module.default === undefined) throw new StrykeSdkError("configuration", "Wallet adapter has no default export");
     if (
       typeof module.default !== "object" ||

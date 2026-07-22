@@ -92,7 +92,8 @@ wallet-adapter module path. Inline secrets are rejected.
 STRYKE_READ_ONLY_MODE=false \
 STRYKE_LIVE_TRADING_ENABLED=true \
 STRYKE_KILL_SWITCH_ENABLED=false \
-STRYKE_WALLET_ADAPTER_PATH=./wallet-adapter.js \
+STRYKE_WALLET_ADAPTER_PATH=./examples/reference-bot/wallet-adapter.example.mjs \
+STRYKE_WALLET_KEYPAIR_PATH=/secure/path/pilot-wallet.json \
 STRYKE_API_BASE_URL=https://invited-devnet-api.example \
 STRYKE_SOLANA_RPC_URL=https://api.devnet.solana.com \
 npm run start:live -w @stryke/reference-bot
@@ -104,6 +105,10 @@ all live gates pass, then performs the canonical capped BTC five-minute YES buy
 through SDK market, quote, transaction, checkpoint, execution, reconciliation,
 and position clients. Review cluster, owner, exact market, side, amount, quote
 economics, minimum output, and blockhash before wallet approval.
+
+The included adapter is a Node/devnet example for a Solana CLI-format keypair
+file. Keep that file outside this repository and never commit it. Hardware or
+remote signers can instead implement the same `TransactionSigner` boundary.
 
 If an action becomes `submitted` or `unknown`, stop and reconcile it. Never
 create a new action ID merely because confirmation is slow.
