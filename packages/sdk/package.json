@@ -1,0 +1,29 @@
+{
+  "name": "@stryke/sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@pythnetwork/hermes-client": "^2.1.0",
+    "@solana/kit": "^7.0.0"
+  }
+}

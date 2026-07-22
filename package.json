@@ -1,0 +1,23 @@
+{
+  "name": "stryke-sdk-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": ["packages/*", "examples/*"],
+  "scripts": {
+    "build": "npm run build -ws --if-present",
+    "typecheck": "npm run typecheck -ws --if-present",
+    "test": "vitest run",
+    "test:localnet": "vitest run test/localnet/pilot-lifecycle.test.ts",
+    "check:public-boundary": "vitest run test/repository-boundary.test.ts",
+    "clean": "npm run clean -ws --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

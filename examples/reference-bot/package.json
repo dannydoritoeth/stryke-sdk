@@ -1,0 +1,14 @@
+{
+  "name": "@stryke/reference-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@stryke/sdk": "0.1.0"
+  }
+}

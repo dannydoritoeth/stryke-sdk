@@ -1,0 +1,116 @@
+import { StrykeSdkError } from "./errors.js";
+
+export const SDK_VERSION = "0.1.0" as const;
+export const SUPPORTED_API_VERSION = "v1" as const;
+export const SUPPORTED_API_SCHEMA_VERSION = "1.0.0" as const;
+export const SUPPORTED_PROGRAM_ID =
+  "GmXBVbwqBhjetu9VSbFoQQMHDi22WAMBn4oNwj9sjnSE" as const;
+export const SUPPORTED_PROGRAM_VERSION = "0.1.0" as const;
+
+export const PILOT_ASSETS = ["BTC", "SOL"] as const;
+export const PILOT_EXPIRY_FAMILIES = [
+  "one_minute",
+  "five_minute",
+  "fifteen_minute",
+  "hourly",
+] as const;
+
+export type PilotAsset = (typeof PILOT_ASSETS)[number];
+export type PilotExpiryFamily = (typeof PILOT_EXPIRY_FAMILIES)[number];
+
+export type ApiCapabilitiesV1 = {
+  apiVersion: "v1";
+  schemaVersion: string;
+  apiServiceVersion: string;
+  compatibility: { minimumSdkVersion: string };
+  cluster: "devnet";
+  contract: {
+    profile: "minimal_pyth";
+    programId: string;
+    programVersion: string;
+    idlSpecVersion: string;
+  };
+  assets: ReadonlyArray<{ symbol: PilotAsset; pythFeedId: string }>;
+  expiryFamilies: readonly PilotExpiryFamily[];
+  actions: readonly ("buy" | "sell" | "claim" | "refund")[];
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const stringField = (value: unknown, name: string): string => {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new StrykeSdkError("compatibility", `Missing capability field: ${name}`);
+  }
+  return value;
+};
+
+export const parseCapabilitiesV1 = (value: unknown): ApiCapabilitiesV1 => {
+  if (!isRecord(value) || !isRecord(value.contract) || !isRecord(value.compatibility)) {
+    throw new StrykeSdkError("compatibility", "Invalid API capability response");
+  }
+  const assets = value.assets;
+  const expiryFamilies = value.expiryFamilies;
+  const actions = value.actions;
+  if (!Array.isArray(assets) || !Array.isArray(expiryFamilies) || !Array.isArray(actions)) {
+    throw new StrykeSdkError("compatibility", "Capability matrices are missing");
+  }
+
+  const parsed = {
+    apiVersion: stringField(value.apiVersion, "apiVersion"),
+    schemaVersion: stringField(value.schemaVersion, "schemaVersion"),
+    apiServiceVersion: stringField(value.apiServiceVersion, "apiServiceVersion"),
+    compatibility: {
+      minimumSdkVersion: stringField(
+        value.compatibility.minimumSdkVersion,
+        "compatibility.minimumSdkVersion"
+      ),
+    },
+    cluster: stringField(value.cluster, "cluster"),
+    contract: {
+      profile: stringField(value.contract.profile, "contract.profile"),
+      programId: stringField(value.contract.programId, "contract.programId"),
+      programVersion: stringField(
+        value.contract.programVersion,
+        "contract.programVersion"
+      ),
+      idlSpecVersion: stringField(
+        value.contract.idlSpecVersion,
+        "contract.idlSpecVersion"
+      ),
+    },
+    assets,
+    expiryFamilies,
+    actions,
+  };
+
+  if (
+    parsed.apiVersion !== SUPPORTED_API_VERSION ||
+    parsed.schemaVersion !== SUPPORTED_API_SCHEMA_VERSION ||
+    parsed.cluster !== "devnet" ||
+    parsed.contract.profile !== "minimal_pyth" ||
+    parsed.contract.programId !== SUPPORTED_PROGRAM_ID ||
+    parsed.contract.programVersion !== SUPPORTED_PROGRAM_VERSION
+  ) {
+    throw new StrykeSdkError("compatibility", "Unsupported Stryke deployment", false, {
+      apiVersion: parsed.apiVersion,
+      schemaVersion: parsed.schemaVersion,
+      cluster: parsed.cluster,
+      contractProfile: parsed.contract.profile,
+      programId: parsed.contract.programId,
+      programVersion: parsed.contract.programVersion,
+    });
+  }
+  for (const asset of PILOT_ASSETS) {
+    if (!assets.some((row) => isRecord(row) && row.symbol === asset)) {
+      throw new StrykeSdkError("compatibility", `Missing pilot asset: ${asset}`);
+    }
+  }
+  for (const expiry of PILOT_EXPIRY_FAMILIES) {
+    if (!expiryFamilies.includes(expiry)) {
+      throw new StrykeSdkError("compatibility", `Missing pilot expiry: ${expiry}`);
+    }
+  }
+
+  return parsed as ApiCapabilitiesV1;
+};
