@@ -291,26 +291,30 @@ export class TransactionsClient {
         }),
       }
     );
-    if (
-      response.clientActionId !== clientActionId ||
-      response.intentHash !== intentHash ||
-      response.owner !== owner ||
-      response.action !== quote.action ||
-      response.side !== quote.side ||
-      response.quoteBinding?.quoteId !== quote.quoteId ||
-      response.quoteBinding.marketStateVersion !== quote.marketStateVersion ||
-      response.quoteBinding.minimumOutput !== quote.minimumOutput ||
-      response.market.tokenMint !== marketIdentity.tokenMint ||
-      response.market.source !== marketIdentity.source ||
-      response.market.expiryFamily !== marketIdentity.expiryFamily ||
-      response.market.expiryTs !== marketIdentity.expiryTs ||
-      response.market.targetValue !== marketIdentity.targetValue ||
-      JSON.stringify(response.market.collateral) !== JSON.stringify(marketIdentity.collateral) ||
-      response.transaction.cluster !== "devnet" ||
-      response.transaction.contractProfile !== "minimal_pyth" ||
-      response.transaction.programId !== this.client.capabilities.contract.programId
-    ) {
-      throw new StrykeSdkError("intent_mismatch", "Prepared transaction intent does not match the reviewed quote");
+    const mismatches = [
+      ["clientActionId", response.clientActionId === clientActionId],
+      ["intentHash", response.intentHash === intentHash],
+      ["owner", response.owner === owner],
+      ["action", response.action === quote.action],
+      ["side", response.side === quote.side],
+      ["quoteId", response.quoteBinding?.quoteId === quote.quoteId],
+      ["marketStateVersion", response.quoteBinding?.marketStateVersion === quote.marketStateVersion],
+      ["minimumOutput", response.quoteBinding?.minimumOutput === quote.minimumOutput],
+      ["tokenMint", response.market.tokenMint === marketIdentity.tokenMint],
+      ["source", response.market.source === marketIdentity.source],
+      ["expiryFamily", response.market.expiryFamily === marketIdentity.expiryFamily],
+      ["expiryTs", response.market.expiryTs === marketIdentity.expiryTs],
+      ["targetValue", response.market.targetValue === marketIdentity.targetValue],
+      ["collateral", JSON.stringify(response.market.collateral) === JSON.stringify(marketIdentity.collateral)],
+      ["cluster", response.transaction.cluster === "devnet"],
+      ["contractProfile", response.transaction.contractProfile === "minimal_pyth"],
+      ["programId", response.transaction.programId === this.client.capabilities.contract.programId],
+    ].filter(([, matches]) => !matches).map(([field]) => field);
+    if (mismatches.length > 0) {
+      throw new StrykeSdkError(
+        "intent_mismatch",
+        `Prepared transaction intent does not match reviewed fields: ${mismatches.join(", ")}`
+      );
     }
     const latest = await this.rpc
       .getLatestBlockhash({ commitment: "confirmed" })
