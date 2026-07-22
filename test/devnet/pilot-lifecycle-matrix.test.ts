@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import sellEvidence from "../../docs/evidence/devnet-sell-matrix.json" with { type: "json" };
+import canonicalBtc5 from "../../docs/evidence/devnet-canonical-btc5.json" with { type: "json" };
 import {
   MemoryActionCheckpointStore,
   ReviewedTransactionExecutor,
@@ -13,7 +14,12 @@ describe("authoritative devnet pilot lifecycle evidence", () => {
     expect(matrixEvidence.oneMinuteTimingEvidence).toMatchObject({ liveStrategyPerformance: "experimental" });
     expect(matrixEvidence.oneMinuteTimingEvidence.completionSecondsAfterExpiry).toBeGreaterThan(0);
   }, 30_000);
-  it("devnet_btc_5m_complete_lifecycle_and_claim_or_refund", () => verifyCell("BTC", "5m"), 30_000);
+  it("devnet_btc_5m_complete_lifecycle_and_claim_or_refund", async () => {
+    await verifyCell("BTC", "5m");
+    expect(canonicalBtc5.durationSeconds).toBeLessThan(3_600);
+    expect(canonicalBtc5.undocumentedInterventions).toBe(0);
+    await verifyFinalized(Object.values(canonicalBtc5.signatures));
+  }, 30_000);
   it("devnet_btc_15m_complete_lifecycle", () => verifyCell("BTC", "15m"), 30_000);
   it("devnet_btc_1h_complete_lifecycle", () => verifyCell("BTC", "1h"), 30_000);
   it("devnet_sol_1m_complete_lifecycle_with_latency_evidence", async () => {

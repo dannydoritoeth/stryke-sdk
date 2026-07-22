@@ -1,0 +1,19 @@
+{
+  "cluster": "devnet",
+  "programId": "GmXBVbwqBhjetu9VSbFoQQMHDi22WAMBn4oNwj9sjnSE",
+  "trader": "5SJTm7genD8XY5rxGrDVSwjUZwaqYeKRmhv8UxeZiCbY",
+  "startedAt": "2026-07-22T10:02:49.321Z",
+  "completedAt": "2026-07-22T10:05:54.604Z",
+  "durationSeconds": 185.283,
+  "expiryTs": 1784714700,
+  "undocumentedInterventions": 0,
+  "signatures": {
+    "buyYes": "4jH6ehuL91yCaDjayuSmRvYA3Saimkb733jhAY6Sxaqv5uWQ5YbdmNnQ27JJnVQXDbn32MtsQpzaPaoopEYwAoWK",
+    "sellYes": "2YGPzX9WkcCS977huFWguNcPfhjmyR4HYRvu52rFGKxRhtcyU3effhD1du7v5DMPekvbF1qromsLSXu34newP91v",
+    "buyNo": "3syXMUULcm23KBc93FnCH4nUTfHZ5PHsDX7o7ngN2pQrJUqpLQ9T4vMmFxWAE3nzex9QCcMyHPfPD7gMWJboTaBi",
+    "sellNo": "2gUrCGSjGH3KFFpNCCYifJzo1XxGeUgBsTMzkSc1AkyxdMSeWoAwJPZZfjYTStnY5catBX85RRxLn3BwoU4CLiTX",
+    "claim": "2MMEJVQ31e36TsCgELBBwx54JhZvYMCAo9CmwXofxWEPhGuyDzidG8TVj9AXApTLvSMshEz86DJAEYnMtzQtcbR3",
+    "refund": "5GnsfztBjXBZdPFgdzVS8sVtJvQoqbVutJuzteVrLDHRWuzQuH1b97jZxNEM3na41eu42k4upDLuM1wFUgmxE4VG",
+    "seriesClosure": "5yDBGvoJzpZeBnC2fmnJUhxUuVJnmAV6u2tsnR4ZBbBVmTcLsxVqUcuw6msa4g7thCAakaQPQY6dhECif7FGuWH7"
+  }
+}

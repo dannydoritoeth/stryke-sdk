@@ -12,9 +12,14 @@ Status: awaiting independent invited-developer session
 - Current result: BTC and SOL short/long YES and NO buy/sell cells simulated and
   confirmed under this address. Provider throttling was handled by bounded
   pacing and per-transaction evidence checkpointing
+- Canonical automated BTC five-minute protocol run: completed in `185.283`
+  seconds with zero interventions; buy/sell, claim, refund, and closure
+  signatures are in `devnet-canonical-btc5.json`
 
 This address may stand in for account and custody isolation. It does not stand
 in for a new human's ability to complete the documentation without assistance.
+The canonical run used the owning protocol harness; an invited developer still
+must prove the SDK transaction-adapter composition from the pilot repository.
 
 The automated clean install and docs-only maintainer rehearsal pass, but they do
 not substitute for the required independent participant. Complete this record
