@@ -1,0 +1,23 @@
+{
+  "cluster": "devnet",
+  "programId": "GmXBVbwqBhjetu9VSbFoQQMHDi22WAMBn4oNwj9sjnSE",
+  "expiryTs": 1784545200,
+  "source": "minimal_pyth",
+  "oneMinuteTimingEvidence": {
+    "separateRunExpiryTs": 1784576760,
+    "startedAt": "2026-07-20T19:43:04.463Z",
+    "completedAt": "2026-07-20T19:46:58.064Z",
+    "completionSecondsAfterExpiry": 58.064,
+    "liveStrategyPerformance": "experimental"
+  },
+  "cells": [
+    { "asset": "BTC", "expiry": "1m", "claim": "4U9khzikAJXxjr18VrXzEDoS5KduFop8cvdCHLzTdBm7hJjoDREQSbB6kR5Vfie6G6krQcqUkVZepASAjhBdG6iy", "refund": "3m5ZAo5LdqbxmKKVes4KE1pU1tAeNBZtxm35oNbHHA8JkdSAVio7fbFRAur7Rf4t5r1LYHgUXXPngmPaPkwdtpS7", "closed": "2a3vqgoEhKPfuVCkBCghy1kuz6jt2VaLRUEexGVG3753eJpzPoe3gocmejs7GHrzW8ka1BYxBpPDFwE9VEcGgadJ" },
+    { "asset": "BTC", "expiry": "5m", "claim": "4nt1WF42tNsdLMZyd5xqp3FjRNSBHJ6jHWWwHqg5ZAgGtSFHgFVVninWoGThiDSAVrpShmYjPqcyizyJNuudjaGu", "refund": "3WAy2cAZL5EaLPPirvWyK5JnVz7SQYgydMwSuX5UxNbQ4vF13mvnTZkrpEj1jfNppjzo6DkrJNFjBeh1CgNosEPp", "closed": "nVtM2TsgGg18xTegsVZqKFczCXoH74FUZ8qtz3ALjEnRmwtEdriAET9iQRV81ffZs4hPQqyDU6YxMeF4wbVEuSD" },
+    { "asset": "BTC", "expiry": "15m", "claim": "3xcNezffhgxdsGxhT3uBaNNCzEE3UBbSXGWuEmj916Xo7hRxRHn4bcttBsQALncZr5LEJJQ2oDC7xkiAEaERaZcP", "refund": "5KhgdRGxuAtKQ5wgXfzwaUf4AAhDyiTDiVyWue2NCLvYHfJymDL3zBvcasA77ugsGHVNULJJqpbeoRUrEGtWUhUe", "closed": "5WbrLoCk7a3Dp1WQgFH2YnH13nj99aX4sdtQSk6chHcTRc5QvNWD6gaPZ8MY1UgHTc2GrxVggc1G9LZtWF5GLwJi" },
+    { "asset": "BTC", "expiry": "1h", "claim": "2iLjvzkPkbPCwhH5Tb2pXCMM1Zj6onyuatv2m3wa2h1sr9jt7sfDAhxRuk52Sc111KbZav1JTdMmahqZi4HbxNci", "refund": "GPaMQLxu71EofRTAqzrLEegiGTHHRN1yyp61jH75fQEPguCjT9g6yWUjqmGaYxeokMEaL5ZgFoj5rj4WcmEsWev", "closed": "dmRSZsn48Azpq6oZu9Q5aQ3p9DPvy55ksL3LUQffhuDVNEnjVK9QzuP55dZyKbNLhSoKaq8qThExnSMryYipjdj" },
+    { "asset": "SOL", "expiry": "1m", "claim": "kycQq8aUPYCqcVa9k4f32RDYrfKkFijFnTcbYcfxyebuRws3MyfGM4nj8FfHwnZzje469JVLYyUDDJKt96j9iu1", "refund": "3AQRkpR1ppKmqNVmvtHNVXqutTWuRzvSxH4j8gXrSv13uydPHxxkybWbghjEeNwm2btrScbMywxUsWoiTPE2bg7h", "closed": "2aQBXAKB87MwweD5YT8jvzTBw54RkFxAoRzWp9X23EovgXt6dEAM7tnNJpMCJwAZQn4GciWcusxryEpMpGigiUeg" },
+    { "asset": "SOL", "expiry": "5m", "claim": "4WnE7FwcA9C3CktP1W3GmSNq9AwzUsk4PPpBNY3aCTTzCGtHPEZHaYV5Ty6RaFigHSTs3TAvwX7aBYQeGtV9jz1q", "refund": "2QBGxBAmMKkZccjYw78uDoGdnVdN1MUGf3kFAwdh4iqk9kZzm8eLcCWffQUx4ezzPxf5KXqqA5uCcPKaMqVVqwpD", "closed": "53BrJjM5mXTMShxpmseyEV7d7bsYDTZ4zWpKWKBdDTfrKashcsSRAKYtMfqHWLDq78sbz5qot1GXM2xx6uwsmmxh" },
+    { "asset": "SOL", "expiry": "15m", "claim": "3sEvZ9cefJnURGoBegBFNBdyTAhcJVkfW1hzsqX7rJog3iM4zfST8hurDBdU9X8xyMvmbHSbCxsqYSxJfTszxfSZ", "refund": "393Y32NX1qiy7ubPcf6TecZTLEmS5CcbWdGFbqMPSyc4CCbkbZxpzu4pnT8F6E2HLHyR2ZEAQzpTiduWz85Y5wAQ", "closed": "BpHNxpvDEgNAE6J9tZVCswE64CVD2YUZbdXmEpEg5P2YnkAoCexX2b6qbzbi7ioLWvL7QGGoVyjLSnpcJWfdHuf" },
+    { "asset": "SOL", "expiry": "1h", "claim": "2svE4qzJVV1puKxF4Bh2cqUUZGguno3uqsJ9Ytz7Rq53JaTDciKhExAWwKW263DPAo1hEeS336voEqJxzEgRokvb", "refund": "hUBx8PXH7XG9daf1RZaff3ZRpuqsj4iZKBCa6g1pYoW2MtxnQqM8P6rxdvRGuqXFuaUksTTTjzMd83APLkM9EA3", "closed": "1289EQcnxvQSifj2zAwMSHZGp6o5J5gN1ssWuocCm6xBoAvz5vBjcfftH7mDJAC8G6HtBw6hm3brg1sJ8F7bbtH6" }
+  ]
+}
