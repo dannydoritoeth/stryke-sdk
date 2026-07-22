@@ -97,6 +97,30 @@ describe("pilot market discovery", () => {
     ).rejects.toBeInstanceOf(StrykeSdkError);
   });
 
+  it("ignores_non_solana_source_rows_when_selecting_the_current_market", async () => {
+    const canonical = {
+      ...row("BTC", "five_minute", 1_800_000_000),
+      tokenMint: "So11111111111111111111111111111111111111112",
+    };
+    const client = {
+      requestJson: async () => ({
+        markets: [
+          { ...canonical, tokenMint: `0x${"a".repeat(64)}`, targetValue: "7100000000000" },
+          canonical,
+        ],
+        metadata: {
+          contractVersion: "stryke.botMarket.v1",
+          generatedAt: "2026-07-22T00:00:00.000Z",
+          stale: false,
+        },
+      }),
+    };
+
+    await expect(
+      new MarketsClient(client as never).current("BTC", "five_minute")
+    ).resolves.toMatchObject({ strikePrice: "7000000000000" });
+  });
+
   it("rejects_asset_feed_or_expiry_identity_mismatch", () => {
     expect(() => parsePilotMarket({ ...row("BTC", "five_minute", 1), symbol: "ETH" }, false))
       .toThrowError(expect.objectContaining({ code: "unsupported_asset" }));

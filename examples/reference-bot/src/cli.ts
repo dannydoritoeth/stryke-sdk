@@ -130,7 +130,21 @@ const runLiveGate = async () => {
     signer,
     checkpointPath: process.env.STRYKE_CHECKPOINT_PATH ?? ".stryke/reference-bot-action.json",
   });
-  console.log(JSON.stringify({ event: "live_action_complete", ...compatibility, result }));
+  const execution = result as {
+    clientActionId?: string;
+    signature?: string;
+    state?: string;
+    refreshed?: { action?: { state?: string }; positions?: unknown[] };
+  };
+  console.log(JSON.stringify({
+    event: "live_action_complete",
+    ...compatibility,
+    clientActionId: execution.clientActionId,
+    signature: execution.signature,
+    state: execution.state,
+    reconciledState: execution.refreshed?.action?.state,
+    positionCount: execution.refreshed?.positions?.length,
+  }));
 };
 
 try {

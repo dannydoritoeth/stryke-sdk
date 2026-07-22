@@ -1,4 +1,5 @@
 import type { PilotAsset, PilotExpiryFamily } from "./compatibility.js";
+import { isAddress } from "@solana/kit";
 import { PILOT_ASSETS, PILOT_EXPIRY_FAMILIES } from "./compatibility.js";
 import type { StrykeClient } from "./client.js";
 import { StrykeSdkError } from "./errors.js";
@@ -163,8 +164,9 @@ export class MarketsClient {
     const eligible = listed
       .filter(
         (market) =>
-          market.lifecycle.state === "open" ||
-          market.lifecycle.state === "upcoming"
+          (market.lifecycle.state === "open" ||
+            market.lifecycle.state === "upcoming") &&
+          (typeof market.raw.tokenMint !== "string" || isAddress(market.raw.tokenMint))
       )
       .sort((a, b) => a.expiryTs - b.expiryTs);
     if (eligible.length === 0) {
