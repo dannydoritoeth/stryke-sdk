@@ -103,7 +103,9 @@ const runLiveGate = async () => {
     ...(walletAdapterPath === undefined ? {} : { walletAdapterPath }),
   });
   const signer = await loadWalletForLiveTrading<TransactionSigner>(config, async (path) => {
-    const module = (await import(pathToFileURL(resolve(path)).href)) as { default?: unknown };
+    const module = (await import(
+      pathToFileURL(resolve(process.env.INIT_CWD ?? process.cwd(), path)).href
+    )) as { default?: unknown };
     if (module.default === undefined) throw new StrykeSdkError("configuration", "Wallet adapter has no default export");
     if (
       typeof module.default !== "object" ||
