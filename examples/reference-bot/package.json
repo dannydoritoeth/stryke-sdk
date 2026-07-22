@@ -12,6 +12,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@solana/kit": "^7.0.0",
     "@stryke/sdk": "0.1.0"
   },
   "devDependencies": {

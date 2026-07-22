@@ -93,13 +93,17 @@ STRYKE_READ_ONLY_MODE=false \
 STRYKE_LIVE_TRADING_ENABLED=true \
 STRYKE_KILL_SWITCH_ENABLED=false \
 STRYKE_WALLET_ADAPTER_PATH=./wallet-adapter.js \
+STRYKE_API_BASE_URL=https://invited-devnet-api.example \
+STRYKE_SOLANA_RPC_URL=https://api.devnet.solana.com \
 npm run start:live -w @stryke/reference-bot
 ```
 
-The command fails unless all live gates pass. A production action must still use
-the SDK quote, transaction, checkpoint, execution, and position clients; review
-cluster, owner, exact market, side, amount, quote economics, minimum output, and
-blockhash before wallet approval.
+The wallet module must default-export an `@solana/kit` `TransactionSigner`; it
+keeps key loading outside configuration and the SDK. The command fails unless
+all live gates pass, then performs the canonical capped BTC five-minute YES buy
+through SDK market, quote, transaction, checkpoint, execution, reconciliation,
+and position clients. Review cluster, owner, exact market, side, amount, quote
+economics, minimum output, and blockhash before wallet approval.
 
 If an action becomes `submitted` or `unknown`, stop and reconcile it. Never
 create a new action ID merely because confirmation is slow.

@@ -5,14 +5,17 @@ import {
   SUPPORTED_PROGRAM_ID,
   SUPPORTED_PROGRAM_VERSION,
   StrykeSdkError,
+  StrykeClient,
   type ExecutableQuote,
 } from "@stryke/sdk";
+import { createSolanaRpc, isTransactionSigner, type TransactionSigner } from "@solana/kit";
 
 import { parseReferenceBotConfig } from "./config.js";
 import { decideEntry } from "./entry.js";
 import { emitDecision } from "./logging.js";
 import { estimateFairProbability } from "./strategy.js";
 import { loadWalletForLiveTrading } from "./wallet.js";
+import { runReviewedLiveBuy } from "./live-runner.js";
 
 const compatibility = {
   sdkVersion: SDK_VERSION,
@@ -97,13 +100,33 @@ const runLiveGate = async () => {
     ...(killSwitchEnabled === undefined ? {} : { killSwitchEnabled }),
     ...(walletAdapterPath === undefined ? {} : { walletAdapterPath }),
   });
-  const wallet = await loadWalletForLiveTrading(config, async (path) => {
+  const signer = await loadWalletForLiveTrading<TransactionSigner>(config, async (path) => {
     const module = (await import(path)) as { default?: unknown };
     if (module.default === undefined) throw new StrykeSdkError("configuration", "Wallet adapter has no default export");
-    return module.default;
+    if (
+      typeof module.default !== "object" ||
+      module.default === null ||
+      !("address" in module.default) ||
+      !isTransactionSigner(module.default as { address: never })
+    ) {
+      throw new StrykeSdkError("configuration", "Wallet adapter must default-export a Solana transaction signer");
+    }
+    return module.default as TransactionSigner;
   });
-  if (!wallet) throw new StrykeSdkError("configuration", "Live gates are not all enabled");
-  console.log(JSON.stringify({ event: "live_gate_ready", ...compatibility }));
+  if (!signer) throw new StrykeSdkError("configuration", "Live gates are not all enabled");
+  const apiBaseUrl = process.env.STRYKE_API_BASE_URL;
+  const rpcUrl = process.env.STRYKE_SOLANA_RPC_URL;
+  if (!apiBaseUrl || !rpcUrl) {
+    throw new StrykeSdkError("configuration", "Live trading requires API and Solana RPC URLs");
+  }
+  const client = await StrykeClient.connect({ apiBaseUrl });
+  const result = await runReviewedLiveBuy({
+    client,
+    rpc: createSolanaRpc(rpcUrl),
+    signer,
+    checkpointPath: process.env.STRYKE_CHECKPOINT_PATH ?? ".stryke/reference-bot-action.json",
+  });
+  console.log(JSON.stringify({ event: "live_action_complete", ...compatibility, result }));
 };
 
 try {

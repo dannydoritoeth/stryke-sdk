@@ -19,9 +19,11 @@ strings in their documented collateral units.
 
 The CLI maps `STRYKE_READ_ONLY_MODE`, `STRYKE_LIVE_TRADING_ENABLED`,
 `STRYKE_KILL_SWITCH_ENABLED`, and `STRYKE_WALLET_ADAPTER_PATH` to those gates.
-Boolean values must be exactly `true` or `false`. `STRYKE_API_BASE_URL` is the
-invited devnet API base URL used by SDK client code.
+Boolean values must be exactly `true` or `false`. Live execution also requires
+the invited `STRYKE_API_BASE_URL` and devnet `STRYKE_SOLANA_RPC_URL`.
+`STRYKE_CHECKPOINT_PATH` defaults to `.stryke/reference-bot-action.json`.
 
-Signer custody stays inside the supplied wallet adapter. Seed phrases, private
-keys, secret keys, mnemonics, and signed transactions are not configuration.
-Use a separately funded, minimally funded devnet pilot wallet.
+Signer custody stays inside the supplied wallet module, whose default export is
+an `@solana/kit` `TransactionSigner`. Seed phrases, private keys, secret keys,
+mnemonics, and signed transactions are not configuration. Use a separately
+funded, minimally funded devnet pilot wallet.
