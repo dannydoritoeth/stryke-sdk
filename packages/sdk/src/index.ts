@@ -45,6 +45,11 @@ export type {
   ReviewedExecutionAdapter,
   ReviewedExecutionResult,
 } from "./execution.js";
+export { SolanaReviewedExecutionAdapter } from "./solana-execution.js";
+export type {
+  SolanaExecutionAdapterOptions,
+  SolanaExecutionRpc,
+} from "./solana-execution.js";
 export type {
   PilotLifecycleEvidence,
   PilotMarketLifecycleState,
