@@ -15,11 +15,20 @@ Status: awaiting independent invited-developer session
 - Canonical automated BTC five-minute protocol run: completed in `185.283`
   seconds with zero interventions; buy/sell, claim, refund, and closure
   signatures are in `devnet-canonical-btc5.json`
+- Canonical SDK BTC five-minute run: wallet-local buy and claim both confirmed
+  and reconciled to indexed activity in `565` seconds. Evidence is retained in
+  `devnet-sdk-live-btc5.json`; the run used only the pilot SDK repository plus
+  configured API/RPC endpoints and the external isolated-wallet keypair path.
+- Clean-clone automated rehearsal at SDK revision `b6f8768` completed install,
+  17 contract tests, packed external-consumer installation, custom-estimator
+  compilation, and the BTC five-minute read-only decision in under 20 seconds.
 
 This address may stand in for account and custody isolation. It does not stand
 in for a new human's ability to complete the documentation without assistance.
-The canonical run used the owning protocol harness; an invited developer still
-must prove the SDK transaction-adapter composition from the pilot repository.
+The owning protocol-harness evidence is now supplemented by a concrete SDK
+adapter/composition run from the pilot repository. Per the product owner's
+request, the separately funded address and clean clone are the automated proxy
+for another developer; they still do not measure a new human's comprehension.
 
 The automated clean install and docs-only maintainer rehearsal pass, but they do
 not substitute for the required independent participant. Complete this record
