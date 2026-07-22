@@ -61,8 +61,9 @@ type PrepResponse = {
     signers: string[];
     programId: string;
     contractProfile: "minimal_pyth";
-    cluster: "devnet";
+    cluster?: "devnet";
   };
+  metadata?: { environment?: { solanaCluster?: string } };
 };
 
 const accountRole = (account: PrepInstruction["accounts"][number]): AccountRole =>
@@ -300,13 +301,13 @@ export class TransactionsClient {
       ["quoteId", response.quoteBinding?.quoteId === quote.quoteId],
       ["marketStateVersion", response.quoteBinding?.marketStateVersion === quote.marketStateVersion],
       ["minimumOutput", response.quoteBinding?.minimumOutput === quote.minimumOutput],
-      ["tokenMint", response.market.tokenMint === marketIdentity.tokenMint],
+      ["tokenMint", response.market.tokenMint === market.raw.tokenMint],
       ["source", response.market.source === marketIdentity.source],
       ["expiryFamily", response.market.expiryFamily === marketIdentity.expiryFamily],
       ["expiryTs", response.market.expiryTs === marketIdentity.expiryTs],
       ["targetValue", response.market.targetValue === marketIdentity.targetValue],
       ["collateral", JSON.stringify(response.market.collateral) === JSON.stringify(marketIdentity.collateral)],
-      ["cluster", response.transaction.cluster === "devnet"],
+      ["cluster", response.metadata?.environment?.solanaCluster === "devnet"],
       ["contractProfile", response.transaction.contractProfile === "minimal_pyth"],
       ["programId", response.transaction.programId === this.client.capabilities.contract.programId],
     ].filter(([, matches]) => !matches).map(([field]) => field);
@@ -405,7 +406,7 @@ export class TransactionsClient {
         expiryTs: response.market.expiryTs,
         targetValue: response.market.targetValue,
       }) !== JSON.stringify(market) ||
-      response.transaction.cluster !== "devnet" ||
+      response.metadata?.environment?.solanaCluster !== "devnet" ||
       response.transaction.contractProfile !== "minimal_pyth" ||
       response.transaction.programId !== this.client.capabilities.contract.programId
     ) {

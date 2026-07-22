@@ -38,6 +38,7 @@ const market: PilotMarket = {
   },
   stale: false,
   raw: {
+    tokenMint: "So11111111111111111111111111111111111111112",
     collateral: {
       type: "native_sol",
       mint: "11111111111111111111111111111111",
@@ -113,6 +114,7 @@ const prep = {
     contractProfile: "minimal_pyth",
     cluster: "devnet",
   },
+  metadata: { environment: { solanaCluster: "devnet" } },
 };
 
 describe("pilot transaction materialization", () => {
@@ -217,7 +219,7 @@ describe("pilot transaction materialization", () => {
       { ...prep, intentHash, action: "sell" },
       { ...prep, intentHash, side: "no" },
       { ...prep, intentHash, market: { ...prep.market, targetValue: "changed" } },
-      { ...prep, intentHash, transaction: { ...prep.transaction, cluster: "localnet" } },
+      { ...prep, intentHash, metadata: { environment: { solanaCluster: "localnet" } } },
       { ...prep, intentHash, transaction: { ...prep.transaction, programId: "11111111111111111111111111111111" } },
     ];
     for (const response of responses) {
