@@ -7,4 +7,15 @@ export type FairProbabilityInput = {
 
 export const estimateFairProbability = (
   input: FairProbabilityInput
-): number => (input.currentPrice > input.strikePrice ? 0.55 : 0.45);
+): number => {
+  // Educational placeholder only: replace this file with the developer's signal.
+  if (input.currentPrice === input.strikePrice) return 0.5;
+  return input.currentPrice > input.strikePrice ? 0.51 : 0.49;
+};
+
+export const assertFairProbability = (value: number): number => {
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new RangeError("Fair probability must be finite and between 0 and 1");
+  }
+  return value;
+};

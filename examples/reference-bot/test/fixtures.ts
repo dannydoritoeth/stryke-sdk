@@ -1,0 +1,45 @@
+import type { ExecutableQuote, PilotPosition } from "@stryke/sdk";
+
+export const quote = (overrides: Partial<ExecutableQuote> = {}): ExecutableQuote => ({
+  quoteId: "quote-1",
+  generatedAt: "2026-07-22T00:00:00.000Z",
+  expiresAt: "2026-07-22T00:01:00.000Z",
+  marketStateVersion: "state-1",
+  action: "buy",
+  side: "yes",
+  amount: "10000000",
+  fee: "0",
+  feeBreakdown: {
+    feeMode: "waived",
+    normalTradingFeeWaivedCollateralUnits: "0",
+    grossTradeFeeCollateralUnits: "0",
+    normalTradingFeeBps: 0,
+    feeBpsApplied: 0,
+  },
+  expectedShares: "20000000",
+  minimumOutput: "19800000",
+  maximumSlippageBpsApplied: 100,
+  executableProbabilityBps: 5000,
+  priceImpactBps: 50,
+  raw: {},
+  ...overrides,
+});
+
+export const position = (overrides: Partial<PilotPosition> = {}): PilotPosition => ({
+  positionId: "position-1",
+  owner: "owner",
+  market: {},
+  yesShares: "10",
+  noShares: "0",
+  claimableAmount: "10",
+  actionDeadline: "2026-07-23T00:00:00.000Z",
+  lifecycle: {
+    state: "claimable",
+    rawState: "resolved_yes",
+    rawReason: "winner_claimable",
+    observedAt: "2026-07-22T00:00:00.000Z",
+    source: "api_v1",
+  },
+  raw: {},
+  ...overrides,
+});
