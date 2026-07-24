@@ -190,7 +190,7 @@ const marketMatches = (position: PilotPosition, market: PilotMarket): boolean =>
     | Record<string, unknown>
     | undefined;
   return (
-    identity.tokenMint === market.assetRef &&
+    identity.tokenMint === market.tokenMint &&
     identity.source === market.source &&
     collateral?.mint === expectedCollateral?.mint &&
     identity.expiryFamily === market.expiryFamily &&

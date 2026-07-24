@@ -11,11 +11,13 @@ const market = {
   marketId: "market-1",
   asset: "BTC",
   assetRef: "btc-feed",
+  tokenMint: "So11111111111111111111111111111111111111112",
   source: "pyth_oracle",
   collateral: "SOL",
   expiryFamily: "five_minute",
   expiryTs: 1_800_000_000,
   strikePrice: "7000000000000",
+  strikePriceDecimal: 70000,
   status: "open",
   rawStatus: "active",
   generatedAt: "2026-07-22T00:00:00.000Z",
@@ -32,6 +34,8 @@ const market = {
     disabledReasons: [],
   },
   stale: false,
+  pools: { yes: "0 SOL", no: "0 SOL", stale: false },
+  probability: { yesBps: 5000, noBps: 5000 },
   raw: { collateral: { type: "native_sol", symbol: "SOL", mint: "sol", decimals: 9 } },
 } as const satisfies PilotMarket;
 

@@ -13,6 +13,7 @@ export type CanonicalMarketIdentity = {
   marketId: string;
   asset: PilotAsset;
   assetRef: string;
+  tokenMint: string;
   source: "pyth_oracle";
   collateral: "SOL";
   expiryFamily: PilotExpiryFamily;
@@ -29,7 +30,7 @@ export type PilotMarket = CanonicalMarketIdentity & {
     disabledReasons: readonly string[];
   };
   stale: boolean;
-  pools: { yesCollateralUnits: string; noCollateralUnits: string; stale: boolean };
+  pools: { yes: string; no: string; stale: boolean };
   probability: { yesBps: number; noBps: number };
   lifecycle: PilotLifecycleEvidence<PilotMarketLifecycleState>;
   rawStatus: string;
@@ -79,7 +80,8 @@ const bps = (value: unknown, name: string): number => {
 export const parsePilotMarket = (
   value: unknown,
   stale: boolean,
-  generatedAt = new Date(0).toISOString()
+  generatedAt = new Date(0).toISOString(),
+  surfaceValue?: unknown
 ): PilotMarket => {
   const row = record(value, "market");
   const tradeability = record(row.tradeability, "tradeability");
@@ -90,12 +92,17 @@ export const parsePilotMarket = (
   const status = text(row.status, "status");
   const rawStatus = text(row.rawStatus, "rawStatus");
   const lifecycle = parsePilotMarketLifecycle(row.pilotLifecycle);
-  const selectedMarket = record(row.selectedMarket, "selectedMarket");
-  const pools = record(selectedMarket.pools, "selectedMarket.pools");
-  const odds = record(selectedMarket.odds, "selectedMarket.odds");
+  const selectedMarket = row.selectedMarket === undefined
+    ? record(surfaceValue, "surface")
+    : record(row.selectedMarket, "selectedMarket");
+  const pools = record(selectedMarket.pools, "surface.pools");
+  const odds = record(selectedMarket.odds, "surface.odds");
   const disabledReasons = tradeability.disabledReasons;
-  const strikePrice = amount(row.targetValue, "targetValue");
-  const strikePriceDecimal = Number(BigInt(strikePrice)) / 100_000_000;
+  const strikePrice = text(row.targetValue, "targetValue");
+  if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(strikePrice)) {
+    throw new StrykeSdkError("validation", "Invalid Pyth strike price");
+  }
+  const strikePriceDecimal = Number(strikePrice);
   if (!Number.isFinite(strikePriceDecimal) || strikePriceDecimal <= 0) {
     throw new StrykeSdkError("validation", "Invalid Pyth strike price");
   }
@@ -123,6 +130,7 @@ export const parsePilotMarket = (
     marketId: text(row.marketId, "marketId"),
     asset: asset as PilotAsset,
     assetRef: text(row.assetRef, "assetRef"),
+    tokenMint: text(row.tokenMint ?? row.assetRef, "tokenMint"),
     source: "pyth_oracle",
     collateral: "SOL",
     expiryFamily: expiryFamily as PilotExpiryFamily,
@@ -142,13 +150,13 @@ export const parsePilotMarket = (
     },
     stale,
     pools: {
-      yesCollateralUnits: amount(pools.yesPool, "selectedMarket.pools.yesPool"),
-      noCollateralUnits: amount(pools.noPool, "selectedMarket.pools.noPool"),
-      stale: boolean(pools.stale, "selectedMarket.pools.stale"),
+      yes: text(pools.yesPool, "surface.pools.yesPool"),
+      no: text(pools.noPool, "surface.pools.noPool"),
+      stale: boolean(pools.stale, "surface.pools.stale"),
     },
     probability: {
-      yesBps: bps(odds.yesBps, "selectedMarket.odds.yesBps"),
-      noBps: bps(odds.noBps, "selectedMarket.odds.noBps"),
+      yesBps: bps(odds.yesBps, "surface.odds.yesBps"),
+      noBps: bps(odds.noBps, "surface.odds.noBps"),
     },
     lifecycle,
     rawStatus,
@@ -180,9 +188,19 @@ export class MarketsClient {
     if (!Number.isFinite(Date.parse(response.metadata.generatedAt))) {
       throw new StrykeSdkError("api_response", "Market response timestamp is invalid");
     }
-    return response.markets.map((row) =>
-      parsePilotMarket(row, response.metadata.stale, response.metadata.generatedAt)
-    );
+    return Promise.all(response.markets.map(async (row) => {
+      const candidate = record(row, "market");
+      if (candidate.selectedMarket !== undefined) {
+        return parsePilotMarket(row, response.metadata.stale, response.metadata.generatedAt);
+      }
+      const links = record(candidate.links, "links");
+      const surfacePath = text(links.surface, "links.surface");
+      if (!surfacePath.startsWith("/v1/")) {
+        throw new StrykeSdkError("validation", "Market surface link is outside API v1");
+      }
+      const detail = await this.client.requestJson<{ surface: unknown; metadata: { stale?: boolean } }>(surfacePath as `/v1/${string}`);
+      return parsePilotMarket(row, response.metadata.stale || detail.metadata.stale === true, response.metadata.generatedAt, detail.surface);
+    }));
   }
 
   async current(asset: PilotAsset, expiryFamily: PilotExpiryFamily): Promise<PilotMarket> {

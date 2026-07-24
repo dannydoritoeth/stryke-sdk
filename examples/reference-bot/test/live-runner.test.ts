@@ -4,6 +4,7 @@ import { executeReviewedLiveBuy } from "../src/live-runner.js";
 
 const market = {
   assetRef: "btc-feed",
+  tokenMint: "So11111111111111111111111111111111111111112",
   source: "pyth_oracle",
   expiryFamily: "five_minute",
   expiryTs: 1_800_000_000,

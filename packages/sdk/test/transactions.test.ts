@@ -16,11 +16,13 @@ const market: PilotMarket = {
   marketId: "pilot-market",
   asset: "BTC",
   assetRef: "So11111111111111111111111111111111111111112",
+  tokenMint: "So11111111111111111111111111111111111111112",
   source: "pyth_oracle",
   collateral: "SOL",
   expiryFamily: "five_minute",
   expiryTs: 1_800_000_000,
   strikePrice: "7000000000000",
+  strikePriceDecimal: 70000,
   status: "open",
   rawStatus: "active",
   generatedAt: new Date(now).toISOString(),
@@ -37,6 +39,8 @@ const market: PilotMarket = {
     disabledReasons: [],
   },
   stale: false,
+  pools: { yes: "0 SOL", no: "0 SOL", stale: false },
+  probability: { yesBps: 5000, noBps: 5000 },
   raw: {
     tokenMint: "So11111111111111111111111111111111111111112",
     collateral: {

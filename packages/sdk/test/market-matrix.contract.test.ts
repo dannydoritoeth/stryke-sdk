@@ -34,12 +34,13 @@ const contractCase = (
             {
               marketId: `pyth:${asset}:${expiryFamily}:${expiryTs}`,
               assetRef,
+              tokenMint: "So11111111111111111111111111111111111111112",
               symbol: asset,
               source: "pyth_oracle",
               collateral: { symbol: "SOL" },
               expiryFamily,
               expiryTs,
-              targetValue: asset === "BTC" ? "7000000000000" : "15000000000",
+              targetValue: asset === "BTC" ? "70000" : "150",
               status: "open",
               rawStatus: "active",
               pilotLifecycle: {
@@ -72,7 +73,7 @@ const contractCase = (
       expect(path).toBe("/v1/quote");
       const request = JSON.parse(String(init?.body)) as Record<string, any>;
       expect(request.market).toMatchObject({
-        tokenMint: assetRef,
+        tokenMint: "So11111111111111111111111111111111111111112",
         source: "pyth_oracle",
         expiryFamily,
         expiryTs,
@@ -122,7 +123,7 @@ const contractCase = (
     collateral: "SOL",
     strikePriceDecimal: asset === "BTC" ? 70_000 : 150,
     stale: false,
-    pools: { yesCollateralUnits: "500000000", noCollateralUnits: "500000000", stale: false },
+    pools: { yes: "500000000", no: "500000000", stale: false },
     probability: { yesBps: 5000, noBps: 5000 },
   });
   expect(quote).toMatchObject({

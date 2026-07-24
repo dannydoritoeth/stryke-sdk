@@ -22,7 +22,7 @@ import type { ReferenceBotConfig } from "./config.js";
 
 const marketMatchesPosition = (market: PilotMarket, position: PilotPosition): boolean => {
   const identity = position.market;
-  return identity.tokenMint === market.assetRef && identity.expiryFamily === market.expiryFamily &&
+  return identity.tokenMint === market.tokenMint && identity.expiryFamily === market.expiryFamily &&
     identity.expiryTs === market.expiryTs && identity.targetValue === market.strikePrice;
 };
 
@@ -75,7 +75,7 @@ export const createSdkRuntimeAdapter = ({
   const prepareAndExecute = async (market: PilotMarket, quote: Awaited<ReturnType<QuotesClient["get"]>>) => {
     const live = requireLive();
     const clientActionId = `pilot-${crypto.randomUUID()}`;
-    const marketIdentity = { tokenMint: market.assetRef, source: market.source, collateral: market.raw.collateral, expiryFamily: market.expiryFamily, expiryTs: market.expiryTs, targetValue: market.strikePrice };
+    const marketIdentity = { tokenMint: market.tokenMint, source: market.source, collateral: market.raw.collateral, expiryFamily: market.expiryFamily, expiryTs: market.expiryTs, targetValue: market.strikePrice };
     const intentHash = await createPilotIntentHash({ clientActionId, owner: live.owner, market: marketIdentity, quote });
     return executionResult(await live.executor.execute(await transactions.prepare({ owner: live.owner, market, quote, clientActionId, intentHash })));
   };

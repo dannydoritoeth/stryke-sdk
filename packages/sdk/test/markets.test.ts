@@ -23,12 +23,13 @@ const lifecycle = (
 const row = (symbol: "BTC" | "SOL", expiryFamily: string, expiryTs: number) => ({
   marketId: `pyth:${symbol}:${expiryFamily}:${expiryTs}`,
   assetRef: `${symbol.toLowerCase()}-feed`,
+  tokenMint: "So11111111111111111111111111111111111111112",
   symbol,
   source: "pyth_oracle",
   collateral: { symbol: "SOL" },
   expiryFamily,
   expiryTs,
-  targetValue: "7000000000000",
+  targetValue: "70000",
   status: "open",
   rawStatus: "active",
   pilotLifecycle: lifecycle(),
@@ -122,7 +123,7 @@ describe("pilot market discovery", () => {
 
     await expect(
       new MarketsClient(client as never).current("BTC", "five_minute")
-    ).resolves.toMatchObject({ strikePrice: "7000000000000" });
+    ).resolves.toMatchObject({ strikePrice: "70000" });
   });
 
   it("rejects_asset_feed_or_expiry_identity_mismatch", () => {
@@ -140,10 +141,10 @@ describe("pilot market discovery", () => {
     expect(
       parsePilotMarket(row("BTC", "five_minute", 1_800_000_000), false, "2026-07-22T00:00:01.000Z")
     ).toMatchObject({
-      strikePrice: "7000000000000",
+      strikePrice: "70000",
       strikePriceDecimal: 70000,
       rawStatus: "active",
-      pools: { yesCollateralUnits: "200", noCollateralUnits: "300", stale: false },
+      pools: { yes: "200", no: "300", stale: false },
       probability: { yesBps: 4000, noBps: 6000 },
       generatedAt: "2026-07-22T00:00:01.000Z",
       lifecycle: {
@@ -206,5 +207,19 @@ describe("pilot market discovery", () => {
     await expect(
       new MarketsClient(client as never).current("BTC", "five_minute")
     ).rejects.toMatchObject({ code: "source_stale", retryable: true });
+  });
+
+  it("hydrates_typed_pools_and_probability_from_authoritative_surface_link", async () => {
+    const candidate = { ...row("BTC", "five_minute", 1_800_000_000), links: { surface: "/v1/markets/id/surface" } } as Record<string, unknown>;
+    delete candidate.selectedMarket;
+    const calls: string[] = [];
+    const client = { requestJson: async (path: string) => {
+      calls.push(path);
+      return path.includes("/surface")
+        ? { surface: { pools: { yesPool: "11", noPool: "12", stale: false }, odds: { yesBps: 4783, noBps: 5217 } }, metadata: { stale: false } }
+        : { markets: [candidate], metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: "2026-07-22T00:00:00.000Z", stale: false } };
+    } };
+    await expect(new MarketsClient(client as never).current("BTC", "five_minute")).resolves.toMatchObject({ pools: { yes: "11", no: "12" }, probability: { yesBps: 4783, noBps: 5217 } });
+    expect(calls).toHaveLength(2);
   });
 });

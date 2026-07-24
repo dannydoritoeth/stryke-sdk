@@ -52,8 +52,15 @@ export class PriceStore {
       );
     }
     const existing = this.points.get(asset) ?? [];
+    const latest = existing.at(-1);
+    if (latest && parsed.publishTime < latest.publishTime) {
+      throw new StrykeSdkError("validation", "Pyth publish time moved backwards");
+    }
     const cutoff = this.now() - this.historyWindowMs;
-    const next = [...existing, parsed]
+    const ordered = latest?.publishTime === parsed.publishTime
+      ? [...existing.slice(0, -1), parsed]
+      : [...existing, parsed];
+    const next = ordered
       .filter((point) => point.publishTime * 1_000 >= cutoff)
       .slice(-this.maximumHistoryPoints);
     this.points.set(asset, next);

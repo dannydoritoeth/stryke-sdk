@@ -251,7 +251,7 @@ export class TransactionsClient {
     }
     const collateral = market.raw.collateral;
     const marketIdentity = {
-      tokenMint: market.assetRef,
+      tokenMint: market.tokenMint,
       source: market.source,
       collateral,
       expiryFamily: market.expiryFamily,

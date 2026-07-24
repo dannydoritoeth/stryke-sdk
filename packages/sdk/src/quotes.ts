@@ -129,7 +129,7 @@ export class QuotesClient {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         market: {
-          tokenMint: market.assetRef,
+          tokenMint: market.tokenMint,
           source: market.source,
           collateral,
           expiryFamily: market.expiryFamily,

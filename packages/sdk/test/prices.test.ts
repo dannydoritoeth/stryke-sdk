@@ -39,6 +39,15 @@ describe("Pyth price store", () => {
     expect(store.history("BTC")).toHaveLength(2);
   });
 
+  it("replaces_same_publish_time_and_rejects_backwards_history", () => {
+    const store = new PriceStore({ now: () => 1_800_000_001_000 });
+    store.ingest("BTC", update("BTC", 1_800_000_000));
+    store.ingest("BTC", update("BTC", 1_800_000_000, "7000100000000"));
+    expect(store.history("BTC")).toHaveLength(1);
+    expect(store.current("BTC").price).toBe(70_001);
+    expect(() => store.ingest("BTC", update("BTC", 1_799_999_999))).toThrow(/moved backwards/);
+  });
+
   it("rejects_wrong_feed_future_stale_and_non_numeric_updates", () => {
     const now = 1_800_000_100_000;
     const store = new PriceStore({ now: () => now });

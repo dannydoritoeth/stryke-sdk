@@ -84,7 +84,7 @@ export const executeReviewedLiveBuy = async ({
   const market = await flow.current(asset, expiryFamily);
   const quote = await flow.buy({ market, side, amount, maximumSlippageBps });
   const marketIdentity = {
-    tokenMint: market.assetRef,
+    tokenMint: market.tokenMint,
     source: market.source,
     collateral: market.raw.collateral,
     expiryFamily: market.expiryFamily,
