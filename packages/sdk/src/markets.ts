@@ -227,6 +227,11 @@ export class MarketsClient {
     const earliest = eligible.filter((market) => market.expiryTs === eligible[0]!.expiryTs);
     const materialized = earliest.filter((market) => isAddress(market.tokenMint));
     const preferred = materialized.length > 0 ? materialized : earliest;
+    const tradeable = preferred.filter((market) => market.tradeability.canQuote && market.tradeability.canPrepareTransaction);
+    if (tradeable.length === 1) return tradeable[0]!;
+    if (tradeable.length === 0 && preferred.length > 1) {
+      throw new StrykeSdkError("source_unavailable", "Requested pilot market has no unique tradeable current market", true, { asset, expiryFamily });
+    }
     if (preferred.length !== 1) {
       throw new StrykeSdkError("validation", "Requested pilot market is ambiguous");
     }

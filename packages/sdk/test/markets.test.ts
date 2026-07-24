@@ -132,6 +132,17 @@ describe("pilot market discovery", () => {
     await expect(new MarketsClient(client as never).current("BTC", "five_minute")).resolves.toMatchObject({ tokenMint: initializable.tokenMint, status: "initializable" });
   });
 
+  it("multiple_non_tradeable_initializable_candidates_are_retryable_unavailable", async () => {
+    const initializable = (targetValue: string) => ({
+      ...row("BTC", "five_minute", 1_800_000_000), targetValue,
+      tokenMint: `0x${targetValue.padStart(64, "a")}`,
+      status: "initializable",
+      tradeability: { canQuote: false, canPrepareTransaction: false, disabledReasons: ["not_initialized"] },
+    });
+    const client = { requestJson: async () => ({ markets: [initializable("1"), initializable("2")], metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: "2026-07-22T00:00:00.000Z", stale: false } }) };
+    await expect(new MarketsClient(client as never).current("BTC", "five_minute")).rejects.toMatchObject({ code: "source_unavailable", retryable: true });
+  });
+
   it("rejects_asset_feed_or_expiry_identity_mismatch", () => {
     expect(() => parsePilotMarket({ ...row("BTC", "five_minute", 1), symbol: "ETH" }, false))
       .toThrowError(expect.objectContaining({ code: "unsupported_asset" }));
