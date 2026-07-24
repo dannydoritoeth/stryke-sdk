@@ -8,6 +8,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run test",
     "start:read-only": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js --read-only",
+    "start:live-data": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js --live-data",
     "start:live": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js --live",
     "clean": "rm -rf dist"
   },

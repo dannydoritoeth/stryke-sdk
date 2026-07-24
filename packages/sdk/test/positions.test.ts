@@ -27,6 +27,7 @@ const row = (
   noShares: "0",
   yesCostBasisCollateralUnits: "7",
   noCostBasisCollateralUnits: "0",
+  poolState: { realYesPoolCollateralUnits: "70", realNoPoolCollateralUnits: "30", totalYesShares: "20", totalNoShares: "10" },
   forceClose: { expiryAt: deadline },
   pilotLifecycle: {
     schemaVersion: "stryke.pilotLifecycle.v1",

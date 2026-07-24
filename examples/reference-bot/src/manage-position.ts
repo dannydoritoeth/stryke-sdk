@@ -7,6 +7,60 @@ export type PositionDecision = {
   reason: string;
   sellNowValue?: bigint;
   holdValue?: bigint;
+  pnlBps?: bigint;
+};
+
+export const decidePositionExit = ({
+  side,
+  fairProbability,
+  sellQuote,
+  shares,
+  costBasisCollateralUnits,
+  ifWinPayout,
+  stopLossBps,
+  takeProfitBps,
+  pendingAction = false,
+}: {
+  side: "yes" | "no";
+  fairProbability: number;
+  sellQuote?: ExecutableQuote;
+  shares?: string;
+  costBasisCollateralUnits?: string;
+  ifWinPayout?: string;
+  stopLossBps: number;
+  takeProfitBps: number;
+  pendingAction?: boolean;
+}): PositionDecision => {
+  if (
+    pendingAction ||
+    !Number.isSafeInteger(stopLossBps) || stopLossBps <= 0 || stopLossBps > 10_000 ||
+    !Number.isSafeInteger(takeProfitBps) || takeProfitBps <= 0 ||
+    !shares || !/^\d+$/.test(shares) || BigInt(shares) <= 0n ||
+    !costBasisCollateralUnits || !/^\d+$/.test(costBasisCollateralUnits) || BigInt(costBasisCollateralUnits) <= 0n ||
+    sellQuote?.action !== "sell" || sellQuote.side !== side || sellQuote.amount !== shares ||
+    !sellQuote.expectedNetProceeds || !/^\d+$/.test(sellQuote.expectedNetProceeds) ||
+    Date.now() >= Date.parse(sellQuote.expiresAt)
+  ) {
+    return { action: "decision_unavailable", reason: "exit_inputs_unavailable" };
+  }
+  const costBasis = BigInt(costBasisCollateralUnits);
+  const proceeds = BigInt(sellQuote.expectedNetProceeds);
+  const pnlBps = ((proceeds - costBasis) * 10_000n) / costBasis;
+  if (pnlBps <= -BigInt(stopLossBps)) {
+    return { action: "sell", reason: "stop_loss", sellNowValue: proceeds, pnlBps };
+  }
+  if (pnlBps >= BigInt(takeProfitBps)) {
+    return { action: "sell", reason: "take_profit", sellNowValue: proceeds, pnlBps };
+  }
+  return {
+    ...decideOpenPosition({
+      side,
+      fairProbability,
+      sellQuote,
+      ...(ifWinPayout === undefined ? {} : { ifWinPayout }),
+    }),
+    pnlBps,
+  };
 };
 
 export const decideOpenPosition = ({

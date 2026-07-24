@@ -27,8 +27,8 @@ export {
   parsePilotMarketLifecycle,
   parsePilotPositionLifecycle,
 } from "./lifecycle.js";
-export { PositionsClient, parsePilotPosition, terminalActionFor } from "./positions.js";
-export type { PilotPosition, PositionTerminalAction } from "./positions.js";
+export { PositionsClient, parsePilotPosition, positionIfWinPayout, positionSideExposures, terminalActionFor } from "./positions.js";
+export type { PilotPosition, PilotPositionPoolState, PilotPositionSideExposure, PositionTerminalAction } from "./positions.js";
 export {
   firstVerifiedExpiryCrossingObservation,
   settlementOutcome,

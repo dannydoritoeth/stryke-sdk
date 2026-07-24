@@ -132,19 +132,23 @@ export const parseReferenceBotEnv = (env: NodeJS.ProcessEnv = process.env): Refe
   const side = required("STRYKE_SIDE", referenceBotDefaults.side) as "yes" | "no";
   const estimator = required("STRYKE_ESTIMATOR", referenceBotDefaults.estimator) as BaselineEstimator;
   const sol = (name: string, fallback: bigint) => solToLamports(required(name, `${Number(fallback) / 1e9}`), name);
+  const numeric = (name: string, fallback: number) => {
+    if (activeLive) required(name);
+    return numberEnv(env, name, fallback);
+  };
   const config = parseReferenceBotConfig({
     asset, expiryFamily, side, estimator,
     tradeSizeLamports: sol("STRYKE_TRADE_SIZE_SOL", referenceBotDefaults.tradeSizeLamports),
     maximumTradeSizeLamports: sol("STRYKE_MAXIMUM_TRADE_SIZE_SOL", referenceBotDefaults.maximumTradeSizeLamports),
     maximumAggregateExposureLamports: sol("STRYKE_MAXIMUM_AGGREGATE_EXPOSURE_SOL", referenceBotDefaults.maximumAggregateExposureLamports),
-    minimumEntryEdgeBps: numberEnv(env, "STRYKE_MINIMUM_ENTRY_EDGE_BPS", referenceBotDefaults.minimumEntryEdgeBps),
-    maximumPriceImpactBps: numberEnv(env, "STRYKE_MAXIMUM_PRICE_IMPACT_BPS", referenceBotDefaults.maximumPriceImpactBps),
-    minimumSecondsToExpiry: numberEnv(env, "STRYKE_MINIMUM_SECONDS_TO_EXPIRY", referenceBotDefaults.minimumSecondsToExpiry),
-    maximumOpenPositions: numberEnv(env, "STRYKE_MAXIMUM_OPEN_POSITIONS", referenceBotDefaults.maximumOpenPositions),
-    tickIntervalMs: numberEnv(env, "STRYKE_TICK_INTERVAL_MS", referenceBotDefaults.tickIntervalMs),
-    stopLossBps: numberEnv(env, "STRYKE_STOP_LOSS_BPS", referenceBotDefaults.stopLossBps),
-    takeProfitBps: numberEnv(env, "STRYKE_TAKE_PROFIT_BPS", referenceBotDefaults.takeProfitBps),
-    priceHistoryMaxPoints: numberEnv(env, "STRYKE_PRICE_HISTORY_MAX_POINTS", referenceBotDefaults.priceHistoryMaxPoints),
+    minimumEntryEdgeBps: numeric("STRYKE_MINIMUM_ENTRY_EDGE_BPS", referenceBotDefaults.minimumEntryEdgeBps),
+    maximumPriceImpactBps: numeric("STRYKE_MAXIMUM_PRICE_IMPACT_BPS", referenceBotDefaults.maximumPriceImpactBps),
+    minimumSecondsToExpiry: numeric("STRYKE_MINIMUM_SECONDS_TO_EXPIRY", referenceBotDefaults.minimumSecondsToExpiry),
+    maximumOpenPositions: numeric("STRYKE_MAXIMUM_OPEN_POSITIONS", referenceBotDefaults.maximumOpenPositions),
+    tickIntervalMs: numeric("STRYKE_TICK_INTERVAL_MS", referenceBotDefaults.tickIntervalMs),
+    stopLossBps: numeric("STRYKE_STOP_LOSS_BPS", referenceBotDefaults.stopLossBps),
+    takeProfitBps: numeric("STRYKE_TAKE_PROFIT_BPS", referenceBotDefaults.takeProfitBps),
+    priceHistoryMaxPoints: numeric("STRYKE_PRICE_HISTORY_MAX_POINTS", referenceBotDefaults.priceHistoryMaxPoints),
     readOnlyMode, liveTradingEnabled, killSwitchEnabled,
     checkpointPath: env.STRYKE_CHECKPOINT_PATH ?? referenceBotDefaults.checkpointPath,
     ...(env.STRYKE_API_BASE_URL ? { apiBaseUrl: env.STRYKE_API_BASE_URL } : {}),

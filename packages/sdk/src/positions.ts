@@ -19,11 +19,19 @@ export type PilotPosition = {
   noShares: string;
   yesCostBasisCollateralUnits?: string;
   noCostBasisCollateralUnits?: string;
+  poolState?: PilotPositionPoolState;
   claimableAmount?: string;
   refundableAmount?: string;
   actionDeadline?: string;
   lifecycle: PilotLifecycleEvidence<PilotPositionLifecycleState>;
   raw: Readonly<Record<string, unknown>>;
+};
+
+export type PilotPositionPoolState = {
+  realYesPoolCollateralUnits: string;
+  realNoPoolCollateralUnits: string;
+  totalYesShares: string;
+  totalNoShares: string;
 };
 
 type PortfolioResponse = {
@@ -56,6 +64,17 @@ const amount = (value: unknown, field: string): string => {
 
 const optionalAmount = (value: unknown, field: string): string | undefined =>
   value === undefined ? undefined : amount(value, field);
+
+const poolState = (value: unknown): PilotPositionPoolState | undefined => {
+  if (value === undefined) return undefined;
+  const row = record(value, "poolState");
+  return {
+    realYesPoolCollateralUnits: amount(row.realYesPoolCollateralUnits, "poolState.realYesPoolCollateralUnits"),
+    realNoPoolCollateralUnits: amount(row.realNoPoolCollateralUnits, "poolState.realNoPoolCollateralUnits"),
+    totalYesShares: amount(row.totalYesShares, "poolState.totalYesShares"),
+    totalNoShares: amount(row.totalNoShares, "poolState.totalNoShares"),
+  };
+};
 
 const positionId = (row: Record<string, unknown>): string =>
   [
@@ -94,6 +113,7 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
     row.noCostBasisCollateralUnits,
     "noCostBasisCollateralUnits"
   );
+  const parsedPoolState = poolState(row.poolState);
   return {
     positionId: positionId(row),
     owner: text(row.owner, "owner"),
@@ -111,12 +131,25 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
     noShares: amount(row.noShares, "noShares"),
     ...(yesCostBasisCollateralUnits === undefined ? {} : { yesCostBasisCollateralUnits }),
     ...(noCostBasisCollateralUnits === undefined ? {} : { noCostBasisCollateralUnits }),
+    ...(parsedPoolState === undefined ? {} : { poolState: parsedPoolState }),
     ...(claimableAmount === undefined ? {} : { claimableAmount }),
     ...(refundableAmount === undefined ? {} : { refundableAmount }),
     ...(typeof actionDeadline === "string" ? { actionDeadline } : {}),
     lifecycle,
     raw: row,
   };
+};
+
+export const positionIfWinPayout = (
+  position: PilotPosition,
+  exposure: PilotPositionSideExposure
+): string | undefined => {
+  const pool = position.poolState;
+  if (!pool) return undefined;
+  const totalShares = BigInt(exposure.side === "yes" ? pool.totalYesShares : pool.totalNoShares);
+  if (totalShares <= 0n) return undefined;
+  const totalPool = BigInt(pool.realYesPoolCollateralUnits) + BigInt(pool.realNoPoolCollateralUnits);
+  return ((totalPool * BigInt(exposure.shares)) / totalShares).toString();
 };
 
 export type PilotPositionSideExposure = {

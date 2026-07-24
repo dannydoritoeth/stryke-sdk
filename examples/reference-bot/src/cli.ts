@@ -1,175 +1,99 @@
 import {
+  FileActionCheckpointStore,
+  PositionsClient,
+  PriceStore,
+  ReviewedTransactionExecutor,
   SDK_VERSION,
   SUPPORTED_API_SCHEMA_VERSION,
   SUPPORTED_API_VERSION,
   SUPPORTED_PROGRAM_ID,
   SUPPORTED_PROGRAM_VERSION,
-  StrykeSdkError,
+  SolanaReviewedExecutionAdapter,
   StrykeClient,
+  StrykeSdkError,
+  TransactionsClient,
+  subscribeHermes,
   type ExecutableQuote,
 } from "@stryke/sdk";
 import { createSolanaRpc, isTransactionSigner, type TransactionSigner } from "@solana/kit";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { parseReferenceBotConfig } from "./config.js";
+import { runReferenceBot } from "./bot.js";
+import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig } from "./config.js";
 import { decideEntry } from "./entry.js";
 import { emitDecision } from "./logging.js";
+import { createSdkRuntimeAdapter } from "./sdk-runtime.js";
 import { estimateFairProbability } from "./strategy.js";
 import { loadWalletForLiveTrading } from "./wallet.js";
-import { runReviewedLiveBuy, runReviewedTerminalAction } from "./live-runner.js";
 
-const compatibility = {
-  sdkVersion: SDK_VERSION,
-  apiVersion: SUPPORTED_API_VERSION,
-  apiSchemaVersion: SUPPORTED_API_SCHEMA_VERSION,
-  programId: SUPPORTED_PROGRAM_ID,
-  programVersion: SUPPORTED_PROGRAM_VERSION,
-};
+const compatibility = { sdkVersion: SDK_VERSION, apiVersion: SUPPORTED_API_VERSION, apiSchemaVersion: SUPPORTED_API_SCHEMA_VERSION, programId: SUPPORTED_PROGRAM_ID, programVersion: SUPPORTED_PROGRAM_VERSION };
 
 const sampleQuote: ExecutableQuote = {
-  quoteId: "read-only-smoke",
-  generatedAt: new Date().toISOString(),
-  expiresAt: new Date(Date.now() + 60_000).toISOString(),
-  marketStateVersion: "documentation-smoke",
-  action: "buy",
-  side: "yes",
-  amount: "10000000",
-  fee: "0",
-  feeBreakdown: {
-    feeMode: "documentation_smoke",
-    normalTradingFeeWaivedCollateralUnits: "0",
-    grossTradeFeeCollateralUnits: "0",
-    normalTradingFeeBps: 0,
-    feeBpsApplied: 0,
-  },
-  expectedShares: "20000000",
-  minimumOutput: "19800000",
-  maximumSlippageBpsApplied: 100,
-  executableProbabilityBps: 4800,
-  priceImpactBps: 25,
-  raw: {},
+  quoteId: "read-only-smoke", generatedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString(),
+  marketStateVersion: "documentation-smoke", action: "buy", side: "yes", amount: "10000000", fee: "0",
+  feeBreakdown: { feeMode: "documentation_smoke", normalTradingFeeWaivedCollateralUnits: "0", grossTradeFeeCollateralUnits: "0", normalTradingFeeBps: 0, feeBpsApplied: 0 },
+  expectedShares: "20000000", minimumOutput: "19800000", maximumSlippageBpsApplied: 100,
+  executableProbabilityBps: 4800, priceImpactBps: 25, raw: {},
 };
 
-const envBoolean = (name: string): boolean | undefined => {
-  const value = process.env[name];
-  if (value === undefined) return undefined;
-  if (value === "true") return true;
-  if (value === "false") return false;
-  throw new StrykeSdkError("configuration", `${name} must be true or false`);
-};
-
-const runReadOnly = () => {
-  const input = {
-    currentPrice: 100_100,
-    strikePrice: 100_000,
-    secondsRemaining: 180,
-    priceHistory: [
-      { price: 100_000, publishTime: Math.floor(Date.now() / 1000) - 1 },
-      { price: 100_100, publishTime: Math.floor(Date.now() / 1000) },
-    ],
-  };
+const runFixtureSmoke = () => {
+  const now = Math.floor(Date.now() / 1_000);
+  const input = { currentPrice: 100_100, strikePrice: 100_000, secondsRemaining: 180, priceHistory: [{ price: 100_000, publishTime: now - 1 }, { price: 100_100, publishTime: now }] };
   const config = parseReferenceBotConfig({ killSwitchEnabled: false });
-  const decision = decideEntry({
-    fairProbability: estimateFairProbability(input),
-    quote: sampleQuote,
-    config,
-    secondsRemaining: input.secondsRemaining,
-    tradeSizeLamports: 10_000_000n,
-    aggregateExposureLamports: 0n,
-    openPositions: 0,
-    dataFresh: true,
-  });
-  emitDecision({
-    event: "reference_bot_decision",
-    market: { asset: "BTC", expiryFamily: "five_minute", mode: "documentation_smoke" },
-    marketState: "open",
-    marketStateVersion: sampleQuote.marketStateVersion,
-    pyth: { price: input.currentPrice, publishTime: input.priceHistory[0]!.publishTime },
-    fairProbability: decision.fairProbability,
-    quote: { quoteId: decision.quoteId, executableProbability: decision.quoteProbability },
-    decision: { action: decision.action, reason: decision.reason },
-    safetyChecks: decision.safetyChecks,
-  });
+  const decision = decideEntry({ fairProbability: estimateFairProbability(input, config.estimator), quote: sampleQuote, config, secondsRemaining: input.secondsRemaining, tradeSizeLamports: config.tradeSizeLamports, aggregateExposureLamports: 0n, openPositions: 0, dataFresh: true });
+  emitDecision({ event: "reference_bot_decision", market: { asset: config.asset, expiryFamily: config.expiryFamily, mode: "documentation_smoke" }, marketState: "open", marketStateVersion: sampleQuote.marketStateVersion, pyth: { price: input.currentPrice, publishTime: now }, fairProbability: decision.fairProbability, quote: { quoteId: decision.quoteId, executableProbability: decision.quoteProbability }, decision: { action: decision.action, reason: decision.reason }, safetyChecks: decision.safetyChecks });
   console.log(JSON.stringify({ event: "stryke_compatibility", ...compatibility }));
 };
 
-const runLiveGate = async () => {
-  const readOnlyMode = envBoolean("STRYKE_READ_ONLY_MODE");
-  const liveTradingEnabled = envBoolean("STRYKE_LIVE_TRADING_ENABLED");
-  const killSwitchEnabled = envBoolean("STRYKE_KILL_SWITCH_ENABLED");
-  const walletAdapterPath = process.env.STRYKE_WALLET_ADAPTER_PATH;
-  const config = parseReferenceBotConfig({
-    ...(readOnlyMode === undefined ? {} : { readOnlyMode }),
-    ...(liveTradingEnabled === undefined ? {} : { liveTradingEnabled }),
-    ...(killSwitchEnabled === undefined ? {} : { killSwitchEnabled }),
-    ...(walletAdapterPath === undefined ? {} : { walletAdapterPath }),
-  });
-  const signer = await loadWalletForLiveTrading<TransactionSigner>(config, async (path) => {
-    const module = (await import(
-      pathToFileURL(resolve(process.env.INIT_CWD ?? process.cwd(), path)).href
-    )) as { default?: unknown };
-    if (module.default === undefined) throw new StrykeSdkError("configuration", "Wallet adapter has no default export");
-    if (
-      typeof module.default !== "object" ||
-      module.default === null ||
-      !("address" in module.default) ||
-      !isTransactionSigner(module.default as { address: never })
-    ) {
-      throw new StrykeSdkError("configuration", "Wallet adapter must default-export a Solana transaction signer");
+const loadSigner = async (config: ReturnType<typeof parseReferenceBotEnv>) => loadWalletForLiveTrading<TransactionSigner>(config, async (path) => {
+  const module = (await import(pathToFileURL(resolve(process.env.INIT_CWD ?? process.cwd(), path)).href)) as { default?: unknown };
+  if (!module.default || typeof module.default !== "object" || !("address" in module.default) || !isTransactionSigner(module.default as { address: never })) {
+    throw new StrykeSdkError("configuration", "Wallet adapter must default-export a Solana transaction signer");
+  }
+  return module.default as TransactionSigner;
+});
+
+const waitForPriceHistory = async (store: PriceStore, asset: "BTC" | "SOL", timeoutMs = 30_000) => {
+  const started = Date.now();
+  while (store.history(asset).length < 2) {
+    if (Date.now() - started >= timeoutMs) throw new StrykeSdkError("source_unavailable", "Pyth did not provide two fresh ordered prices within 30 seconds", true);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+};
+
+const runSdkBot = async () => {
+  const config = parseReferenceBotEnv();
+  if (!config.apiBaseUrl) throw new StrykeSdkError("configuration", "STRYKE_API_BASE_URL is required for live-data mode");
+  console.log(JSON.stringify({ event: "reference_bot_config", config: publicConfig(config), ...compatibility }));
+  const client = await StrykeClient.connect({ apiBaseUrl: config.apiBaseUrl });
+  const priceStore = new PriceStore({ maximumHistoryPoints: config.priceHistoryMaxPoints });
+  const subscription = await subscribeHermes({ endpoint: process.env.STRYKE_PYTH_HERMES_URL ?? "https://hermes.pyth.network", assets: [config.asset], store: priceStore });
+  try {
+    await waitForPriceHistory(priceStore, config.asset);
+    const signer = await loadSigner(config);
+    const rpc = createSolanaRpc(config.solanaRpcUrl ?? "http://127.0.0.1:8899");
+    const checkpoint = new FileActionCheckpointStore(config.checkpointPath);
+    let executor: ReviewedTransactionExecutor | undefined;
+    if (signer) {
+      const transactions = new TransactionsClient(client, rpc);
+      const positions = new PositionsClient(client);
+      const executionAdapter = new SolanaReviewedExecutionAdapter({ rpc, signer, refresh: async ({ clientActionId }) => ({ action: await transactions.reconcile(clientActionId), positions: await positions.list(signer.address) }) });
+      executor = new ReviewedTransactionExecutor(transactions, checkpoint, executionAdapter);
     }
-    return module.default as TransactionSigner;
-  });
-  if (!signer) throw new StrykeSdkError("configuration", "Live gates are not all enabled");
-  const apiBaseUrl = process.env.STRYKE_API_BASE_URL;
-  const rpcUrl = process.env.STRYKE_SOLANA_RPC_URL;
-  if (!apiBaseUrl || !rpcUrl) {
-    throw new StrykeSdkError("configuration", "Live trading requires API and Solana RPC URLs");
-  }
-  const client = await StrykeClient.connect({ apiBaseUrl });
-  const liveAction = process.env.STRYKE_LIVE_ACTION ?? "buy";
-  if (liveAction !== "buy" && liveAction !== "terminal") {
-    throw new StrykeSdkError("configuration", "STRYKE_LIVE_ACTION must be buy or terminal");
-  }
-  const liveInput = {
-    client,
-    rpc: createSolanaRpc(rpcUrl),
-    signer,
-    checkpointPath: process.env.STRYKE_CHECKPOINT_PATH ?? ".stryke/reference-bot-action.json",
-  };
-  const result = liveAction === "buy"
-    ? await runReviewedLiveBuy(liveInput)
-    : await runReviewedTerminalAction({
-        ...liveInput,
-        ...(process.env.STRYKE_TERMINAL_POSITION_ID
-          ? { positionId: process.env.STRYKE_TERMINAL_POSITION_ID }
-          : {}),
-      });
-  const execution = result as {
-    clientActionId?: string;
-    signature?: string;
-    state?: string;
-    refreshed?: { action?: { state?: string }; positions?: unknown[] };
-  };
-  console.log(JSON.stringify({
-    event: "live_action_complete",
-    action: liveAction,
-    ...compatibility,
-    clientActionId: execution.clientActionId,
-    signature: execution.signature,
-    state: execution.state,
-    reconciledState: execution.refreshed?.action?.state,
-    positionCount: execution.refreshed?.positions?.length,
-  }));
+    const adapter = createSdkRuntimeAdapter({ client, rpc, priceStore, checkpoint, config, ...(signer ? { owner: signer.address } : {}), ...(executor ? { executor } : {}) });
+    const controller = new AbortController();
+    process.once("SIGINT", () => controller.abort());
+    process.once("SIGTERM", () => controller.abort());
+    await runReferenceBot({ config, adapter, once: process.argv.includes("--once"), signal: controller.signal });
+  } finally { subscription.close(); }
 };
 
 try {
-  if (process.argv.includes("--live")) await runLiveGate();
-  else await runReadOnly();
+  if (process.argv.includes("--live") || process.argv.includes("--live-data")) await runSdkBot();
+  else runFixtureSmoke();
 } catch (error) {
-  const failure = error instanceof StrykeSdkError
-    ? { code: error.code, message: error.message, retryable: error.retryable }
-    : { code: "configuration", message: "Reference bot startup failed", retryable: false };
+  const failure = error instanceof StrykeSdkError ? { code: error.code, message: error.message, retryable: error.retryable } : { code: "configuration", message: error instanceof Error ? error.message : "Reference bot startup failed", retryable: false };
   console.error(JSON.stringify({ event: "reference_bot_error", ...failure }));
   process.exitCode = 1;
 }
