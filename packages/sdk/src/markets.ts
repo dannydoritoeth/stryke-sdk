@@ -28,6 +28,8 @@ export type PilotMarket = CanonicalMarketIdentity & {
     disabledReasons: readonly string[];
   };
   stale: boolean;
+  pools: { yesCollateralUnits: string; noCollateralUnits: string; stale: boolean };
+  probability: { yesBps: number; noBps: number };
   lifecycle: PilotLifecycleEvidence<PilotMarketLifecycleState>;
   rawStatus: string;
   generatedAt: string;
@@ -60,6 +62,19 @@ const boolean = (value: unknown, name: string): boolean => {
   return value;
 };
 
+const amount = (value: unknown, name: string): string => {
+  const parsed = text(value, name);
+  if (!/^\d+$/.test(parsed)) throw new StrykeSdkError("validation", `Invalid market amount: ${name}`);
+  return parsed;
+};
+
+const bps = (value: unknown, name: string): number => {
+  if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > 10_000) {
+    throw new StrykeSdkError("validation", `Invalid market probability: ${name}`);
+  }
+  return value as number;
+};
+
 export const parsePilotMarket = (
   value: unknown,
   stale: boolean,
@@ -74,6 +89,9 @@ export const parsePilotMarket = (
   const status = text(row.status, "status");
   const rawStatus = text(row.rawStatus, "rawStatus");
   const lifecycle = parsePilotMarketLifecycle(row.pilotLifecycle);
+  const selectedMarket = record(row.selectedMarket, "selectedMarket");
+  const pools = record(selectedMarket.pools, "selectedMarket.pools");
+  const odds = record(selectedMarket.odds, "selectedMarket.odds");
   const disabledReasons = tradeability.disabledReasons;
   if (!(PILOT_ASSETS as readonly string[]).includes(asset)) {
     throw new StrykeSdkError("unsupported_asset", `Unsupported pilot asset: ${asset}`);
@@ -116,6 +134,15 @@ export const parsePilotMarket = (
       ),
     },
     stale,
+    pools: {
+      yesCollateralUnits: amount(pools.yesPool, "selectedMarket.pools.yesPool"),
+      noCollateralUnits: amount(pools.noPool, "selectedMarket.pools.noPool"),
+      stale: boolean(pools.stale, "selectedMarket.pools.stale"),
+    },
+    probability: {
+      yesBps: bps(odds.yesBps, "selectedMarket.odds.yesBps"),
+      noBps: bps(odds.noBps, "selectedMarket.odds.noBps"),
+    },
     lifecycle,
     rawStatus,
     generatedAt: text(generatedAt, "metadata.generatedAt"),

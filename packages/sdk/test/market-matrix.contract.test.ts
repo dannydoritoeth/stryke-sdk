@@ -55,6 +55,10 @@ const contractCase = (
                 canPrepareTransaction: true,
                 disabledReasons: [],
               },
+              selectedMarket: {
+                pools: { yesPool: "500000000", noPool: "500000000", stale: false },
+                odds: { yesBps: 5000, noBps: 5000 },
+              },
             },
           ],
           metadata: {
@@ -117,6 +121,8 @@ const contractCase = (
     source: "pyth_oracle",
     collateral: "SOL",
     stale: false,
+    pools: { yesCollateralUnits: "500000000", noCollateralUnits: "500000000", stale: false },
+    probability: { yesBps: 5000, noBps: 5000 },
   });
   expect(quote).toMatchObject({
     action: "buy",

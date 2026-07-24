@@ -37,6 +37,10 @@ const row = (symbol: "BTC" | "SOL", expiryFamily: string, expiryTs: number) => (
     canPrepareTransaction: true,
     disabledReasons: [],
   },
+  selectedMarket: {
+    pools: { yesPool: "200", noPool: "300", stale: false },
+    odds: { yesBps: 4000, noBps: 6000 },
+  },
 });
 
 describe("pilot market discovery", () => {
@@ -138,6 +142,8 @@ describe("pilot market discovery", () => {
     ).toMatchObject({
       strikePrice: "7000000000000",
       rawStatus: "active",
+      pools: { yesCollateralUnits: "200", noCollateralUnits: "300", stale: false },
+      probability: { yesBps: 4000, noBps: 6000 },
       generatedAt: "2026-07-22T00:00:01.000Z",
       lifecycle: {
         schemaVersion: "stryke.pilotLifecycle.v1",
