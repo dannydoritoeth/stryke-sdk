@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -16,9 +16,11 @@ const option = (name) => {
 const requestedAsset = option("asset");
 const requestedExpiry = option("expiry");
 const timeoutSeconds = Number(option("timeout-seconds") ?? "7200");
+const paperTimeoutSeconds = Number(option("paper-timeout-seconds") ?? "90");
 if (requestedAsset && !assets.includes(requestedAsset)) throw new Error("--asset must be BTC or SOL");
 if (requestedExpiry && !expiries.includes(requestedExpiry)) throw new Error("--expiry is invalid");
 if (!Number.isSafeInteger(timeoutSeconds) || timeoutSeconds < 60) throw new Error("--timeout-seconds must be an integer >= 60");
+if (!Number.isSafeInteger(paperTimeoutSeconds) || paperTimeoutSeconds < 30) throw new Error("--paper-timeout-seconds must be an integer >= 30");
 
 const cells = assets
   .filter((asset) => !requestedAsset || asset === requestedAsset)
@@ -27,6 +29,33 @@ const revision = process.env.STRYKE_MATRIX_REVISION ?? "working-tree";
 const runId = `bot-matrix-${new Date().toISOString().replaceAll(/[-:.]/g, "").replace("Z", "Z")}`;
 const directory = resolve("artifacts/devnet-bot-matrix", runId);
 await mkdir(directory, { recursive: true });
+
+const runPaperFollowUp = ({ cellId, cellEnv, lines }) => new Promise((complete) => {
+  const paper = spawn(process.execPath, ["--env-file-if-exists=.env", "examples/reference-bot/dist/cli.js", "--profile=paper"], {
+    cwd: process.cwd(), env: cellEnv, stdio: ["ignore", "pipe", "pipe"],
+  });
+  let evaluated = false;
+  const record = (stream, chunk) => {
+    for (const line of String(chunk).split("\n").filter(Boolean)) {
+      lines.push({ observedAt: new Date().toISOString(), stream: `paper_${stream}`, line });
+      process.stdout.write(`[${cellId}:paper] ${line}\n`);
+      try {
+        const event = JSON.parse(line);
+        if (event.phase === "entry") {
+          evaluated = true;
+          paper.kill("SIGTERM");
+        }
+      } catch {}
+    }
+  };
+  paper.stdout.on("data", (chunk) => record("stdout", chunk));
+  paper.stderr.on("data", (chunk) => record("stderr", chunk));
+  const timer = setTimeout(() => paper.kill("SIGTERM"), paperTimeoutSeconds * 1_000);
+  paper.on("exit", () => {
+    clearTimeout(timer);
+    complete(evaluated);
+  });
+});
 
 const runCell = ({ asset, expiry }) => new Promise((complete) => {
   const cellId = `${asset.toLowerCase()}-${expiry}`;
@@ -71,16 +100,7 @@ const runCell = ({ asset, expiry }) => new Promise((complete) => {
     clearTimeout(timer);
     let nextMarketEvaluated = false;
     if (cleanLifecycle) {
-      const paper = spawnSync(process.execPath, ["--env-file-if-exists=.env", "examples/reference-bot/dist/cli.js", "--profile=paper", "--once"], {
-        cwd: process.cwd(), env: cellEnv, encoding: "utf8", timeout: 60_000,
-      });
-      for (const [stream, output] of [["stdout", paper.stdout], ["stderr", paper.stderr]]) {
-        for (const line of String(output ?? "").split("\n").filter(Boolean)) {
-          lines.push({ observedAt: new Date().toISOString(), stream: `paper_${stream}`, line });
-          process.stdout.write(`[${cellId}:paper] ${line}\n`);
-          try { const event = JSON.parse(line); if (event.phase === "entry") nextMarketEvaluated = true; } catch {}
-        }
-      }
+      nextMarketEvaluated = await runPaperFollowUp({ cellId, cellEnv, lines });
     }
     const events = lines.flatMap(({ line }) => { try { return [JSON.parse(line)]; } catch { return []; } });
     const runtimeEvents = events.filter((event) => Number.isInteger(event.tick));

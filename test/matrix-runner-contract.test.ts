@@ -19,4 +19,11 @@ describe("reference-bot devnet matrix runner", () => {
     expect(source).toContain("result.nextMarketEvaluated");
     expect(source).toContain('STRYKE_MATRIX_ONE_MINUTE_MINIMUM_SECONDS ?? "5"');
   });
+
+  it("matrix_paper_follow_up_retries_rollover_until_entry_evaluation", () => {
+    expect(source).toContain('"--profile=paper"');
+    expect(source).not.toContain('"--profile=paper", "--once"');
+    expect(source).toContain('event.phase === "entry"');
+    expect(source).toContain("paperTimeoutSeconds * 1_000");
+  });
 });
