@@ -25,6 +25,8 @@ const row = (
   strikeMarket: "strike-1",
   yesShares: "10",
   noShares: "0",
+  yesCostBasisCollateralUnits: "7",
+  noCostBasisCollateralUnits: "0",
   forceClose: { expiryAt: deadline },
   pilotLifecycle: {
     schemaVersion: "stryke.pilotLifecycle.v1",
@@ -95,6 +97,14 @@ describe("pilot positions", () => {
     expect(() => terminalActionFor(parsePilotPosition(row("lost")))).toThrowError(
       expect.objectContaining({ code: "position_state" })
     );
+  });
+
+  it("preserves_side_cost_basis_as_exact_integer_units", () => {
+    expect(parsePilotPosition(row("sellable"))).toMatchObject({
+      yesShares: "10",
+      yesCostBasisCollateralUnits: "7",
+      noCostBasisCollateralUnits: "0",
+    });
   });
 
   it("claim_refund_deadline_is_preserved_and_enforced", () => {

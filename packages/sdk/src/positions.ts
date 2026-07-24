@@ -17,6 +17,8 @@ export type PilotPosition = {
   strikeMarket?: string;
   yesShares: string;
   noShares: string;
+  yesCostBasisCollateralUnits?: string;
+  noCostBasisCollateralUnits?: string;
   claimableAmount?: string;
   refundableAmount?: string;
   actionDeadline?: string;
@@ -84,6 +86,14 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
     row.refundableAmount,
     "refundableAmount"
   );
+  const yesCostBasisCollateralUnits = optionalAmount(
+    row.yesCostBasisCollateralUnits,
+    "yesCostBasisCollateralUnits"
+  );
+  const noCostBasisCollateralUnits = optionalAmount(
+    row.noCostBasisCollateralUnits,
+    "noCostBasisCollateralUnits"
+  );
   return {
     positionId: positionId(row),
     owner: text(row.owner, "owner"),
@@ -99,12 +109,45 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
     ...(typeof row.strikeMarket === "string" ? { strikeMarket: row.strikeMarket } : {}),
     yesShares: amount(row.yesShares, "yesShares"),
     noShares: amount(row.noShares, "noShares"),
+    ...(yesCostBasisCollateralUnits === undefined ? {} : { yesCostBasisCollateralUnits }),
+    ...(noCostBasisCollateralUnits === undefined ? {} : { noCostBasisCollateralUnits }),
     ...(claimableAmount === undefined ? {} : { claimableAmount }),
     ...(refundableAmount === undefined ? {} : { refundableAmount }),
     ...(typeof actionDeadline === "string" ? { actionDeadline } : {}),
     lifecycle,
     raw: row,
   };
+};
+
+export type PilotPositionSideExposure = {
+  side: "yes" | "no";
+  shares: string;
+  costBasisCollateralUnits?: string;
+};
+
+export const positionSideExposures = (
+  position: PilotPosition
+): PilotPositionSideExposure[] => {
+  const exposures: PilotPositionSideExposure[] = [];
+  if (BigInt(position.yesShares) > 0n) {
+    exposures.push({
+      side: "yes",
+      shares: position.yesShares,
+      ...(position.yesCostBasisCollateralUnits === undefined
+        ? {}
+        : { costBasisCollateralUnits: position.yesCostBasisCollateralUnits }),
+    });
+  }
+  if (BigInt(position.noShares) > 0n) {
+    exposures.push({
+      side: "no",
+      shares: position.noShares,
+      ...(position.noCostBasisCollateralUnits === undefined
+        ? {}
+        : { costBasisCollateralUnits: position.noCostBasisCollateralUnits }),
+    });
+  }
+  return exposures;
 };
 
 const marketMatches = (position: PilotPosition, market: PilotMarket): boolean => {

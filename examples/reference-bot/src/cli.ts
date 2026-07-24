@@ -64,7 +64,10 @@ const runReadOnly = () => {
     currentPrice: 100_100,
     strikePrice: 100_000,
     secondsRemaining: 180,
-    priceHistory: [{ price: 100_000, publishTime: Math.floor(Date.now() / 1000) }],
+    priceHistory: [
+      { price: 100_000, publishTime: Math.floor(Date.now() / 1000) - 1 },
+      { price: 100_100, publishTime: Math.floor(Date.now() / 1000) },
+    ],
   };
   const config = parseReferenceBotConfig({ killSwitchEnabled: false });
   const decision = decideEntry({
@@ -72,8 +75,8 @@ const runReadOnly = () => {
     quote: sampleQuote,
     config,
     secondsRemaining: input.secondsRemaining,
-    tradeSizeSol: 0.01,
-    aggregateExposureSol: 0,
+    tradeSizeLamports: 10_000_000n,
+    aggregateExposureLamports: 0n,
     openPositions: 0,
     dataFresh: true,
   });

@@ -20,8 +20,8 @@ export const decideEntry = ({
   quote,
   config,
   secondsRemaining,
-  tradeSizeSol,
-  aggregateExposureSol,
+  tradeSizeLamports,
+  aggregateExposureLamports,
   openPositions,
   dataFresh,
   checkpoint,
@@ -30,8 +30,8 @@ export const decideEntry = ({
   quote: ExecutableQuote;
   config: ReferenceBotConfig;
   secondsRemaining: number;
-  tradeSizeSol: number;
-  aggregateExposureSol: number;
+  tradeSizeLamports: bigint;
+  aggregateExposureLamports: bigint;
   openPositions: number;
   dataFresh: boolean;
   checkpoint?: ActionCheckpoint;
@@ -44,9 +44,9 @@ export const decideEntry = ({
     edge: edgeBps >= config.minimumEntryEdgeBps,
     priceImpact: quote.priceImpactBps <= config.maximumPriceImpactBps,
     time: secondsRemaining >= config.minimumSecondsToExpiry,
-    size: tradeSizeSol > 0 && tradeSizeSol <= config.maximumTradeSizeSol,
+    size: tradeSizeLamports > 0n && tradeSizeLamports <= config.maximumTradeSizeLamports,
     positions: openPositions < config.maximumOpenPositions,
-    aggregateExposure: aggregateExposureSol + tradeSizeSol <= config.maximumAggregateExposureSol,
+    aggregateExposure: aggregateExposureLamports + tradeSizeLamports <= config.maximumAggregateExposureLamports,
     fresh: dataFresh,
     checkpoint: checkpoint?.state !== "submitted" && checkpoint?.state !== "unknown",
     killSwitch: !config.killSwitchEnabled,

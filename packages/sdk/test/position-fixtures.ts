@@ -18,6 +18,8 @@ export const positionRow = (
   strikeMarket: "strike-1",
   yesShares: "10",
   noShares: "0",
+  yesCostBasisCollateralUnits: "7",
+  noCostBasisCollateralUnits: "0",
   forceClose: { expiryAt: deadline },
   pilotLifecycle: {
     schemaVersion: "stryke.pilotLifecycle.v1",
