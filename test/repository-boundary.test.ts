@@ -8,6 +8,9 @@ const forbidden = [
   ["work", "space:"].join(""),
   ["file:", "../"].join(""),
 ];
+const forbiddenDependencyProtocols = new RegExp(
+  `^(?:${["file", ["work", "space"].join(""), "link"].join("|")}):`
+);
 
 const sourceFiles = async (directory: string): Promise<string[]> => {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -27,6 +30,26 @@ describe("public repository boundary", () => {
       const text = await readFile(file, "utf8");
       for (const token of forbidden) {
         expect(text, `${relative(root, file)} contains ${token}`).not.toContain(token);
+      }
+    }
+  });
+
+  it("package dependencies resolve without repository-external protocols", async () => {
+    for (const packagePath of [
+      "packages/sdk/package.json",
+      "examples/reference-bot/package.json",
+    ]) {
+      const packageJson = JSON.parse(await readFile(join(root, packagePath), "utf8")) as {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
+      for (const [name, version] of Object.entries({
+        ...packageJson.dependencies,
+        ...packageJson.devDependencies,
+      })) {
+        expect(version, `${packagePath}: ${name}`).not.toMatch(
+          forbiddenDependencyProtocols
+        );
       }
     }
   });
