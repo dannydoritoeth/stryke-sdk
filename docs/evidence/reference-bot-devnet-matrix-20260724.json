@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "stryke.referenceBotDevnetMatrixEvidence.v1",
+  "runId": "bot-matrix-20260724T222956095Z",
+  "revision": "6b333293fbdce829e14da93ec5eeceddf24daeb9",
+  "generatedAt": "2026-07-24T22:56:24.638Z",
+  "command": "STRYKE_MATRIX_REVISION=$(git rev-parse HEAD) npm run devnet:bot-matrix -- --timeout-seconds 600",
+  "status": "partial",
+  "summary": {
+    "cells": 8,
+    "signedLifecyclesCompleted": 7,
+    "nextMarketEvaluationsCompleted": 6,
+    "timedOut": 1
+  },
+  "results": [
+    { "asset": "BTC", "expiry": "one_minute", "lifecycleCompleted": true, "nextMarketEvaluated": true },
+    { "asset": "BTC", "expiry": "five_minute", "lifecycleCompleted": true, "nextMarketEvaluated": true },
+    { "asset": "BTC", "expiry": "fifteen_minute", "lifecycleCompleted": true, "nextMarketEvaluated": true },
+    { "asset": "BTC", "expiry": "hourly", "lifecycleCompleted": true, "nextMarketEvaluated": false, "reason": "paper follow-up had no tradeable rolling market" },
+    { "asset": "SOL", "expiry": "one_minute", "lifecycleCompleted": true, "nextMarketEvaluated": true },
+    { "asset": "SOL", "expiry": "five_minute", "lifecycleCompleted": true, "nextMarketEvaluated": true },
+    { "asset": "SOL", "expiry": "fifteen_minute", "lifecycleCompleted": true, "nextMarketEvaluated": true },
+    { "asset": "SOL", "expiry": "hourly", "lifecycleCompleted": false, "nextMarketEvaluated": false, "reason": "no tradeable rolling market during bounded 600-second lane" }
+  ],
+  "verification": {
+    "deterministicTests": "162/162 passed",
+    "contractTests": "18/18 passed",
+    "exampleTests": "61/61 passed",
+    "externalConsumerTests": "1/1 passed",
+    "publicBoundaryTests": "4/4 passed"
+  },
+  "notes": [
+    "Each completed lifecycle used the built reference-bot CLI and signed devnet buy and sell actions that reconciled as confirmed.",
+    "No transaction was submitted for the timed-out SOL hourly lane.",
+    "The raw ignored run report contains transaction signatures and per-tick logs."
+  ]
+}
