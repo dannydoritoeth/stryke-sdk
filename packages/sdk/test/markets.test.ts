@@ -167,6 +167,18 @@ describe("pilot market discovery", () => {
     await expect(new MarketsClient(client as never).current("SOL", "hourly", 75)).rejects.toMatchObject({ code: "validation" });
   });
 
+  it("hourly_ladder_collapses_candidate_and_open_duplicate_target", async () => {
+    const candidate = (targetValue: string, status: "initializable" | "open") => ({
+      ...row("SOL", "hourly", 1_800_000_000), targetValue, status,
+      tradeability: { canQuote: false, canPrepareTransaction: false, disabledReasons: [] },
+    });
+    const client = { requestJson: async () => ({
+      markets: [candidate("70", "initializable"), candidate("75", "initializable"), candidate("75", "open"), candidate("80", "initializable")],
+      metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: "2026-07-22T00:00:00.000Z", stale: false },
+    }) };
+    await expect(new MarketsClient(client as never).current("SOL", "hourly", 76)).resolves.toMatchObject({ strikePrice: "75", status: "open" });
+  });
+
   it("initializable_ladder_never_crosses_expiry_or_source_identity", async () => {
     const initializable = (targetValue: string, expiryTs: number) => ({
       ...row("SOL", "hourly", expiryTs), targetValue, status: "initializable",

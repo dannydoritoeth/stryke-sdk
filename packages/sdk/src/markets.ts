@@ -237,15 +237,22 @@ export class MarketsClient {
       tradeable.length === 0 &&
       expiryFamily === "hourly" &&
       preferred.length > 1 &&
-      preferred.every((market) => market.status === "initializable") &&
+      preferred.every((market) => market.status === "initializable" || market.status === "open") &&
       referencePrice !== undefined &&
       Number.isFinite(referencePrice) &&
       referencePrice > 0
     ) {
-      const byDistance = preferred
+      const byTarget = new Map<string, PilotMarket>();
+      for (const market of preferred) {
+        const existing = byTarget.get(market.strikePrice);
+        if (!existing || (existing.status === "initializable" && market.status === "open")) {
+          byTarget.set(market.strikePrice, market);
+        }
+      }
+      const byDistance = [...byTarget.values()]
         .map((market) => ({ market, distance: Math.abs(market.strikePriceDecimal - referencePrice) }))
         .sort((left, right) => left.distance - right.distance);
-      if (byDistance[0]!.distance === byDistance[1]!.distance) {
+      if (byDistance.length > 1 && byDistance[0]!.distance === byDistance[1]!.distance) {
         throw new StrykeSdkError("validation", "Requested pilot market is ambiguous");
       }
       return byDistance[0]!.market;
