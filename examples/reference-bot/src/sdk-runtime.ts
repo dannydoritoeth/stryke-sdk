@@ -168,7 +168,11 @@ export const createSdkRuntimeAdapter = ({
       return { market, estimatorInput: estimatorInput(market), sellQuote: await quotes.sell({ market, side: exposure.side, amount: exposure.shares, maximumSlippageBps: config.maximumPriceImpactBps }), ifWinPayout, dataFresh: !market.stale };
     },
     evaluateEntry: async () => {
-      const market = await markets.current(config.asset, config.expiryFamily);
+      const market = await markets.current(
+        config.asset,
+        config.expiryFamily,
+        priceStore.current(config.asset).price
+      );
       const portfolio = owner ? await positions.list(owner) : [];
       const activePortfolio = portfolio.filter((position) =>
         position.asset === config.asset &&

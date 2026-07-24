@@ -203,7 +203,11 @@ export class MarketsClient {
     }));
   }
 
-  async current(asset: PilotAsset, expiryFamily: PilotExpiryFamily): Promise<PilotMarket> {
+  async current(
+    asset: PilotAsset,
+    expiryFamily: PilotExpiryFamily,
+    referencePrice?: number
+  ): Promise<PilotMarket> {
     const listed = await this.list(asset, expiryFamily);
     if (listed.some((market) => market.stale)) {
       throw new StrykeSdkError(
@@ -229,6 +233,23 @@ export class MarketsClient {
     const preferred = materialized.length > 0 ? materialized : earliest;
     const tradeable = preferred.filter((market) => market.tradeability.canQuote && market.tradeability.canPrepareTransaction);
     if (tradeable.length === 1) return tradeable[0]!;
+    if (
+      tradeable.length === 0 &&
+      expiryFamily === "hourly" &&
+      preferred.length > 1 &&
+      preferred.every((market) => market.status === "initializable") &&
+      referencePrice !== undefined &&
+      Number.isFinite(referencePrice) &&
+      referencePrice > 0
+    ) {
+      const byDistance = preferred
+        .map((market) => ({ market, distance: Math.abs(market.strikePriceDecimal - referencePrice) }))
+        .sort((left, right) => left.distance - right.distance);
+      if (byDistance[0]!.distance === byDistance[1]!.distance) {
+        throw new StrykeSdkError("validation", "Requested pilot market is ambiguous");
+      }
+      return byDistance[0]!.market;
+    }
     if (tradeable.length === 0 && preferred.length > 1) {
       throw new StrykeSdkError("source_unavailable", "Requested pilot market has no unique tradeable current market", true, { asset, expiryFamily });
     }

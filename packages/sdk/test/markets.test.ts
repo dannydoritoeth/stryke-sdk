@@ -143,6 +143,42 @@ describe("pilot market discovery", () => {
     await expect(new MarketsClient(client as never).current("BTC", "five_minute")).rejects.toMatchObject({ code: "source_unavailable", retryable: true });
   });
 
+  it("hourly_initializable_ladder_selects_unique_closest_reference_strike", async () => {
+    const initializable = (targetValue: string) => ({
+      ...row("SOL", "hourly", 1_800_000_000), targetValue, status: "initializable",
+      tradeability: { canQuote: false, canPrepareTransaction: false, disabledReasons: [] },
+    });
+    const client = { requestJson: async () => ({
+      markets: [initializable("70"), initializable("75"), initializable("80")],
+      metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: "2026-07-22T00:00:00.000Z", stale: false },
+    }) };
+    await expect(new MarketsClient(client as never).current("SOL", "hourly", 76)).resolves.toMatchObject({ strikePrice: "75" });
+  });
+
+  it("hourly_initializable_ladder_equal_distance_remains_ambiguous", async () => {
+    const initializable = (targetValue: string) => ({
+      ...row("SOL", "hourly", 1_800_000_000), targetValue, status: "initializable",
+      tradeability: { canQuote: false, canPrepareTransaction: false, disabledReasons: [] },
+    });
+    const client = { requestJson: async () => ({
+      markets: [initializable("70"), initializable("80")],
+      metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: "2026-07-22T00:00:00.000Z", stale: false },
+    }) };
+    await expect(new MarketsClient(client as never).current("SOL", "hourly", 75)).rejects.toMatchObject({ code: "validation" });
+  });
+
+  it("initializable_ladder_never_crosses_expiry_or_source_identity", async () => {
+    const initializable = (targetValue: string, expiryTs: number) => ({
+      ...row("SOL", "hourly", expiryTs), targetValue, status: "initializable",
+      tradeability: { canQuote: false, canPrepareTransaction: false, disabledReasons: [] },
+    });
+    const client = { requestJson: async () => ({
+      markets: [initializable("70", 1_800_000_000), initializable("80", 1_800_000_000), initializable("75", 1_800_003_600)],
+      metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: "2026-07-22T00:00:00.000Z", stale: false },
+    }) };
+    await expect(new MarketsClient(client as never).current("SOL", "hourly", 75)).rejects.toMatchObject({ code: "validation" });
+  });
+
   it("rejects_asset_feed_or_expiry_identity_mismatch", () => {
     expect(() => parsePilotMarket({ ...row("BTC", "five_minute", 1), symbol: "ETH" }, false))
       .toThrowError(expect.objectContaining({ code: "unsupported_asset" }));
