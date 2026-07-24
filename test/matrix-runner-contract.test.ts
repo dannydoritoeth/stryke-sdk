@@ -14,7 +14,8 @@ describe("reference-bot devnet matrix runner", () => {
 
   it("requires_multi_tick_action_and_next_market_evidence", () => {
     expect(source).toContain("result.tickCount >= 2");
-    expect(source).toContain("result.actions.length > 0");
+    expect(source).toContain('event.action === "buy" && event.signature');
+    expect(source).toContain("result.lifecycleCompleted");
     expect(source).toContain("result.nextMarketEvaluated");
   });
 });

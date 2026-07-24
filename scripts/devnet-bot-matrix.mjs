@@ -52,11 +52,14 @@ const runCell = ({ asset, expiry }) => new Promise((complete) => {
     const events = lines.flatMap(({ line }) => { try { return [JSON.parse(line)]; } catch { return []; } });
     const runtimeEvents = events.filter((event) => Number.isInteger(event.tick));
     const actions = runtimeEvents.filter((event) => ["buy", "sell", "claim", "refund"].includes(event.action));
+    const buy = actions.find((event) => event.action === "buy" && event.signature);
+    const completion = buy && actions.find((event) => event.tick > buy.tick && ["sell", "claim", "refund"].includes(event.action) && event.signature);
+    const nextMarket = completion && runtimeEvents.find((event) => event.tick > completion.tick && event.phase === "entry");
     const result = {
       schemaVersion: "stryke.referenceBotDevnetMatrixCell.v1", runId, revision, asset, expiry,
       startedAt, completedAt: new Date().toISOString(), exitCode: code, signal,
       timedOut: signal === "SIGTERM", tickCount: runtimeEvents.length,
-      actions, nextMarketEvaluated: runtimeEvents.some((event) => event.phase === "entry" && event.tick > 1),
+      actions, lifecycleCompleted: Boolean(completion), nextMarketEvaluated: Boolean(nextMarket),
       checkpointPath: checkpoint, lines,
     };
     await writeFile(resolve(directory, `${cellId}.json`), `${JSON.stringify(result, null, 2)}\n`);
@@ -69,4 +72,4 @@ for (const cell of cells) results.push(await runCell(cell));
 const report = { schemaVersion: "stryke.referenceBotDevnetMatrix.v1", runId, revision, generatedAt: new Date().toISOString(), results };
 await writeFile(resolve(directory, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify({ event: "devnet_bot_matrix_complete", runId, directory, cells: results.length }));
-process.exitCode = results.every((result) => result.tickCount >= 2 && result.actions.length > 0 && result.nextMarketEvaluated) ? 0 : 1;
+process.exitCode = results.every((result) => result.tickCount >= 2 && result.actions.some((event) => event.action === "buy" && event.signature) && result.lifecycleCompleted && result.nextMarketEvaluated) ? 0 : 1;

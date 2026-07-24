@@ -31,6 +31,10 @@ and live fails closed pending mainnet approval. The checkpoint defaults to
 `STRYKE_PYTH_HERMES_URL` may select the supplied Hermes endpoint; otherwise the
 public endpoint is used.
 
+The bundled example wallet adapter reads `STRYKE_WALLET_KEYPAIR_PATH`. Point it
+to an absolute path outside the repository for a separately funded devnet
+keypair; the key bytes are never copied into `.env` or logs.
+
 In the typed config, `readOnlyMode` Overrides live enablement and
 `killSwitchEnabled` Overrides live enablement.
 

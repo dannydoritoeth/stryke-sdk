@@ -87,6 +87,12 @@ describe("reference bot composed runtime", () => {
     await expect(runMarketTick({ tick: 1, config: live, adapter: runtime })).resolves.toMatchObject({ phase: "entry", action: "buy" });
   });
 
+  it("runtime_skips_non_actionable_historical_terminal_position_and_evaluates_entry", async () => {
+    const stale = position("claimable", { claimableAmount: undefined, refundableAmount: undefined });
+    const runtime = adapter({ listPositions: async () => [stale] });
+    await expect(runMarketTick({ tick: 1, config: parseReferenceBotConfig({ killSwitchEnabled: false }), adapter: runtime })).resolves.toMatchObject({ phase: "entry" });
+  });
+
   it("runtime_read_only_uses_real_sdk_tick_without_wallet_or_submission", async () => {
     const runtime = adapter();
     await expect(runMarketTick({ tick: 1, config: parseReferenceBotConfig({ killSwitchEnabled: false }), adapter: runtime })).resolves.toMatchObject({ action: "dry_run", reason: "read_only" });

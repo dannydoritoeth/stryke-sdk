@@ -85,11 +85,12 @@ export const runMarketTick = async ({
   }
 
   const positions = (await adapter.listPositions()).slice().sort((a, b) => a.positionId.localeCompare(b.positionId));
+  const nonActionableTerminalPositions = new Set<string>();
   for (const position of positions) {
     if (terminalStates.has(position.lifecycle.state)) {
       let action: PositionTerminalAction;
       try { action = terminalActionFor(position); }
-      catch { return event(tick, "position", "decision_unavailable", "authoritative_position_not_actionable", { positionId: position.positionId }); }
+      catch { nonActionableTerminalPositions.add(position.positionId); continue; }
       if (config.readOnlyMode || !config.liveTradingEnabled || config.killSwitchEnabled) {
         return event(tick, "position", action, "terminal_dry_run", { positionId: position.positionId });
       }
@@ -119,7 +120,7 @@ export const runMarketTick = async ({
     return event(tick, "position", "sell", decision.reason, { positionId: position.positionId, marketId: evaluation.market.marketId, details, ...result });
   }
 
-  if (positions.some((position) => !completeStates.has(position.lifecycle.state))) {
+  if (positions.some((position) => !completeStates.has(position.lifecycle.state) && !nonActionableTerminalPositions.has(position.positionId))) {
     return event(tick, "wait", "hold", "position_not_economically_complete");
   }
 
