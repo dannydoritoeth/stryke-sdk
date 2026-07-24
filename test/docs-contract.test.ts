@@ -5,6 +5,7 @@ import { STRYKE_SDK_ERROR_CODES } from "../packages/sdk/src/index.js";
 
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const readme = read("README.md");
+const sdkReadme = read("packages/sdk/README.md");
 const quickstart = read("docs/quickstart.md");
 const mechanics = read("docs/market-mechanics.md");
 const configuration = read("docs/configuration.md");
@@ -15,6 +16,21 @@ describe("pilot documentation contract", () => {
   it("readme_links_quickstart_and_market_mechanics", () => {
     expect(readme).toContain("[quickstart](docs/quickstart.md)");
     expect(readme).toContain("[market mechanics](docs/market-mechanics.md)");
+  });
+
+  it("sdk_readme_gives_a_minimal_copyable_developer_path", () => {
+    for (const phrase of [
+      "npm run build -w @stryke/sdk",
+      "StrykeClient.connect",
+      "MarketsClient",
+      "QuotesClient",
+      "TransactionsClient",
+      "PositionsClient",
+      "start:read-only",
+      "devnet-only",
+    ]) {
+      expect(sdkReadme).toContain(phrase);
+    }
   });
 
   it("quickstart_uses_btc_5m_and_labels_1m_experimental", () => {
