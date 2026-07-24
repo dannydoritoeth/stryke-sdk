@@ -8,6 +8,15 @@ export type ActionCheckpoint = {
   intentHash: string;
   state: PilotActionState;
   signature?: string;
+  materialization?: {
+    action: "buy" | "sell" | "claim" | "refund";
+    asset: "BTC" | "SOL";
+    expiryFamily: "one_minute" | "five_minute" | "fifteen_minute" | "hourly";
+    expiryTs: number;
+    targetValue: string;
+    positionId?: string;
+    sharesBefore?: string;
+  };
 };
 
 export interface ActionCheckpointStore {

@@ -6,12 +6,14 @@ import {
   type PilotPositionLifecycleState,
 } from "./lifecycle.js";
 import type { PilotMarket } from "./markets.js";
+import { PILOT_ASSETS, type PilotAsset } from "./compatibility.js";
 
 export type PositionTerminalAction = "claim" | "refund";
 
 export type PilotPosition = {
   positionId: string;
   owner: string;
+  asset?: PilotAsset;
   market: Readonly<Record<string, unknown>>;
   marketSeries?: string;
   strikeMarket?: string;
@@ -114,9 +116,14 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
     "noCostBasisCollateralUnits"
   );
   const parsedPoolState = poolState(row.poolState);
+  const tokenSymbol = typeof row.tokenSymbol === "string" ? row.tokenSymbol.toUpperCase() : undefined;
+  if (tokenSymbol !== undefined && !(PILOT_ASSETS as readonly string[]).includes(tokenSymbol)) {
+    throw new StrykeSdkError("unsupported_asset", `Unsupported position asset: ${tokenSymbol}`);
+  }
   return {
     positionId: positionId(row),
     owner: text(row.owner, "owner"),
+    ...(tokenSymbol === undefined ? {} : { asset: tokenSymbol as PilotAsset }),
     market: {
       tokenMint: row.tokenMint,
       source: row.source,

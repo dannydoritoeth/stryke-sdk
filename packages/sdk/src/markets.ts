@@ -214,12 +214,7 @@ export class MarketsClient {
       );
     }
     const eligible = listed
-      .filter(
-        (market) =>
-          (market.lifecycle.state === "open" ||
-            market.lifecycle.state === "upcoming") &&
-          (typeof market.raw.tokenMint !== "string" || isAddress(market.raw.tokenMint))
-      )
+      .filter((market) => market.lifecycle.state === "open" || market.lifecycle.state === "upcoming")
       .sort((a, b) => a.expiryTs - b.expiryTs);
     if (eligible.length === 0) {
       throw new StrykeSdkError(
@@ -229,9 +224,12 @@ export class MarketsClient {
         { asset, expiryFamily }
       );
     }
-    if (eligible[1]?.expiryTs === eligible[0]?.expiryTs) {
+    const earliest = eligible.filter((market) => market.expiryTs === eligible[0]!.expiryTs);
+    const materialized = earliest.filter((market) => isAddress(market.tokenMint));
+    const preferred = materialized.length > 0 ? materialized : earliest;
+    if (preferred.length !== 1) {
       throw new StrykeSdkError("validation", "Requested pilot market is ambiguous");
     }
-    return eligible[0]!;
+    return preferred[0]!;
   }
 }

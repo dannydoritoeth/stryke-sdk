@@ -7,6 +7,7 @@ export const positionRow = (
   overrides: Record<string, unknown> = {}
 ) => ({
   owner: "HYDrCb45WNbMzLjKqQByKduksFCasUfgLNpkA7xvcxf7",
+  tokenSymbol: "BTC",
   tokenMint: "So11111111111111111111111111111111111111112",
   source: "pyth_oracle",
   collateral: { type: "native_sol", mint: "11111111111111111111111111111111", symbol: "SOL", decimals: 9 },

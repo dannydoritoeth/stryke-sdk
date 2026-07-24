@@ -126,6 +126,12 @@ describe("pilot market discovery", () => {
     ).resolves.toMatchObject({ strikePrice: "70000" });
   });
 
+  it("selects_single_initializable_feed_identity_before_onchain_market_exists", async () => {
+    const initializable = { ...row("BTC", "five_minute", 1_800_000_000), tokenMint: `0x${"a".repeat(64)}`, status: "initializable" };
+    const client = { requestJson: async () => ({ markets: [initializable], metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: "2026-07-22T00:00:00.000Z", stale: false } }) };
+    await expect(new MarketsClient(client as never).current("BTC", "five_minute")).resolves.toMatchObject({ tokenMint: initializable.tokenMint, status: "initializable" });
+  });
+
   it("rejects_asset_feed_or_expiry_identity_mismatch", () => {
     expect(() => parsePilotMarket({ ...row("BTC", "five_minute", 1), symbol: "ETH" }, false))
       .toThrowError(expect.objectContaining({ code: "unsupported_asset" }));

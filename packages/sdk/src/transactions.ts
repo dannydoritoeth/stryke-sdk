@@ -5,6 +5,7 @@ import {
   blockhash,
   createTransactionMessage,
   getBase64Encoder,
+  isAddress,
   setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash,
   type Instruction,
@@ -301,7 +302,9 @@ export class TransactionsClient {
       ["quoteId", response.quoteBinding?.quoteId === quote.quoteId],
       ["marketStateVersion", response.quoteBinding?.marketStateVersion === quote.marketStateVersion],
       ["minimumOutput", response.quoteBinding?.minimumOutput === quote.minimumOutput],
-      ["tokenMint", response.market.tokenMint === market.raw.tokenMint],
+      ["tokenMint", isAddress(market.tokenMint)
+        ? response.market.tokenMint === market.tokenMint
+        : typeof response.market.tokenMint === "string" && isAddress(response.market.tokenMint)],
       ["source", response.market.source === marketIdentity.source],
       ["expiryFamily", response.market.expiryFamily === marketIdentity.expiryFamily],
       ["expiryTs", response.market.expiryTs === marketIdentity.expiryTs],

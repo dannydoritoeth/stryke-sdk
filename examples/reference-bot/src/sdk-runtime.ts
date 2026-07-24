@@ -72,16 +72,75 @@ export const createSdkRuntimeAdapter = ({
       priceHistory: priceStore.history(config.asset).slice(-config.priceHistoryMaxPoints),
     };
   };
-  const prepareAndExecute = async (market: PilotMarket, quote: Awaited<ReturnType<QuotesClient["get"]>>) => {
+  const saveMaterialization = async ({
+    result,
+    intentHash,
+    action,
+    market,
+    positionId,
+    sharesBefore,
+  }: {
+    result: Awaited<ReturnType<ReviewedTransactionExecutor["execute"]>>;
+    intentHash: string;
+    action: "buy" | "sell" | "claim" | "refund";
+    market: { expiryTs: number; targetValue: string };
+    positionId?: string;
+    sharesBefore?: string;
+  }) => {
+    if (result.state !== "confirmed") return;
+    await checkpoint.save({
+      clientActionId: result.clientActionId,
+      intentHash,
+      state: "confirmed",
+      ...(result.signature ? { signature: result.signature } : {}),
+      materialization: {
+        action,
+        asset: config.asset,
+        expiryFamily: config.expiryFamily,
+        expiryTs: market.expiryTs,
+        targetValue: market.targetValue,
+        ...(positionId ? { positionId } : {}),
+        ...(sharesBefore ? { sharesBefore } : {}),
+      },
+    });
+  };
+  const prepareAndExecute = async (
+    market: PilotMarket,
+    quote: Awaited<ReturnType<QuotesClient["get"]>>,
+    materialization?: { positionId?: string; sharesBefore?: string }
+  ) => {
     const live = requireLive();
     const clientActionId = `pilot-${crypto.randomUUID()}`;
     const marketIdentity = { tokenMint: market.tokenMint, source: market.source, collateral: market.raw.collateral, expiryFamily: market.expiryFamily, expiryTs: market.expiryTs, targetValue: market.strikePrice };
     const intentHash = await createPilotIntentHash({ clientActionId, owner: live.owner, market: marketIdentity, quote });
-    return executionResult(await live.executor.execute(await transactions.prepare({ owner: live.owner, market, quote, clientActionId, intentHash })));
+    const result = await live.executor.execute(await transactions.prepare({ owner: live.owner, market, quote, clientActionId, intentHash }));
+    await saveMaterialization({ result, intentHash, action: quote.action, market: { expiryTs: market.expiryTs, targetValue: market.strikePrice }, ...(materialization?.positionId ? { positionId: materialization.positionId } : {}), ...(materialization?.sharesBefore ? { sharesBefore: materialization.sharesBefore } : {}) });
+    return executionResult(result);
   };
   return {
     loadCheckpoint: () => checkpoint.load(),
     reconcilePending: async (pending) => {
+      if (pending.materialization) {
+        const materialization = pending.materialization;
+        const portfolio = owner ? await positions.list(owner) : [];
+        const matching = portfolio.find((position) =>
+          position.asset === materialization.asset &&
+          position.market.expiryFamily === materialization.expiryFamily &&
+          position.market.expiryTs === materialization.expiryTs &&
+          position.market.targetValue === materialization.targetValue
+        );
+        const exposureShares = matching
+          ? BigInt(matching.yesShares) + BigInt(matching.noShares)
+          : 0n;
+        const observed = materialization.action === "buy"
+          ? exposureShares > 0n
+          : materialization.action === "sell"
+            ? !matching || !["open_position", "sellable"].includes(matching.lifecycle.state) || exposureShares < BigInt(materialization.sharesBefore ?? "0")
+            : matching?.lifecycle.state === (materialization.action === "claim" ? "claimed" : "refunded");
+        if (!observed) return { state: "materializing", clientActionId: pending.clientActionId, ...(pending.signature ? { signature: pending.signature } : {}) };
+        await checkpoint.clear(pending.clientActionId);
+        return { state: "confirmed", clientActionId: pending.clientActionId, ...(pending.signature ? { signature: pending.signature } : {}) };
+      }
       try {
         const result = await requireLive().executor.resume();
         return { state: result?.state ?? "not_submitted", clientActionId: pending.clientActionId, ...(result?.signature ? { signature: result.signature } : {}) };
@@ -93,7 +152,9 @@ export const createSdkRuntimeAdapter = ({
         throw error;
       }
     },
-    listPositions: () => owner ? positions.list(owner) : Promise.resolve([]),
+    listPositions: async () => owner
+      ? (await positions.list(owner)).filter((position) => position.asset === config.asset && position.market.expiryFamily === config.expiryFamily)
+      : [],
     evaluatePosition: async (position, exposure) => {
       const market = await marketFor(position);
       const ifWinPayout = positionIfWinPayout(position, exposure);
@@ -103,17 +164,24 @@ export const createSdkRuntimeAdapter = ({
     evaluateEntry: async () => {
       const market = await markets.current(config.asset, config.expiryFamily);
       const portfolio = owner ? await positions.list(owner) : [];
-      const aggregateExposureLamports = portfolio.reduce((sum, position) => sum + BigInt(position.yesCostBasisCollateralUnits ?? "0") + BigInt(position.noCostBasisCollateralUnits ?? "0"), 0n);
-      const openPositions = portfolio.filter((position) => ["open_position", "sellable", "awaiting_resolution", "claimable", "refundable"].includes(position.lifecycle.state)).length;
+      const activePortfolio = portfolio.filter((position) =>
+        position.asset === config.asset &&
+        position.market.expiryFamily === config.expiryFamily &&
+        ["pending_confirmation", "open_position", "sellable", "awaiting_resolution", "claimable", "refundable"].includes(position.lifecycle.state)
+      );
+      const aggregateExposureLamports = activePortfolio.reduce((sum, position) => sum + BigInt(position.yesCostBasisCollateralUnits ?? "0") + BigInt(position.noCostBasisCollateralUnits ?? "0"), 0n);
+      const openPositions = activePortfolio.length;
       return { market, estimatorInput: estimatorInput(market), buyQuote: await quotes.buy({ market, side: config.side, amount: config.tradeSizeLamports.toString(), maximumSlippageBps: config.maximumPriceImpactBps }), aggregateExposureLamports, openPositions, dataFresh: !market.stale };
     },
     executeBuy: (evaluation) => prepareAndExecute(evaluation.market, evaluation.buyQuote),
-    executeSell: (_position, _exposure, evaluation) => prepareAndExecute(evaluation.market, evaluation.sellQuote),
+    executeSell: (position, exposure, evaluation) => prepareAndExecute(evaluation.market, evaluation.sellQuote, { positionId: position.positionId, sharesBefore: exposure.shares }),
     executeTerminal: async (position, action) => {
       const live = requireLive();
       const clientActionId = `pilot-${crypto.randomUUID()}`;
       const intentHash = await createTerminalIntentHash({ clientActionId, owner: live.owner, market: position.market as Record<string, unknown>, action });
-      return executionResult(await live.executor.execute(await transactions.prepareTerminal({ owner: live.owner, position, action, clientActionId, intentHash })));
+      const result = await live.executor.execute(await transactions.prepareTerminal({ owner: live.owner, position, action, clientActionId, intentHash }));
+      await saveMaterialization({ result, intentHash, action, market: { expiryTs: Number(position.market.expiryTs), targetValue: String(position.market.targetValue) }, positionId: position.positionId });
+      return executionResult(result);
     },
   };
 };

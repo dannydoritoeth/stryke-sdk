@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ActionCheckpoint, PilotPosition } from "@stryke/sdk";
+import { StrykeSdkError } from "@stryke/sdk";
 
 import { runMarketTick, runReferenceBot, type ReferenceBotRuntimeAdapter } from "../src/bot.js";
 import { parseReferenceBotConfig } from "../src/config.js";
@@ -90,5 +91,13 @@ describe("reference bot composed runtime", () => {
     const runtime = adapter();
     await expect(runMarketTick({ tick: 1, config: parseReferenceBotConfig({ killSwitchEnabled: false }), adapter: runtime })).resolves.toMatchObject({ action: "dry_run", reason: "read_only" });
     expect(runtime.executeBuy).not.toHaveBeenCalled();
+  });
+
+  it("runtime_reports_retryable_unavailability_and_continues_next_tick", async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const runtime = adapter({ evaluateEntry: async () => { calls += 1; if (calls === 1) throw new StrykeSdkError("source_unavailable", "rolling market unavailable", true); return adapter().evaluateEntry(); } });
+    const events = await runReferenceBot({ config: parseReferenceBotConfig({ killSwitchEnabled: false }), adapter: runtime, wait: async () => {}, onEvent: () => { if (calls === 2) controller.abort(); }, signal: controller.signal });
+    expect(events.map(({ reason }) => reason)).toEqual(["retryable_source_unavailable", "read_only"]);
   });
 });

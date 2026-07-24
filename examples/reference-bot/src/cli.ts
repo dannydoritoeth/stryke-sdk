@@ -73,7 +73,9 @@ const runSdkBot = async () => {
     await waitForPriceHistory(priceStore, config.asset);
     const signer = await loadSigner(config);
     const rpc = createSolanaRpc(config.solanaRpcUrl ?? "http://127.0.0.1:8899");
-    const checkpoint = new FileActionCheckpointStore(config.checkpointPath);
+    const checkpoint = new FileActionCheckpointStore(
+      resolve(process.env.INIT_CWD ?? process.cwd(), config.checkpointPath)
+    );
     let executor: ReviewedTransactionExecutor | undefined;
     if (signer) {
       const transactions = new TransactionsClient(client, rpc);

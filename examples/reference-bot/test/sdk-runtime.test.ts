@@ -48,4 +48,31 @@ describe("SDK runtime composition", () => {
     expect(calls[0]!.path).toContain("expiryFamily=one_minute");
     expect(calls[1]!.body).toMatchObject({ action: "buy", side: "no", amount: "1234567", maxSlippageBps: 77 });
   });
+
+  it("confirmed_buy_blocks_restart_until_portfolio_materializes", async () => {
+    const checkpoint = new MemoryActionCheckpointStore();
+    await checkpoint.save({
+      clientActionId: "buy-1", intentHash: "intent-1", state: "confirmed", signature: "signature-1",
+      materialization: { action: "buy", asset: "BTC", expiryFamily: "five_minute", expiryTs: 1_800_000_000, targetValue: "70000" },
+    });
+    let materialized = false;
+    const client = { requestJson: async () => ({
+      owner: "owner",
+      positions: materialized ? [{
+        owner: "owner", tokenSymbol: "BTC", tokenMint: "So11111111111111111111111111111111111111112",
+        source: "pyth_oracle", collateral: { mint: "11111111111111111111111111111111" },
+        expiryFamily: "five_minute", expiryTs: 1_800_000_000, targetValue: "70000",
+        yesShares: "10", noShares: "0", pilotLifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() },
+      }] : [],
+      metadata: { stale: false, generatedAt: new Date().toISOString() },
+    }) };
+    const config = parseReferenceBotConfig({ asset: "BTC", expiryFamily: "five_minute" });
+    const adapter = createSdkRuntimeAdapter({ client: client as never, rpc: {} as never, priceStore: new PriceStore(), checkpoint, config, owner: "owner" });
+    const pending = (await checkpoint.load())!;
+    await expect(adapter.reconcilePending(pending)).resolves.toMatchObject({ state: "materializing" });
+    expect(await checkpoint.load()).toBeDefined();
+    materialized = true;
+    await expect(adapter.reconcilePending(pending)).resolves.toMatchObject({ state: "confirmed" });
+    expect(await checkpoint.load()).toBeUndefined();
+  });
 });

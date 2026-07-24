@@ -7,6 +7,7 @@ import {
   type PilotPosition,
   type PilotPositionSideExposure,
   type PositionTerminalAction,
+  StrykeSdkError,
 } from "@stryke/sdk";
 
 import type { ReferenceBotConfig } from "./config.js";
@@ -25,6 +26,7 @@ export type RuntimeEvent = {
   marketId?: string;
   clientActionId?: string;
   signature?: string;
+  details?: Readonly<Record<string, string | number | boolean>>;
 };
 
 export type PositionEvaluation = {
@@ -76,7 +78,7 @@ export const runMarketTick = async ({
   const checkpoint = await adapter.loadCheckpoint();
   if (checkpoint) {
     const reconciled = await adapter.reconcilePending(checkpoint);
-    if (reconciled.state === "submitted" || reconciled.state === "unknown" || reconciled.state === "not_submitted") {
+    if (reconciled.state === "submitted" || reconciled.state === "unknown" || reconciled.state === "not_submitted" || reconciled.state === "materializing") {
       return event(tick, "reconcile", "blocked", `pending_${reconciled.state}`, { clientActionId: reconciled.clientActionId, ...(reconciled.signature ? { signature: reconciled.signature } : {}) });
     }
     return event(tick, "reconcile", "complete", `reconciled_${reconciled.state}`, { clientActionId: reconciled.clientActionId, ...(reconciled.signature ? { signature: reconciled.signature } : {}) });
@@ -110,10 +112,11 @@ export const runMarketTick = async ({
       ifWinPayout: evaluation.ifWinPayout, stopLossBps: config.stopLossBps,
       takeProfitBps: config.takeProfitBps,
     });
-    if (decision.action !== "sell") return event(tick, "position", decision.action, decision.reason, { positionId: position.positionId, marketId: evaluation.market.marketId });
-    if (config.readOnlyMode || !config.liveTradingEnabled || config.killSwitchEnabled) return event(tick, "position", "sell", `${decision.reason}_dry_run`, { positionId: position.positionId, marketId: evaluation.market.marketId });
+    const details = { fairProbability, ...(decision.pnlBps === undefined ? {} : { pnlBps: decision.pnlBps.toString() }), ...(decision.sellNowValue === undefined ? {} : { sellNowValue: decision.sellNowValue.toString() }), ...(decision.holdValue === undefined ? {} : { holdValue: decision.holdValue.toString() }) };
+    if (decision.action !== "sell") return event(tick, "position", decision.action, decision.reason, { positionId: position.positionId, marketId: evaluation.market.marketId, details });
+    if (config.readOnlyMode || !config.liveTradingEnabled || config.killSwitchEnabled) return event(tick, "position", "sell", `${decision.reason}_dry_run`, { positionId: position.positionId, marketId: evaluation.market.marketId, details });
     const result = await adapter.executeSell(position, exposure, evaluation);
-    return event(tick, "position", "sell", decision.reason, { positionId: position.positionId, marketId: evaluation.market.marketId, ...result });
+    return event(tick, "position", "sell", decision.reason, { positionId: position.positionId, marketId: evaluation.market.marketId, details, ...result });
   }
 
   if (positions.some((position) => !completeStates.has(position.lifecycle.state))) {
@@ -130,9 +133,10 @@ export const runMarketTick = async ({
     openPositions: evaluation.openPositions,
     dataFresh: evaluation.dataFresh,
   });
-  if (decision.action !== "buy") return event(tick, "entry", decision.action, decision.reason, { marketId: evaluation.market.marketId });
+  const details = { fairProbability: decision.fairProbability, sideFairProbability: decision.sideFairProbability, quoteProbability: decision.quoteProbability, edgeBps: decision.edgeBps };
+  if (decision.action !== "buy") return event(tick, "entry", decision.action, decision.reason, { marketId: evaluation.market.marketId, details });
   const result = await adapter.executeBuy(evaluation);
-  return event(tick, "entry", "buy", decision.reason, { marketId: evaluation.market.marketId, ...result });
+  return event(tick, "entry", "buy", decision.reason, { marketId: evaluation.market.marketId, details, ...result });
 };
 
 export const runReferenceBot = async ({
@@ -152,7 +156,13 @@ export const runReferenceBot = async ({
 }): Promise<RuntimeEvent[]> => {
   const events: RuntimeEvent[] = [];
   for (let tick = 1; !signal?.aborted; tick += 1) {
-    const result = await runMarketTick({ tick, config, adapter });
+    let result: RuntimeEvent;
+    try {
+      result = await runMarketTick({ tick, config, adapter });
+    } catch (error) {
+      if (!(error instanceof StrykeSdkError) || !error.retryable) throw error;
+      result = event(tick, "wait", "blocked", `retryable_${error.code}`);
+    }
     events.push(result);
     onEvent(result);
     if (once || signal?.aborted) break;
