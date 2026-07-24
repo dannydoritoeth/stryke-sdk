@@ -67,7 +67,7 @@ export const createSdkRuntimeAdapter = ({
     const current = priceStore.current(config.asset);
     return {
       currentPrice: current.price,
-      strikePrice: Number(market.strikePrice),
+      strikePrice: market.strikePriceDecimal,
       secondsRemaining: market.expiryTs - Math.floor(now() / 1_000),
       priceHistory: priceStore.history(config.asset).slice(-config.priceHistoryMaxPoints),
     };

@@ -120,6 +120,7 @@ const contractCase = (
     expiryFamily,
     source: "pyth_oracle",
     collateral: "SOL",
+    strikePriceDecimal: asset === "BTC" ? 70_000 : 150,
     stale: false,
     pools: { yesCollateralUnits: "500000000", noCollateralUnits: "500000000", stale: false },
     probability: { yesBps: 5000, noBps: 5000 },

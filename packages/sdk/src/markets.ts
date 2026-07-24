@@ -18,6 +18,7 @@ export type CanonicalMarketIdentity = {
   expiryFamily: PilotExpiryFamily;
   expiryTs: number;
   strikePrice: string;
+  strikePriceDecimal: number;
 };
 
 export type PilotMarket = CanonicalMarketIdentity & {
@@ -93,6 +94,11 @@ export const parsePilotMarket = (
   const pools = record(selectedMarket.pools, "selectedMarket.pools");
   const odds = record(selectedMarket.odds, "selectedMarket.odds");
   const disabledReasons = tradeability.disabledReasons;
+  const strikePrice = amount(row.targetValue, "targetValue");
+  const strikePriceDecimal = Number(BigInt(strikePrice)) / 100_000_000;
+  if (!Number.isFinite(strikePriceDecimal) || strikePriceDecimal <= 0) {
+    throw new StrykeSdkError("validation", "Invalid Pyth strike price");
+  }
   if (!(PILOT_ASSETS as readonly string[]).includes(asset)) {
     throw new StrykeSdkError("unsupported_asset", `Unsupported pilot asset: ${asset}`);
   }
@@ -121,7 +127,8 @@ export const parsePilotMarket = (
     collateral: "SOL",
     expiryFamily: expiryFamily as PilotExpiryFamily,
     expiryTs: expiryTs as number,
-    strikePrice: text(row.targetValue, "targetValue"),
+    strikePrice,
+    strikePriceDecimal,
     status: status as PilotMarket["status"],
     tradeability: {
       canQuote: boolean(tradeability.canQuote, "tradeability.canQuote"),
