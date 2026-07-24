@@ -41,7 +41,8 @@ action to claim or refund; do not infer settlement locally.
 For the fastest safe introduction, run the bundled read-only bot:
 
 ```bash
-npm run start:read-only -w @stryke/reference-bot
+cp .env.example .env
+npm run start:paper -w @stryke/reference-bot
 ```
 
 Live execution is devnet-only, disabled by default, and requires a separately

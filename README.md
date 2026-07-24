@@ -9,61 +9,40 @@ transactions, restart-safe reconciliation, positions, sells, claims, and
 refunds. The reference bot continuously reconciles → manages/exits → settles →
 evaluates the next market. It includes two transparent educational estimators.
 
-## Start safely
+## Three-step confidence ladder
 
 ```bash
 npm ci
-npm run start:read-only -w @stryke/reference-bot
+cp .env.example .env
+npm run start:paper -w @stryke/reference-bot
 ```
 
-That deterministic fixture needs no endpoint or wallet. For one real SDK
-evaluation tick with no wallet or submission:
+Open `.env` to inspect the minimum-size strategy and risk settings. Replace the
+invited devnet API value before using real data. Paper mode reads real markets,
+Pyth prices, and quotes but never loads a wallet or submits a transaction.
 
 ```bash
-STRYKE_READ_ONLY_MODE=true STRYKE_ASSET=BTC \
-STRYKE_EXPIRY_FAMILY=five_minute STRYKE_SIDE=yes \
-STRYKE_ESTIMATOR=distance_to_strike \
-STRYKE_API_BASE_URL="$INVITED_DEVNET_API" \
-npm run start:live-data -w @stryke/reference-bot -- --once
+npm run start:devnet -w @stryke/reference-bot
 ```
 
-Remove `--once` to observe continuously; optionally set
-`STRYKE_ESTIMATOR=distance_momentum` and `STRYKE_TICK_INTERVAL_MS=5000`.
-Both bundled strategies are simple baselines. Replace only the exported
-`estimateFairProbability` seam in `examples/reference-bot/src/strategy.ts` for
-your own signal.
-
-Every run prints effective non-secret config and each waiting, blocked, hold,
-entry, exit, claim, or refund reason.
-
-## Minimum-size devnet live example
-
-Live trading defaults off. Use a separately funded, minimally funded devnet
-wallet adapter. Copy `.env.example`, set every value explicitly, then deliberately
-change the three mode gates and run:
+Devnet mode uses the same `.env` values and a separately funded wallet adapter
+to make minimum-size signed devnet trades when the estimator and every safety
+gate pass. It continuously manages positions, exits or waits for expiry,
+claims/refunds, reconciles, and repeats.
 
 ```bash
-STRYKE_READ_ONLY_MODE=false STRYKE_LIVE_TRADING_ENABLED=true \
-STRYKE_KILL_SWITCH_ENABLED=false STRYKE_ASSET=BTC \
-STRYKE_EXPIRY_FAMILY=five_minute STRYKE_SIDE=yes \
-STRYKE_ESTIMATOR=distance_to_strike STRYKE_TRADE_SIZE_SOL=0.001 \
-STRYKE_MAXIMUM_TRADE_SIZE_SOL=0.001 \
-STRYKE_MAXIMUM_AGGREGATE_EXPOSURE_SOL=0.001 \
-STRYKE_MINIMUM_ENTRY_EDGE_BPS=0 STRYKE_MAXIMUM_PRICE_IMPACT_BPS=100 \
-STRYKE_MINIMUM_SECONDS_TO_EXPIRY=60 STRYKE_MAXIMUM_OPEN_POSITIONS=1 \
-STRYKE_TICK_INTERVAL_MS=5000 STRYKE_STOP_LOSS_BPS=1000 \
-STRYKE_TAKE_PROFIT_BPS=2000 STRYKE_PRICE_HISTORY_MAX_POINTS=120 \
-STRYKE_API_BASE_URL="$INVITED_DEVNET_API" \
-STRYKE_SOLANA_RPC_URL="$DEVNET_RPC_URL" \
-STRYKE_WALLET_ADAPTER_PATH=./wallet-adapter.js \
 npm run start:live -w @stryke/reference-bot
 ```
 
-This does not force a trade. Entry happens only when the selected estimator and
-every freshness, edge, impact, time, exposure, checkpoint, wallet, and mode gate
-pass. The loop uses full-position executable sell quotes, applies the configured
-10% stop loss / 20% take profit before its EV fallback, waits for
-API-authoritative resolution, claims/refunds, reconciles, and repeats.
+`start:live` is the eventual mainnet command. It currently fails closed before
+wallet loading because this pilot is devnet-only and mainnet requires separate
+approval and compatible API/program deployment.
+
+Both bundled estimators are simple educational baselines. Replace only the
+exported `estimateFairProbability` seam in
+`examples/reference-bot/src/strategy.ts` for your own signal. Every run prints
+effective non-secret config and each waiting, blocked, hold, entry, exit, claim,
+or refund reason. No command forces a trade.
 
 Never put a seed phrase, private key, secret key, or signed transaction in config
 or logs. See the [quickstart](docs/quickstart.md),

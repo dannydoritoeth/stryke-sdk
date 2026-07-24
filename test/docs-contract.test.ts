@@ -26,7 +26,7 @@ describe("pilot documentation contract", () => {
       "QuotesClient",
       "TransactionsClient",
       "PositionsClient",
-      "start:read-only",
+      "start:paper",
       "devnet-only",
     ]) {
       expect(sdkReadme).toContain(phrase);
@@ -60,7 +60,10 @@ describe("pilot documentation contract", () => {
   it("docs_show_read_only_live_and_kill_switch_precedence", () => {
     expect(configuration).toMatch(/readOnlyMode.*Overrides live enablement/);
     expect(configuration).toMatch(/killSwitchEnabled.*Overrides live enablement/);
-    expect(readme).toContain("STRYKE_LIVE_TRADING_ENABLED=true");
+    expect(readme).toContain("npm run start:paper -w @stryke/reference-bot");
+    expect(readme).toContain("npm run start:devnet -w @stryke/reference-bot");
+    expect(readme).toContain("npm run start:live -w @stryke/reference-bot");
+    expect(readme).toMatch(/mainnet.*fails closed/is);
   });
 
   it("docs_show_sdk_api_program_compatibility_output", () => {

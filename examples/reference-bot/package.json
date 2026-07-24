@@ -9,7 +9,9 @@
     "test": "vitest run test",
     "start:read-only": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js --read-only",
     "start:live-data": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js --live-data",
-    "start:live": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js --live",
+    "start:paper": "npm run build -w @stryke/sdk && npm run build && node --env-file-if-exists=../../.env dist/cli.js --profile=paper",
+    "start:devnet": "npm run build -w @stryke/sdk && npm run build && node --env-file-if-exists=../../.env dist/cli.js --profile=devnet",
+    "start:live": "npm run build -w @stryke/sdk && npm run build && node --env-file-if-exists=../../.env dist/cli.js --profile=live",
     "clean": "rm -rf dist"
   },
   "dependencies": {

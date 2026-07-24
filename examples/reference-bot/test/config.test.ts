@@ -49,6 +49,19 @@ describe("reference bot config", () => {
   });
 
   it("active_live_requires_every_explicit_control_before_wallet_or_api_work", () => {
-    expect(() => parseReferenceBotEnv({ STRYKE_READ_ONLY_MODE: "false", STRYKE_LIVE_TRADING_ENABLED: "true", STRYKE_KILL_SWITCH_ENABLED: "false" })).toThrow(/STRYKE_ASSET/);
+    expect(() => parseReferenceBotEnv({}, "devnet")).toThrow(/STRYKE_ASSET/);
+  });
+
+  it("paper_profile_overrides_unsafe_env_and_never_enables_transactions", () => {
+    const config = parseReferenceBotEnv({
+      STRYKE_READ_ONLY_MODE: "false",
+      STRYKE_LIVE_TRADING_ENABLED: "true",
+      STRYKE_KILL_SWITCH_ENABLED: "false",
+    }, "paper");
+    expect(config).toMatchObject({ profile: "paper", readOnlyMode: true, liveTradingEnabled: false, killSwitchEnabled: true });
+  });
+
+  it("live_profile_fails_closed_until_mainnet_is_approved", () => {
+    expect(() => parseReferenceBotEnv({}, "live")).toThrow(/Mainnet live trading is not approved/);
   });
 });

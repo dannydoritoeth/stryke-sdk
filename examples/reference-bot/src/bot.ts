@@ -143,6 +143,7 @@ export const runReferenceBot = async ({
   config,
   adapter,
   once = false,
+  maximumTicks,
   signal,
   onEvent = (value: RuntimeEvent) => console.log(JSON.stringify(value)),
   wait = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)),
@@ -150,6 +151,7 @@ export const runReferenceBot = async ({
   config: ReferenceBotConfig;
   adapter: ReferenceBotRuntimeAdapter;
   once?: boolean;
+  maximumTicks?: number;
   signal?: AbortSignal;
   onEvent?: (event: RuntimeEvent) => void;
   wait?: (milliseconds: number) => Promise<void>;
@@ -165,7 +167,7 @@ export const runReferenceBot = async ({
     }
     events.push(result);
     onEvent(result);
-    if (once || signal?.aborted) break;
+    if (once || signal?.aborted || tick === maximumTicks) break;
     await wait(config.tickIntervalMs);
   }
   return events;

@@ -30,7 +30,7 @@ describe("documented example contract", () => {
     }
   });
 
-  it("documented_live_command_refuses_without_explicit_gates", () => {
+  it("documented_live_command_refuses_without_mainnet_approval", () => {
     const env = { ...process.env };
     delete env.STRYKE_READ_ONLY_MODE;
     delete env.STRYKE_LIVE_TRADING_ENABLED;
@@ -39,6 +39,15 @@ describe("documented example contract", () => {
     const result = spawnSync("npm", ["run", "start:live", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8", env });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('"event":"reference_bot_error"');
+    expect(result.stderr).toContain("Mainnet live trading is not approved");
     expect(result.stderr).not.toMatch(/seed phrase|private key|secret key/i);
   }, 30_000);
+
+  it("three_mode_commands_load_the_root_env_file", () => {
+    const manifest = JSON.parse(readFileSync(join(workspace, "examples/reference-bot/package.json"), "utf8")) as { scripts: Record<string, string> };
+    for (const [script, profile] of [["start:paper", "paper"], ["start:devnet", "devnet"], ["start:live", "live"]] as const) {
+      expect(manifest.scripts[script]).toContain("--env-file-if-exists=../../.env");
+      expect(manifest.scripts[script]).toContain(`--profile=${profile}`);
+    }
+  });
 });

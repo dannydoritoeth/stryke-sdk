@@ -3,23 +3,25 @@
 Use Node.js 22+. BTC five-minute devnet is the canonical onboarding path. BTC
 and SOL 1m/5m/15m/1h are supported. One-minute live strategy performance is experimental because timing races are tighter.
 
-## 1. Prove the safe boundary
+## 1. Copy and inspect the safe configuration
 
 ```bash
 npm ci
-npm run start:read-only -w @stryke/reference-bot
+cp .env.example .env
+npm run start:paper -w @stryke/reference-bot
 ```
 
-The output contains a fixture dry-run decision and the SDK/API/program
-compatibility fields `sdkVersion`, `apiVersion`, `apiSchemaVersion`, `programId`,
-and `programVersion`. It contacts no endpoint and loads no wallet.
+Set the invited devnet API in `.env`. Paper mode uses real data and prints the
+SDK/API/program compatibility fields `sdkVersion`, `apiVersion`,
+`apiSchemaVersion`, `programId`, and `programVersion`. It never loads a wallet
+or submits.
 
-## 2. Observe real data
+## 2. Make minimum-size devnet trades
 
-Run the root README's `start:live-data` command with the supplied invited API.
-It uses actual SDK market, Pyth, and quote clients. `--once` evaluates once;
-without it the loop repeats at `STRYKE_TICK_INTERVAL_MS`. Both modes remain
-read-only and never load a wallet.
+Configure the separately funded wallet adapter in `.env`, inspect every value,
+then run `npm run start:devnet -w @stryke/reference-bot`. It uses the same
+continuous loop with signed devnet transactions. A trade occurs only when the
+estimator and all safety checks pass.
 
 Unavailable/stale data blocks decisions. There is no alternate-price or
 inferred-market fallback.
@@ -69,11 +71,11 @@ current market. Entry needs estimator edge plus every freshness, impact, time,
 size, position, exposure, checkpoint, mode, and kill-switch check. Every outcome
 prints a reason.
 
-## 5. Deliberately open live mode
+## 5. Keep mainnet closed until approved
 
-Copy `.env.example`, set every control explicitly, provide the invited devnet
-API/RPC and a separately funded wallet adapter, then use the root README's
-minimum-size command. It does not force a trade.
+`npm run start:live -w @stryke/reference-bot` is reserved for a separately
+approved compatible mainnet deployment. This devnet pilot rejects it before
+wallet loading.
 
 The wallet module must default-export an `@solana/kit` `TransactionSigner`.
 Keep wallet files outside the repository. Never put wallet secrets or signed

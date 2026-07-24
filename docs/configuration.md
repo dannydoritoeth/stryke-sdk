@@ -1,8 +1,8 @@
 # Configuration
 
-Read-only mode has educational defaults. Active live mode requires every
-trading/risk control explicitly; missing or invalid input fails before wallet or
-transaction work.
+Copy `.env.example` to `.env`. It contains the complete minimum-size educational
+baseline. `start:paper`, `start:devnet`, and `start:live` select the safety
+profile; missing or invalid input fails before wallet or transaction work.
 
 | Environment variable | Unit / values |
 | --- | --- |
@@ -22,18 +22,17 @@ transaction work.
 | `STRYKE_TAKE_PROFIT_BPS` | positive integer; equality exits |
 | `STRYKE_PRICE_HISTORY_MAX_POINTS` | integer `2..10000` |
 
-Mode and connection controls are `STRYKE_READ_ONLY_MODE`,
-`STRYKE_LIVE_TRADING_ENABLED`, `STRYKE_KILL_SWITCH_ENABLED`,
-`STRYKE_API_BASE_URL`, `STRYKE_SOLANA_RPC_URL`,
+Connection controls are `STRYKE_API_BASE_URL`, `STRYKE_SOLANA_RPC_URL`,
 `STRYKE_WALLET_ADAPTER_PATH`, and `STRYKE_CHECKPOINT_PATH`. Booleans are exactly
-`true` or `false`. Read-only and the kill switch override live enablement. The
-checkpoint defaults to `.stryke/reference-bot-action.json`.
+`true` or `false` when used by custom integrations. The public commands force
+safe mode precedence: paper is read-only, devnet enables signed devnet actions,
+and live fails closed pending mainnet approval. The checkpoint defaults to
+`.stryke/reference-bot-action.json`.
 `STRYKE_PYTH_HERMES_URL` may select the supplied Hermes endpoint; otherwise the
 public endpoint is used.
 
 In the typed config, `readOnlyMode` Overrides live enablement and
-`killSwitchEnabled` Overrides live enablement. The environment variables above
-map directly to those controls.
+`killSwitchEnabled` Overrides live enablement.
 
 SOL values convert once to exact lamports. Quotes, shares, proceeds, cost basis,
 and payout math stay in integer base units. The wallet module default-exports an

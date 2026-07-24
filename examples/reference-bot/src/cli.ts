@@ -20,7 +20,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { runReferenceBot } from "./bot.js";
-import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig } from "./config.js";
+import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, type ReferenceBotProfile } from "./config.js";
 import { decideEntry } from "./entry.js";
 import { emitDecision } from "./logging.js";
 import { createSdkRuntimeAdapter } from "./sdk-runtime.js";
@@ -62,8 +62,22 @@ const waitForPriceHistory = async (store: PriceStore, asset: "BTC" | "SOL", time
   }
 };
 
-const runSdkBot = async () => {
-  const config = parseReferenceBotEnv();
+const selectedProfile = (): ReferenceBotProfile => {
+  const value = process.argv.find((argument) => argument.startsWith("--profile="))?.split("=", 2)[1];
+  if (value === "paper" || value === "devnet" || value === "live") return value;
+  throw new StrykeSdkError("configuration", "Use --profile=paper, --profile=devnet, or --profile=live");
+};
+
+const selectedMaximumTicks = (): number | undefined => {
+  const raw = process.argv.find((argument) => argument.startsWith("--ticks="))?.split("=", 2)[1];
+  if (raw === undefined) return undefined;
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 2) throw new StrykeSdkError("configuration", "--ticks must be an integer of at least 2");
+  return value;
+};
+
+const runSdkBot = async (profile: ReferenceBotProfile) => {
+  const config = parseReferenceBotEnv(process.env, profile);
   if (!config.apiBaseUrl) throw new StrykeSdkError("configuration", "STRYKE_API_BASE_URL is required for live-data mode");
   console.log(JSON.stringify({ event: "reference_bot_config", config: publicConfig(config), ...compatibility }));
   const client = await StrykeClient.connect({ apiBaseUrl: config.apiBaseUrl });
@@ -87,12 +101,14 @@ const runSdkBot = async () => {
     const controller = new AbortController();
     process.once("SIGINT", () => controller.abort());
     process.once("SIGTERM", () => controller.abort());
-    await runReferenceBot({ config, adapter, once: process.argv.includes("--once"), signal: controller.signal });
+    const maximumTicks = selectedMaximumTicks();
+    await runReferenceBot({ config, adapter, once: process.argv.includes("--once"), ...(maximumTicks === undefined ? {} : { maximumTicks }), signal: controller.signal });
   } finally { subscription.close(); }
 };
 
 try {
-  if (process.argv.includes("--live") || process.argv.includes("--live-data")) await runSdkBot();
+  if (process.argv.some((argument) => argument.startsWith("--profile="))) await runSdkBot(selectedProfile());
+  else if (process.argv.includes("--live") || process.argv.includes("--live-data")) await runSdkBot(process.argv.includes("--live") ? "devnet" : "paper");
   else runFixtureSmoke();
 } catch (error) {
   const failure = error instanceof StrykeSdkError ? { code: error.code, message: error.message, retryable: error.retryable } : { code: "configuration", message: error instanceof Error ? error.message : "Reference bot startup failed", retryable: false };

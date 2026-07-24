@@ -3,6 +3,7 @@ import { StrykeSdkError, type PilotAsset, type PilotExpiryFamily } from "@stryke
 import type { BaselineEstimator } from "./strategy.js";
 
 export type ReferenceBotConfig = {
+  profile: ReferenceBotProfile;
   asset: PilotAsset;
   expiryFamily: PilotExpiryFamily;
   side: "yes" | "no";
@@ -27,7 +28,10 @@ export type ReferenceBotConfig = {
   walletAdapterPath?: string;
 };
 
+export type ReferenceBotProfile = "paper" | "devnet" | "live";
+
 export const referenceBotDefaults: ReferenceBotConfig = {
+  profile: "paper",
   asset: "BTC",
   expiryFamily: "five_minute",
   side: "yes",
@@ -90,6 +94,7 @@ export const parseReferenceBotConfig = (
     if (input[forbidden] !== undefined) throw new StrykeSdkError("configuration", "Inline wallet secrets are not supported");
   }
   const config = { ...referenceBotDefaults, ...input } as ReferenceBotConfig;
+  if (!["paper", "devnet", "live"].includes(config.profile)) configurationError("profile");
   if (!["BTC", "SOL"].includes(config.asset)) configurationError("asset");
   if (!["one_minute", "five_minute", "fifteen_minute", "hourly"].includes(config.expiryFamily)) configurationError("expiryFamily");
   if (!["yes", "no"].includes(config.side)) configurationError("side");
@@ -117,14 +122,29 @@ export const parseReferenceBotConfig = (
   return config;
 };
 
-export const parseReferenceBotEnv = (env: NodeJS.ProcessEnv = process.env): ReferenceBotConfig => {
-  const readOnlyMode = booleanEnv(env, "STRYKE_READ_ONLY_MODE", true);
-  const liveTradingEnabled = booleanEnv(env, "STRYKE_LIVE_TRADING_ENABLED", false);
-  const killSwitchEnabled = booleanEnv(env, "STRYKE_KILL_SWITCH_ENABLED", true);
+export const parseReferenceBotEnv = (
+  env: NodeJS.ProcessEnv = process.env,
+  profile: ReferenceBotProfile = "paper"
+): ReferenceBotConfig => {
+  if (profile === "live") {
+    throw new StrykeSdkError(
+      "configuration",
+      "Mainnet live trading is not approved or compatible with this devnet pilot"
+    );
+  }
+  const profiledEnv: NodeJS.ProcessEnv = {
+    ...env,
+    STRYKE_READ_ONLY_MODE: profile === "paper" ? "true" : "false",
+    STRYKE_LIVE_TRADING_ENABLED: profile === "devnet" ? "true" : "false",
+    STRYKE_KILL_SWITCH_ENABLED: profile === "devnet" ? "false" : "true",
+  };
+  const readOnlyMode = booleanEnv(profiledEnv, "STRYKE_READ_ONLY_MODE", true);
+  const liveTradingEnabled = booleanEnv(profiledEnv, "STRYKE_LIVE_TRADING_ENABLED", false);
+  const killSwitchEnabled = booleanEnv(profiledEnv, "STRYKE_KILL_SWITCH_ENABLED", true);
   const activeLive = !readOnlyMode && liveTradingEnabled && !killSwitchEnabled;
   const required = (name: string, fallback?: string): string => {
-    const value = env[name] ?? fallback;
-    if (value === undefined || (activeLive && env[name] === undefined)) return configurationError(name);
+    const value = profiledEnv[name] ?? fallback;
+    if (value === undefined || (activeLive && profiledEnv[name] === undefined)) return configurationError(name);
     return value;
   };
   const asset = required("STRYKE_ASSET", referenceBotDefaults.asset) as PilotAsset;
@@ -134,10 +154,10 @@ export const parseReferenceBotEnv = (env: NodeJS.ProcessEnv = process.env): Refe
   const sol = (name: string, fallback: bigint) => solToLamports(required(name, `${Number(fallback) / 1e9}`), name);
   const numeric = (name: string, fallback: number) => {
     if (activeLive) required(name);
-    return numberEnv(env, name, fallback);
+    return numberEnv(profiledEnv, name, fallback);
   };
   const config = parseReferenceBotConfig({
-    asset, expiryFamily, side, estimator,
+    profile, asset, expiryFamily, side, estimator,
     tradeSizeLamports: sol("STRYKE_TRADE_SIZE_SOL", referenceBotDefaults.tradeSizeLamports),
     maximumTradeSizeLamports: sol("STRYKE_MAXIMUM_TRADE_SIZE_SOL", referenceBotDefaults.maximumTradeSizeLamports),
     maximumAggregateExposureLamports: sol("STRYKE_MAXIMUM_AGGREGATE_EXPOSURE_SOL", referenceBotDefaults.maximumAggregateExposureLamports),
@@ -150,10 +170,10 @@ export const parseReferenceBotEnv = (env: NodeJS.ProcessEnv = process.env): Refe
     takeProfitBps: numeric("STRYKE_TAKE_PROFIT_BPS", referenceBotDefaults.takeProfitBps),
     priceHistoryMaxPoints: numeric("STRYKE_PRICE_HISTORY_MAX_POINTS", referenceBotDefaults.priceHistoryMaxPoints),
     readOnlyMode, liveTradingEnabled, killSwitchEnabled,
-    checkpointPath: env.STRYKE_CHECKPOINT_PATH ?? referenceBotDefaults.checkpointPath,
-    ...(env.STRYKE_API_BASE_URL ? { apiBaseUrl: env.STRYKE_API_BASE_URL } : {}),
-    ...(env.STRYKE_SOLANA_RPC_URL ? { solanaRpcUrl: env.STRYKE_SOLANA_RPC_URL } : {}),
-    ...(env.STRYKE_WALLET_ADAPTER_PATH ? { walletAdapterPath: env.STRYKE_WALLET_ADAPTER_PATH } : {}),
+    checkpointPath: profiledEnv.STRYKE_CHECKPOINT_PATH ?? referenceBotDefaults.checkpointPath,
+    ...(profiledEnv.STRYKE_API_BASE_URL ? { apiBaseUrl: profiledEnv.STRYKE_API_BASE_URL } : {}),
+    ...(profiledEnv.STRYKE_SOLANA_RPC_URL ? { solanaRpcUrl: profiledEnv.STRYKE_SOLANA_RPC_URL } : {}),
+    ...(profiledEnv.STRYKE_WALLET_ADAPTER_PATH ? { walletAdapterPath: profiledEnv.STRYKE_WALLET_ADAPTER_PATH } : {}),
   });
   if (activeLive && (!config.apiBaseUrl || !config.solanaRpcUrl || !config.walletAdapterPath)) {
     configurationError("live endpoints and wallet adapter");
