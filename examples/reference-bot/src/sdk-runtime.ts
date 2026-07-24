@@ -136,7 +136,10 @@ export const createSdkRuntimeAdapter = ({
           ? exposureShares > 0n
           : materialization.action === "sell"
             ? !matching || !["open_position", "sellable"].includes(matching.lifecycle.state) || exposureShares < BigInt(materialization.sharesBefore ?? "0")
-            : matching?.lifecycle.state === (materialization.action === "claim" ? "claimed" : "refunded");
+            : !matching || (
+                exposureShares === 0n &&
+                ["claimed", "refunded", "expired_unclaimed", "lost"].includes(matching.lifecycle.state)
+              );
         if (!observed) return { state: "materializing", clientActionId: pending.clientActionId, ...(pending.signature ? { signature: pending.signature } : {}) };
         await checkpoint.clear(pending.clientActionId);
         return { state: "confirmed", clientActionId: pending.clientActionId, ...(pending.signature ? { signature: pending.signature } : {}) };
