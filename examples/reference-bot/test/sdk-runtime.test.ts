@@ -3,9 +3,17 @@ import { MemoryActionCheckpointStore, PYTH_FEED_IDS, PriceStore } from "@stryke/
 
 import { runMarketTick } from "../src/bot.js";
 import { parseReferenceBotConfig } from "../src/config.js";
-import { createSdkRuntimeAdapter } from "../src/sdk-runtime.js";
+import { createSdkRuntimeAdapter, positionCountsTowardEntryCapacity } from "../src/sdk-runtime.js";
 
 describe("SDK runtime composition", () => {
+  it("non_actionable_terminal_history_does_not_consume_entry_capacity", () => {
+    for (const state of ["claimable", "refundable", "lost", "claimed", "refunded"] as const) {
+      expect(positionCountsTowardEntryCapacity({ lifecycle: { state } } as never)).toBe(false);
+    }
+    for (const state of ["pending_confirmation", "open_position", "sellable", "awaiting_resolution"] as const) {
+      expect(positionCountsTowardEntryCapacity({ lifecycle: { state } } as never)).toBe(true);
+    }
+  });
   it("actual_sdk_tick_consumes_market_side_size_slippage_estimator_and_risk_config", async () => {
     const now = Date.now();
     const config = parseReferenceBotConfig({

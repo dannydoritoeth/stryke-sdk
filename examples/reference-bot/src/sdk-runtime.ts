@@ -20,6 +20,9 @@ import {
 import type { ReferenceBotRuntimeAdapter, RuntimeExecution } from "./bot.js";
 import type { ReferenceBotConfig } from "./config.js";
 
+export const positionCountsTowardEntryCapacity = (position: PilotPosition): boolean =>
+  ["pending_confirmation", "open_position", "sellable", "awaiting_resolution"].includes(position.lifecycle.state);
+
 const marketMatchesPosition = (market: PilotMarket, position: PilotPosition): boolean => {
   const identity = position.market;
   return identity.tokenMint === market.tokenMint && identity.expiryFamily === market.expiryFamily &&
@@ -170,7 +173,7 @@ export const createSdkRuntimeAdapter = ({
       const activePortfolio = portfolio.filter((position) =>
         position.asset === config.asset &&
         position.market.expiryFamily === config.expiryFamily &&
-        ["pending_confirmation", "open_position", "sellable", "awaiting_resolution", "claimable", "refundable"].includes(position.lifecycle.state)
+        positionCountsTowardEntryCapacity(position)
       );
       const aggregateExposureLamports = activePortfolio.reduce((sum, position) => sum + BigInt(position.yesCostBasisCollateralUnits ?? "0") + BigInt(position.noCostBasisCollateralUnits ?? "0"), 0n);
       const openPositions = activePortfolio.length;

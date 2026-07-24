@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -32,34 +32,66 @@ const runCell = ({ asset, expiry }) => new Promise((complete) => {
   const cellId = `${asset.toLowerCase()}-${expiry}`;
   const checkpoint = resolve(directory, `${cellId}.checkpoint.json`);
   const lines = [];
+  const cellEnv = {
+    ...process.env,
+    STRYKE_ASSET: asset,
+    STRYKE_EXPIRY_FAMILY: expiry,
+    ...(expiry === "one_minute" ? { STRYKE_MINIMUM_SECONDS_TO_EXPIRY: process.env.STRYKE_MATRIX_ONE_MINUTE_MINIMUM_SECONDS ?? "5" } : {}),
+    STRYKE_CHECKPOINT_PATH: checkpoint,
+  };
   const child = spawn(process.execPath, ["--env-file-if-exists=.env", "examples/reference-bot/dist/cli.js", "--profile=devnet"], {
     cwd: process.cwd(),
-    env: { ...process.env, STRYKE_ASSET: asset, STRYKE_EXPIRY_FAMILY: expiry, STRYKE_CHECKPOINT_PATH: checkpoint },
+    env: cellEnv,
     stdio: ["ignore", "pipe", "pipe"],
   });
   const startedAt = new Date().toISOString();
+  let buyTick;
+  let completionActionId;
+  let cleanLifecycle = false;
+  let timedOut = false;
   const record = (stream, chunk) => {
     for (const line of String(chunk).split("\n").filter(Boolean)) {
       lines.push({ observedAt: new Date().toISOString(), stream, line });
       process.stdout.write(`[${cellId}] ${line}\n`);
+      try {
+        const event = JSON.parse(line);
+        if (event.action === "buy" && event.signature && Number.isInteger(event.tick) && buyTick === undefined) buyTick = event.tick;
+        if (buyTick !== undefined && event.tick > buyTick && ["sell", "claim", "refund"].includes(event.action) && event.signature) completionActionId = event.clientActionId;
+        if (completionActionId && event.phase === "reconcile" && event.action === "complete" && event.clientActionId === completionActionId) {
+          cleanLifecycle = true;
+          child.kill("SIGTERM");
+        }
+      } catch {}
     }
   };
   child.stdout.on("data", (chunk) => record("stdout", chunk));
   child.stderr.on("data", (chunk) => record("stderr", chunk));
-  const timer = setTimeout(() => child.kill("SIGTERM"), timeoutSeconds * 1_000);
+  const timer = setTimeout(() => { timedOut = true; child.kill("SIGTERM"); }, timeoutSeconds * 1_000);
   child.on("exit", async (code, signal) => {
     clearTimeout(timer);
+    let nextMarketEvaluated = false;
+    if (cleanLifecycle) {
+      const paper = spawnSync(process.execPath, ["--env-file-if-exists=.env", "examples/reference-bot/dist/cli.js", "--profile=paper", "--once"], {
+        cwd: process.cwd(), env: cellEnv, encoding: "utf8", timeout: 60_000,
+      });
+      for (const [stream, output] of [["stdout", paper.stdout], ["stderr", paper.stderr]]) {
+        for (const line of String(output ?? "").split("\n").filter(Boolean)) {
+          lines.push({ observedAt: new Date().toISOString(), stream: `paper_${stream}`, line });
+          process.stdout.write(`[${cellId}:paper] ${line}\n`);
+          try { const event = JSON.parse(line); if (event.phase === "entry") nextMarketEvaluated = true; } catch {}
+        }
+      }
+    }
     const events = lines.flatMap(({ line }) => { try { return [JSON.parse(line)]; } catch { return []; } });
     const runtimeEvents = events.filter((event) => Number.isInteger(event.tick));
     const actions = runtimeEvents.filter((event) => ["buy", "sell", "claim", "refund"].includes(event.action));
     const buy = actions.find((event) => event.action === "buy" && event.signature);
     const completion = buy && actions.find((event) => event.tick > buy.tick && ["sell", "claim", "refund"].includes(event.action) && event.signature);
-    const nextMarket = completion && runtimeEvents.find((event) => event.tick > completion.tick && event.phase === "entry");
     const result = {
       schemaVersion: "stryke.referenceBotDevnetMatrixCell.v1", runId, revision, asset, expiry,
       startedAt, completedAt: new Date().toISOString(), exitCode: code, signal,
-      timedOut: signal === "SIGTERM", tickCount: runtimeEvents.length,
-      actions, lifecycleCompleted: Boolean(completion), nextMarketEvaluated: Boolean(nextMarket),
+      timedOut, tickCount: runtimeEvents.length,
+      actions, lifecycleCompleted: Boolean(completion) && cleanLifecycle, nextMarketEvaluated,
       checkpointPath: checkpoint, lines,
     };
     await writeFile(resolve(directory, `${cellId}.json`), `${JSON.stringify(result, null, 2)}\n`);

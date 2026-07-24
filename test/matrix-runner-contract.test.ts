@@ -17,5 +17,6 @@ describe("reference-bot devnet matrix runner", () => {
     expect(source).toContain('event.action === "buy" && event.signature');
     expect(source).toContain("result.lifecycleCompleted");
     expect(source).toContain("result.nextMarketEvaluated");
+    expect(source).toContain('STRYKE_MATRIX_ONE_MINUTE_MINIMUM_SECONDS ?? "5"');
   });
 });
