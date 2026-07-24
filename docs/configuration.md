@@ -1,33 +1,41 @@
 # Configuration
 
-All controls fail closed. Amount limits below are SOL-denominated numbers for
-the reference pilot; SDK and API financial quantities remain exact integer
-strings in their documented collateral units.
+Read-only mode has educational defaults. Active live mode requires every
+trading/risk control explicitly; missing or invalid input fails before wallet or
+transaction work.
 
-| Control | Default | Rule |
-| --- | ---: | --- |
-| `maximumTradeSizeSol` | `0.01` | Positive; each entry must not exceed it |
-| `maximumAggregateExposureSol` | `0.05` | Must cover the per-trade cap and the post-trade total |
-| `minimumEntryEdgeBps` | `200` | Between `0` and `10000` |
-| `maximumPriceImpactBps` | `100` | Between `0` and `10000` |
-| `minimumSecondsToExpiry` | `60` | Non-negative integer |
-| `maximumOpenPositions` | `3` | Positive integer |
-| `readOnlyMode` | `true` | Overrides live enablement and prevents wallet loading |
-| `liveTradingEnabled` | `false` | Must be explicitly enabled |
-| `killSwitchEnabled` | `true` | Overrides live enablement |
-| `walletAdapterPath` | unset | Required only after all live gates pass |
+| Environment variable | Unit / values |
+| --- | --- |
+| `STRYKE_ASSET` | `BTC`, `SOL` |
+| `STRYKE_EXPIRY_FAMILY` | `one_minute`, `five_minute`, `fifteen_minute`, `hourly` |
+| `STRYKE_SIDE` | `yes`, `no` |
+| `STRYKE_ESTIMATOR` | `distance_to_strike`, `distance_momentum` |
+| `STRYKE_TRADE_SIZE_SOL` | positive decimal, maximum 9 decimals |
+| `STRYKE_MAXIMUM_TRADE_SIZE_SOL` | positive decimal; ≥ trade size |
+| `STRYKE_MAXIMUM_AGGREGATE_EXPOSURE_SOL` | positive decimal; ≥ trade cap |
+| `STRYKE_MINIMUM_ENTRY_EDGE_BPS` | integer `0..10000` |
+| `STRYKE_MAXIMUM_PRICE_IMPACT_BPS` | integer `0..9999` |
+| `STRYKE_MINIMUM_SECONDS_TO_EXPIRY` | non-negative integer seconds |
+| `STRYKE_MAXIMUM_OPEN_POSITIONS` | positive integer |
+| `STRYKE_TICK_INTERVAL_MS` | integer ≥ `1000` |
+| `STRYKE_STOP_LOSS_BPS` | integer `1..10000`; equality exits |
+| `STRYKE_TAKE_PROFIT_BPS` | positive integer; equality exits |
+| `STRYKE_PRICE_HISTORY_MAX_POINTS` | integer `2..10000` |
 
-The CLI maps `STRYKE_READ_ONLY_MODE`, `STRYKE_LIVE_TRADING_ENABLED`,
-`STRYKE_KILL_SWITCH_ENABLED`, and `STRYKE_WALLET_ADAPTER_PATH` to those gates.
-Boolean values must be exactly `true` or `false`. Live execution also requires
-the invited `STRYKE_API_BASE_URL` and devnet `STRYKE_SOLANA_RPC_URL`.
-`STRYKE_CHECKPOINT_PATH` defaults to `.stryke/reference-bot-action.json`.
-`STRYKE_LIVE_ACTION` defaults to `buy`; set it to `terminal` after settlement
-to execute the first authoritative claimable or refundable position.
-Set `STRYKE_TERMINAL_POSITION_ID` to the SDK `positionId` when the wallet has
-more than one actionable position.
+Mode and connection controls are `STRYKE_READ_ONLY_MODE`,
+`STRYKE_LIVE_TRADING_ENABLED`, `STRYKE_KILL_SWITCH_ENABLED`,
+`STRYKE_API_BASE_URL`, `STRYKE_SOLANA_RPC_URL`,
+`STRYKE_WALLET_ADAPTER_PATH`, and `STRYKE_CHECKPOINT_PATH`. Booleans are exactly
+`true` or `false`. Read-only and the kill switch override live enablement. The
+checkpoint defaults to `.stryke/reference-bot-action.json`.
+`STRYKE_PYTH_HERMES_URL` may select the supplied Hermes endpoint; otherwise the
+public endpoint is used.
 
-Signer custody stays inside the supplied wallet module, whose default export is
-an `@solana/kit` `TransactionSigner`. Seed phrases, private keys, secret keys,
-mnemonics, and signed transactions are not configuration. Use a separately
-funded, minimally funded devnet pilot wallet.
+In the typed config, `readOnlyMode` Overrides live enablement and
+`killSwitchEnabled` Overrides live enablement. The environment variables above
+map directly to those controls.
+
+SOL values convert once to exact lamports. Quotes, shares, proceeds, cost basis,
+and payout math stay in integer base units. The wallet module default-exports an
+`@solana/kit` `TransactionSigner`; inline keys, seed phrases, mnemonics, signed
+transactions, and wallet material are rejected or redacted.

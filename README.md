@@ -1,53 +1,71 @@
 # Stryke SDK Pilot
 
-Private invited-developer pilot for TypeScript bots trading Stryke BTC and SOL
-markets. It is educational software, not investment advice; outcomes are not
-guaranteed. The package is consumed from this repository during the pilot and
-is not published to npm.
+Private TypeScript SDK and reference bot for invited developers trading Stryke
+BTC/SOL devnet markets. This is educational software, not investment advice;
+outcomes are not guaranteed. Node.js 22+ is required.
 
-The SDK owns API compatibility, exact market reads, Pyth freshness, executable
-quotes, reviewed transaction preparation, wallet-local execution seams,
-restart-safe reconciliation, and authoritative position actions. The small
-reference bot owns only one estimator and visible trading decisions.
+The SDK supplies typed markets, Pyth prices/history, executable quotes, reviewed
+transactions, restart-safe reconciliation, positions, sells, claims, and
+refunds. The reference bot continuously reconciles → manages/exits → settles →
+evaluates the next market. It includes two transparent educational estimators.
 
-## Start read-only
-
-Node.js 22 or newer is required. This copyable smoke uses a documented BTC
-five-minute fixture, prints the active SDK/API/program compatibility contract,
-and never loads a wallet or submits a transaction.
+## Start safely
 
 ```bash
 npm ci
 npm run start:read-only -w @stryke/reference-bot
 ```
 
-Replace only `examples/reference-bot/src/strategy.ts` to supply your estimator,
-then rerun the command. One-minute markets are SDK-supported, but live strategy
-performance is experimental; BTC five-minute is the canonical onboarding path.
-
-## Live gate
-
-Live trading defaults off. Use only a separately funded, minimally funded
-devnet pilot wallet through a wallet-adapter module. Never put a seed phrase,
-private key, secret key, or signed transaction in configuration or logs.
-
-The following command intentionally fails until every gate is explicit and a
-valid wallet-adapter path exists:
+That deterministic fixture needs no endpoint or wallet. For one real SDK
+evaluation tick with no wallet or submission:
 
 ```bash
-STRYKE_READ_ONLY_MODE=false \
-STRYKE_LIVE_TRADING_ENABLED=true \
-STRYKE_KILL_SWITCH_ENABLED=false \
+STRYKE_READ_ONLY_MODE=true STRYKE_ASSET=BTC \
+STRYKE_EXPIRY_FAMILY=five_minute STRYKE_SIDE=yes \
+STRYKE_ESTIMATOR=distance_to_strike \
+STRYKE_API_BASE_URL="$INVITED_DEVNET_API" \
+npm run start:live-data -w @stryke/reference-bot -- --once
+```
+
+Remove `--once` to observe continuously; optionally set
+`STRYKE_ESTIMATOR=distance_momentum` and `STRYKE_TICK_INTERVAL_MS=5000`.
+Both bundled strategies are simple baselines. Replace only the exported
+`estimateFairProbability` seam in `examples/reference-bot/src/strategy.ts` for
+your own signal.
+
+Every run prints effective non-secret config and each waiting, blocked, hold,
+entry, exit, claim, or refund reason.
+
+## Minimum-size devnet live example
+
+Live trading defaults off. Use a separately funded, minimally funded devnet
+wallet adapter. Copy `.env.example`, set every value explicitly, then deliberately
+change the three mode gates and run:
+
+```bash
+STRYKE_READ_ONLY_MODE=false STRYKE_LIVE_TRADING_ENABLED=true \
+STRYKE_KILL_SWITCH_ENABLED=false STRYKE_ASSET=BTC \
+STRYKE_EXPIRY_FAMILY=five_minute STRYKE_SIDE=yes \
+STRYKE_ESTIMATOR=distance_to_strike STRYKE_TRADE_SIZE_SOL=0.001 \
+STRYKE_MAXIMUM_TRADE_SIZE_SOL=0.001 \
+STRYKE_MAXIMUM_AGGREGATE_EXPOSURE_SOL=0.001 \
+STRYKE_MINIMUM_ENTRY_EDGE_BPS=0 STRYKE_MAXIMUM_PRICE_IMPACT_BPS=100 \
+STRYKE_MINIMUM_SECONDS_TO_EXPIRY=60 STRYKE_MAXIMUM_OPEN_POSITIONS=1 \
+STRYKE_TICK_INTERVAL_MS=5000 STRYKE_STOP_LOSS_BPS=1000 \
+STRYKE_TAKE_PROFIT_BPS=2000 STRYKE_PRICE_HISTORY_MAX_POINTS=120 \
+STRYKE_API_BASE_URL="$INVITED_DEVNET_API" \
+STRYKE_SOLANA_RPC_URL="$DEVNET_RPC_URL" \
 STRYKE_WALLET_ADAPTER_PATH=./wallet-adapter.js \
 npm run start:live -w @stryke/reference-bot
 ```
 
-Passing the startup gate does not itself place a trade. Reviewed transactions
-still require a fresh exact-market quote, successful simulation, wallet-local
-approval, submission, confirmation, and authoritative reconciliation.
+This does not force a trade. Entry happens only when the selected estimator and
+every freshness, edge, impact, time, exposure, checkpoint, wallet, and mode gate
+pass. The loop uses full-position executable sell quotes, applies the configured
+10% stop loss / 20% take profit before its EV fallback, waits for
+API-authoritative resolution, claims/refunds, reconciles, and repeats.
 
-Read the [quickstart](docs/quickstart.md),
-[market mechanics](docs/market-mechanics.md),
-[configuration reference](docs/configuration.md), and
-[typed-error recovery guide](docs/troubleshooting.md). Maintainers can inspect
-the latest [docs-only rehearsal](docs/maintainer-rehearsal.md).
+Never put a seed phrase, private key, secret key, or signed transaction in config
+or logs. See the [quickstart](docs/quickstart.md),
+[configuration](docs/configuration.md), [market mechanics](docs/market-mechanics.md),
+and [error recovery](docs/troubleshooting.md).

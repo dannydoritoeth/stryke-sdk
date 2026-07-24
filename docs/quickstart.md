@@ -1,50 +1,35 @@
 # Quickstart
 
-Use Node.js 22 or newer. BTC five-minute on devnet is the canonical onboarding
-path. BTC and SOL `one_minute`, `five_minute`, `fifteen_minute`, and `hourly`
-markets are SDK-supported; one-minute live strategy performance is experimental
-because expiry, oracle, and confirmation races are tighter.
+Use Node.js 22+. BTC five-minute devnet is the canonical onboarding path. BTC
+and SOL 1m/5m/15m/1h are supported. One-minute live strategy performance is experimental because timing races are tighter.
 
-## 1. Install and prove the read-only boundary
+## 1. Prove the safe boundary
 
 ```bash
 npm ci
 npm run start:read-only -w @stryke/reference-bot
 ```
 
-The structured output includes a dry-run decision and `stryke_compatibility`
-with `sdkVersion`, `apiVersion`, `apiSchemaVersion`, `programId`, and
-`programVersion`. It uses a labelled documentation fixture and does not contact
-an endpoint, load a wallet, sign, or submit.
+The output contains a fixture dry-run decision and the SDK/API/program
+compatibility fields `sdkVersion`, `apiVersion`, `apiSchemaVersion`, `programId`,
+and `programVersion`. It contacts no endpoint and loads no wallet.
 
-## 2. Connect to the invited devnet API
+## 2. Observe real data
 
-Use the supplied devnet base URL; do not guess or substitute another cluster.
-The handshake fails closed unless `/v1/capabilities` matches the SDK's API
-schema, minimal-Pyth profile, program ID/version, and devnet cluster.
+Run the root README's `start:live-data` command with the supplied invited API.
+It uses actual SDK market, Pyth, and quote clients. `--once` evaluates once;
+without it the loop repeats at `STRYKE_TICK_INTERVAL_MS`. Both modes remain
+read-only and never load a wallet.
 
-```ts
-import { MarketsClient, StrykeClient } from "@stryke/sdk";
+Unavailable/stale data blocks decisions. There is no alternate-price or
+inferred-market fallback.
 
-const client = await StrykeClient.connect({
-  apiBaseUrl: process.env.STRYKE_API_BASE_URL!,
-});
-console.log(client.capabilities);
+## 3. Choose or replace the estimator
 
-const markets = new MarketsClient(client);
-const market = await markets.current({
-  asset: "BTC",
-  expiryFamily: "five_minute",
-});
-console.log(market);
-```
-
-Unavailable or stale data blocks the decision. There is no cross-cluster,
-alternate-price-source, or inferred-market fallback.
-
-## 3. Replace the estimator
-
-Edit only `examples/reference-bot/src/strategy.ts`. Keep the function signature:
+`distance_to_strike` and `distance_momentum` are bundled educational baselines.
+Select one with `STRYKE_ESTIMATOR`. To supply your own signal, replace the
+exported `estimateFairProbability` seam in
+`examples/reference-bot/src/strategy.ts`. Its input is:
 
 ```ts
 export const estimateFairProbability = ({
@@ -66,59 +51,36 @@ export const estimateFairProbability = ({
 };
 ```
 
-The result must be finite and between `0` and `1`. The bundled estimator is an
-educational placeholder and makes no accuracy, profitability, or predictive
-quality claim.
+Return a finite probability from `0` to `1`. No included estimator makes an
+accuracy or profitability claim.
 
-## 4. Interpret the decision
+## 4. Understand the loop
 
-For YES, the bot compares `fairProbability` with the executable YES quote. For
-NO, it compares `1 - fairProbability` with the executable NO quote. Entry needs
-the configured minimum edge plus every freshness, impact, time, size, position,
-aggregate-exposure, checkpoint, and kill-switch check. Read-only or live-off
-mode records the decision without loading a wallet or submitting.
+Every tick reconciles a saved action before doing anything else. A submitted or
+unknown action blocks duplicates. The bot then handles one stable position:
 
-While holding, executable net sell proceeds are compared with the applicable
-side probability multiplied by the API-authored if-win payout. Missing or stale
-sell/payout inputs yield `decision_unavailable`. Claim/refund eligibility comes
-only from refreshed Stryke position state, never from a local Pyth comparison.
+- sellable: request a fresh full-position quote, calculate integer PnL from the
+  API-authored side cost basis, apply stop loss/take profit, then EV fallback;
+- awaiting resolution: wait; or
+- claimable/refundable: use only the API-authoritative terminal action.
 
-## 5. Deliberately open the live gate
+Only after prior work is economically complete does it evaluate the next
+current market. Entry needs estimator edge plus every freshness, impact, time,
+size, position, exposure, checkpoint, mode, and kill-switch check. Every outcome
+prints a reason.
 
-Copy `.env.example`, use a separately funded devnet pilot wallet, and provide a
-wallet-adapter module path. Inline secrets are rejected.
+## 5. Deliberately open live mode
 
-```bash
-STRYKE_READ_ONLY_MODE=false \
-STRYKE_LIVE_TRADING_ENABLED=true \
-STRYKE_KILL_SWITCH_ENABLED=false \
-STRYKE_WALLET_ADAPTER_PATH=./examples/reference-bot/wallet-adapter.example.mjs \
-STRYKE_WALLET_KEYPAIR_PATH=/secure/path/pilot-wallet.json \
-STRYKE_API_BASE_URL=https://invited-devnet-api.example \
-STRYKE_SOLANA_RPC_URL=https://api.devnet.solana.com \
-npm run start:live -w @stryke/reference-bot
-```
+Copy `.env.example`, set every control explicitly, provide the invited devnet
+API/RPC and a separately funded wallet adapter, then use the root README's
+minimum-size command. It does not force a trade.
 
-The wallet module must default-export an `@solana/kit` `TransactionSigner`; it
-keeps key loading outside configuration and the SDK. The command fails unless
-all live gates pass, then performs the canonical capped BTC five-minute YES buy
-through SDK market, quote, transaction, checkpoint, execution, reconciliation,
-and position clients. Review cluster, owner, exact market, side, amount, quote
-economics, minimum output, and blockhash before wallet approval.
+The wallet module must default-export an `@solana/kit` `TransactionSigner`.
+Keep wallet files outside the repository. Never put wallet secrets or signed
+transactions in environment variables or logs.
 
-The included adapter is a Node/devnet example for a Solana CLI-format keypair
-file. Keep that file outside this repository and never commit it. Hardware or
-remote signers can instead implement the same `TransactionSigner` boundary.
-
-If an action becomes `submitted` or `unknown`, stop and reconcile it. Never
-create a new action ID merely because confirmation is slow.
-
-After the position becomes claimable or refundable, use a fresh checkpoint
-path and the same wallet-local signer:
-
-```bash
-STRYKE_LIVE_ACTION=terminal \
-STRYKE_TERMINAL_POSITION_ID='<tokenMint>:pyth_oracle:<collateralMint>:five_minute:<expiryTs>:<targetValue>' \
-STRYKE_CHECKPOINT_PATH=.stryke/reference-bot-terminal.json \
-npm run start:live -w @stryke/reference-bot
-```
+Before approval, review cluster, owner, market, side, amount, quote economics,
+minimum output, and blockhash. If an action is submitted/unknown, keep the same
+checkpoint and action ID; the next run reconciles before any new action. The
+same loop handles sell, claim/refund, and subsequent markets—do not start a
+separate settlement command.
