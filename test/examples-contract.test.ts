@@ -50,4 +50,12 @@ describe("documented example contract", () => {
       expect(manifest.scripts[script]).toContain(`--profile=${profile}`);
     }
   });
+
+  it("documented_devnet_preflight_can_stop_before_the_loop", () => {
+    const cli = readFileSync(join(workspace, "examples/reference-bot/src/cli.ts"), "utf8");
+    const troubleshooting = readFileSync(join(workspace, "docs/troubleshooting.md"), "utf8");
+    expect(cli).toContain('process.argv.includes("--preflight-only")');
+    expect(cli.indexOf('process.argv.includes("--preflight-only")')).toBeLessThan(cli.indexOf("new FileActionCheckpointStore"));
+    expect(troubleshooting).toContain("npm run start:devnet -w @stryke/reference-bot -- --preflight-only");
+  });
 });

@@ -19,6 +19,13 @@ The wallet address and file path may be printed, but keypair bytes are never
 printed. Do not paste the keypair JSON, a seed phrase, or signed transaction
 into an issue, log, or coding-agent prompt.
 
+To check the configured devnet API, Pyth feed, wallet, RPC, and funding without
+entering the trading loop or signing, run:
+
+```bash
+npm run start:devnet -w @stryke/reference-bot -- --preflight-only
+```
+
 Catch `StrykeSdkError`, inspect `code` and `retryable`, and log only its bounded
 context. A retryable flag means the condition may recover; it does not override
 quote freshness, action reconciliation, or any signing precondition.

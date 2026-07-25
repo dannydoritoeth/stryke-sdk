@@ -146,6 +146,10 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
       }
       emitPreflight(profile, "funding", "passed", `Wallet ${signer.address} has enough devnet SOL for the configured trade cap and execution buffer.`);
     }
+    if (process.argv.includes("--preflight-only")) {
+      console.log(JSON.stringify({ event: "reference_bot_preflight_complete", profile }));
+      return;
+    }
     const checkpoint = new FileActionCheckpointStore(
       resolve(process.env.INIT_CWD ?? process.cwd(), config.checkpointPath)
     );
