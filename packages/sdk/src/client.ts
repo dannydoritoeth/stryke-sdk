@@ -11,6 +11,7 @@ const apiErrorCode = (code?: string): StrykeSdkErrorCode => {
   if (/stale/i.test(code)) return "source_stale";
   if (/unavailable|not_found|read_models/i.test(code)) return "source_unavailable";
   if (/quote|market_state|slippage/i.test(code)) return "quote_blocked";
+  if (/market_not_tradeable|trading_locked/i.test(code)) return "quote_blocked";
   if (/unsupported.*asset/i.test(code)) return "unsupported_asset";
   if (/unsupported.*expir/i.test(code)) return "unsupported_expiry";
   if (/compatib|api_major|schema/i.test(code)) return "compatibility";

@@ -114,4 +114,81 @@ describe("reference bot composed runtime", () => {
     const events = await runReferenceBot({ config: parseReferenceBotConfig({ killSwitchEnabled: false }), adapter: runtime, wait: async () => {}, onEvent: () => { if (calls === 2) controller.abort(); }, signal: controller.signal });
     expect(events.map(({ reason }) => reason)).toEqual(["retryable_source_unavailable", "read_only"]);
   });
+
+  it("closing_fee_reaches_strategy_final_decision", async () => {
+    const runtime = adapter({
+      evaluateEntry: async () => ({
+        ...(await adapter().evaluateEntry()),
+        buyQuote: quote({
+          closingProtection: {
+            policyVersion: 1,
+            phase: "closing",
+            baseFeeBps: 100,
+            closingFeeBps: 700,
+            effectiveFeeBps: 700,
+            hardLockTs: 1_800_000_000,
+            secondsUntilLock: 8,
+          },
+        }),
+      }),
+    });
+
+    await expect(runMarketTick({ tick: 1, config: live, adapter: runtime })).resolves.toMatchObject({
+      action: "buy",
+      details: { effectiveFeeBps: 700 },
+    });
+  });
+
+  it("locked_entry_and_sell_are_suppressed", async () => {
+    const locked = () =>
+      new StrykeSdkError(
+        "quote_blocked",
+        "Trading is locked before settlement.",
+        false,
+        { phase: "locked", policyVersion: 1 }
+      );
+    const entryRuntime = adapter({ evaluateEntry: async () => { throw locked(); } });
+    await expect(runMarketTick({ tick: 1, config: live, adapter: entryRuntime })).resolves.toMatchObject({
+      action: "blocked", reason: "trading_locked_until_settlement",
+    });
+    expect(entryRuntime.executeBuy).not.toHaveBeenCalled();
+
+    const sellRuntime = adapter({
+      listPositions: async () => [position()],
+      evaluatePosition: async () => { throw locked(); },
+    });
+    await expect(runMarketTick({ tick: 1, config: live, adapter: sellRuntime })).resolves.toMatchObject({
+      action: "hold", reason: "trading_locked_until_settlement",
+    });
+    expect(sellRuntime.executeSell).not.toHaveBeenCalled();
+  });
+
+  it("locked_position_holds_then_settles_once_across_restart", async () => {
+    let tick = 0;
+    let terminalCalls = 0;
+    let checkpoint: ActionCheckpoint | undefined;
+    const locked = new StrykeSdkError("quote_blocked", "Trading is locked before settlement.", false, { phase: "locked" });
+    const runtime = adapter({
+      loadCheckpoint: async () => checkpoint,
+      listPositions: async () => {
+        tick += 1;
+        return tick === 1
+          ? [position()]
+          : [position("claimable", { claimableAmount: "10", actionDeadline: new Date(Date.now() + 60_000).toISOString() })];
+      },
+      evaluatePosition: async () => { throw locked; },
+      executeTerminal: async () => {
+        terminalCalls += 1;
+        checkpoint = { clientActionId: "claim-1", intentHash: "claim-intent", state: "submitted" };
+        return { clientActionId: "claim-1" };
+      },
+      reconcilePending: async () => ({ state: "submitted", clientActionId: "claim-1" }),
+    });
+
+    const first = await runMarketTick({ tick: 1, config: live, adapter: runtime });
+    const second = await runMarketTick({ tick: 2, config: live, adapter: runtime });
+    const restarted = await runMarketTick({ tick: 3, config: live, adapter: runtime });
+    expect([first.action, second.action, restarted.action]).toEqual(["hold", "claim", "blocked"]);
+    expect(terminalCalls).toBe(1);
+  });
 });

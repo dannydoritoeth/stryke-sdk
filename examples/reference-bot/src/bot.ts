@@ -63,6 +63,13 @@ const terminalStates = new Set(["claimable", "refundable"]);
 const completeStates = new Set(["lost", "claimed", "refunded", "sold", "expired_unclaimed"]);
 const openStates = new Set(["open_position", "sellable"]);
 
+const isTradingLockedError = (error: unknown): boolean =>
+  error instanceof StrykeSdkError &&
+  (error.context?.phase === "locked" ||
+    /TradingLockedBeforeExpiry|locked before settlement|trading is locked/i.test(
+      error.message
+    ));
+
 const event = (tick: number, phase: RuntimeEvent["phase"], action: RuntimeEvent["action"], reason: string, extra: Partial<RuntimeEvent> = {}): RuntimeEvent =>
   ({ tick, phase, action, reason, ...extra });
 
@@ -103,7 +110,11 @@ export const runMarketTick = async ({
     const exposure = exposures[0]!;
     let evaluation: PositionEvaluation;
     try { evaluation = await adapter.evaluatePosition(position, exposure); }
-    catch { return event(tick, "position", "decision_unavailable", "position_evaluation_unavailable", { positionId: position.positionId }); }
+    catch (error) {
+      return isTradingLockedError(error)
+        ? event(tick, "position", "hold", "trading_locked_until_settlement", { positionId: position.positionId })
+        : event(tick, "position", "decision_unavailable", "position_evaluation_unavailable", { positionId: position.positionId });
+    }
     if (!evaluation.dataFresh) return event(tick, "position", "decision_unavailable", "position_data_stale", { positionId: position.positionId });
     const fairProbability = estimateFairProbability(evaluation.estimatorInput, config.estimator);
     const decision: PositionDecision = decidePositionExit({
@@ -116,7 +127,12 @@ export const runMarketTick = async ({
     const details = { fairProbability, ...(decision.pnlBps === undefined ? {} : { pnlBps: decision.pnlBps.toString() }), ...(decision.sellNowValue === undefined ? {} : { sellNowValue: decision.sellNowValue.toString() }), ...(decision.holdValue === undefined ? {} : { holdValue: decision.holdValue.toString() }) };
     if (decision.action !== "sell") return event(tick, "position", decision.action, decision.reason, { positionId: position.positionId, marketId: evaluation.market.marketId, details });
     if (config.readOnlyMode || !config.liveTradingEnabled || config.killSwitchEnabled) return event(tick, "position", "sell", `${decision.reason}_dry_run`, { positionId: position.positionId, marketId: evaluation.market.marketId, details });
-    const result = await adapter.executeSell(position, exposure, evaluation);
+    let result: RuntimeExecution;
+    try { result = await adapter.executeSell(position, exposure, evaluation); }
+    catch (error) {
+      if (isTradingLockedError(error)) return event(tick, "position", "hold", "trading_locked_until_settlement", { positionId: position.positionId, marketId: evaluation.market.marketId, details });
+      throw error;
+    }
     return event(tick, "position", "sell", decision.reason, { positionId: position.positionId, marketId: evaluation.market.marketId, details, ...result });
   }
 
@@ -124,7 +140,12 @@ export const runMarketTick = async ({
     return event(tick, "wait", "hold", "position_not_economically_complete");
   }
 
-  const evaluation = await adapter.evaluateEntry();
+  let evaluation: EntryEvaluation;
+  try { evaluation = await adapter.evaluateEntry(); }
+  catch (error) {
+    if (isTradingLockedError(error)) return event(tick, "entry", "blocked", "trading_locked_until_settlement");
+    throw error;
+  }
   const fairProbability = estimateFairProbability(evaluation.estimatorInput, config.estimator);
   const decision: EntryDecision = decideEntry({
     fairProbability, quote: evaluation.buyQuote, config,
@@ -134,9 +155,14 @@ export const runMarketTick = async ({
     openPositions: evaluation.openPositions,
     dataFresh: evaluation.dataFresh,
   });
-  const details = { fairProbability: decision.fairProbability, sideFairProbability: decision.sideFairProbability, quoteProbability: decision.quoteProbability, edgeBps: decision.edgeBps };
+  const details = { fairProbability: decision.fairProbability, sideFairProbability: decision.sideFairProbability, quoteProbability: decision.quoteProbability, edgeBps: decision.edgeBps, effectiveFeeBps: evaluation.buyQuote.closingProtection.effectiveFeeBps };
   if (decision.action !== "buy") return event(tick, "entry", decision.action, decision.reason, { marketId: evaluation.market.marketId, details });
-  const result = await adapter.executeBuy(evaluation);
+  let result: RuntimeExecution;
+  try { result = await adapter.executeBuy(evaluation); }
+  catch (error) {
+    if (isTradingLockedError(error)) return event(tick, "entry", "blocked", "trading_locked_until_settlement", { marketId: evaluation.market.marketId, details });
+    throw error;
+  }
   return event(tick, "entry", "buy", decision.reason, { marketId: evaluation.market.marketId, details, ...result });
 };
 

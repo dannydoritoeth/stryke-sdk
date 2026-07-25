@@ -34,6 +34,7 @@ const sampleQuote: ExecutableQuote = {
   quoteId: "read-only-smoke", generatedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString(),
   marketStateVersion: "documentation-smoke", action: "buy", side: "yes", amount: "10000000", fee: "0",
   feeBreakdown: { feeMode: "documentation_smoke", normalTradingFeeWaivedCollateralUnits: "0", grossTradeFeeCollateralUnits: "0", normalTradingFeeBps: 0, feeBpsApplied: 0 },
+  closingProtection: { policyVersion: 1, phase: "open", baseFeeBps: 0, closingFeeBps: 0, effectiveFeeBps: 0, hardLockTs: 1_800_000_000, secondsUntilLock: 60 },
   expectedShares: "20000000", minimumOutput: "19800000", maximumSlippageBpsApplied: 100,
   executableProbabilityBps: 4800, priceImpactBps: 25, raw: {},
 };
