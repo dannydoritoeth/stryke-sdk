@@ -47,6 +47,14 @@ describe("pilot documentation contract", () => {
     expect(quickstart).toMatch(/never commit, share.*personal\/mainnet/is);
   });
 
+  it("startup_failures_have_ai_readable_remediation", () => {
+    expect(troubleshooting).toContain("reference_bot_preflight");
+    for (const check of ["environment", "api", "pyth", "wallet", "rpc", "funding"]) {
+      expect(troubleshooting).toContain(`\`${check}\``);
+    }
+    expect(troubleshooting).toContain("first `reference_bot_preflight` line");
+  });
+
   it("docs_define_strike_time_resolution_equality_and_refund_semantics", () => {
     for (const phrase of ["target_value", "Solana Clock", "prev_publish_time < expiry_ts <= publish_time", "underfunded", "zero-winner"]) expect(mechanics).toContain(phrase);
     expect(mechanics).toMatch(/Equality\s+resolves NO/);

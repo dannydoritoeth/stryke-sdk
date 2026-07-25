@@ -46,6 +46,12 @@ exported `estimateFairProbability` seam in
 effective non-secret config and each waiting, blocked, hold, entry, exit, claim,
 or refund reason. No command forces a trade.
 
+Startup prints one structured preflight line per dependency. A failed line
+includes a `remediation` field with the next command or setting to fix; the bot
+exits before its loop or signing. Paper explicitly skips wallet, RPC, and
+funding checks. See [error recovery](docs/troubleshooting.md#startup-preflight)
+for the short checklist.
+
 Never put a seed phrase, private key, secret key, or signed transaction in config
 or logs. See the [quickstart](docs/quickstart.md),
 [configuration](docs/configuration.md), [market mechanics](docs/market-mechanics.md),

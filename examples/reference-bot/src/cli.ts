@@ -23,6 +23,7 @@ import { runReferenceBot } from "./bot.js";
 import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, type ReferenceBotProfile } from "./config.js";
 import { decideEntry } from "./entry.js";
 import { emitDecision } from "./logging.js";
+import { emitPreflight, requireRootEnvFile, requiredDevnetBalance, runPreflightCheck } from "./preflight.js";
 import { createSdkRuntimeAdapter } from "./sdk-runtime.js";
 import { estimateFairProbability } from "./strategy.js";
 import { loadWalletForLiveTrading } from "./wallet.js";
@@ -47,7 +48,13 @@ const runFixtureSmoke = () => {
 };
 
 const loadSigner = async (config: ReturnType<typeof parseReferenceBotEnv>) => loadWalletForLiveTrading<TransactionSigner>(config, async (path) => {
-  const module = (await import(pathToFileURL(resolve(process.env.INIT_CWD ?? process.cwd(), path)).href)) as { default?: unknown };
+  let module: { default?: unknown };
+  try {
+    module = (await import(pathToFileURL(resolve(process.env.INIT_CWD ?? process.cwd(), path)).href)) as { default?: unknown };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "adapter import failed";
+    throw new StrykeSdkError("configuration", `Cannot load STRYKE_WALLET_ADAPTER_PATH: ${detail}`);
+  }
   if (!module.default || typeof module.default !== "object" || !("address" in module.default) || !isTransactionSigner(module.default as { address: never })) {
     throw new StrykeSdkError("configuration", "Wallet adapter must default-export a Solana transaction signer");
   }
@@ -77,16 +84,68 @@ const selectedMaximumTicks = (): number | undefined => {
 };
 
 const runSdkBot = async (profile: ReferenceBotProfile) => {
-  const config = parseReferenceBotEnv(process.env, profile);
+  if (profile !== "live") requireRootEnvFile(profile);
+  let config: ReturnType<typeof parseReferenceBotEnv>;
+  try {
+    config = parseReferenceBotEnv(process.env, profile);
+  } catch (error) {
+    if (profile !== "live") {
+      emitPreflight(profile, "environment", "failed", error instanceof Error ? error.message : "Invalid .env configuration", "Compare .env with .env.example, correct the named value, and retry.");
+    }
+    throw error;
+  }
   if (!config.apiBaseUrl) throw new StrykeSdkError("configuration", "STRYKE_API_BASE_URL is required for live-data mode");
   console.log(JSON.stringify({ event: "reference_bot_config", config: publicConfig(config), ...compatibility }));
-  const client = await StrykeClient.connect({ apiBaseUrl: config.apiBaseUrl });
+  const client = await runPreflightCheck(
+    profile,
+    "api",
+    "Connected to a compatible Stryke API.",
+    "Check STRYKE_API_BASE_URL and confirm the invited devnet API is healthy and compatible.",
+    () => StrykeClient.connect({ apiBaseUrl: config.apiBaseUrl! })
+  );
   const priceStore = new PriceStore({ maximumHistoryPoints: config.priceHistoryMaxPoints });
-  const subscription = await subscribeHermes({ endpoint: process.env.STRYKE_PYTH_HERMES_URL ?? "https://hermes.pyth.network", assets: [config.asset], store: priceStore });
+  const pythEndpoint = process.env.STRYKE_PYTH_HERMES_URL ?? "https://hermes.pyth.network";
+  const pythRemediation = "Check STRYKE_PYTH_HERMES_URL and network access, then retry; do not substitute another price source.";
+  const subscription = await runPreflightCheck(
+    profile,
+    "pyth",
+    `Connected to Pyth for ${config.asset}.`,
+    pythRemediation,
+    () => subscribeHermes({ endpoint: pythEndpoint, assets: [config.asset], store: priceStore })
+  );
   try {
-    await waitForPriceHistory(priceStore, config.asset);
-    const signer = await loadSigner(config);
+    emitPreflight(profile, "pyth", "checking", `Waiting for two fresh ordered ${config.asset} Pyth prices.`);
+    try {
+      await waitForPriceHistory(priceStore, config.asset);
+      emitPreflight(profile, "pyth", "passed", `Received two fresh ordered ${config.asset} Pyth prices.`);
+    } catch (error) {
+      emitPreflight(profile, "pyth", "failed", error instanceof Error ? error.message : "Pyth startup failed", pythRemediation);
+      throw error;
+    }
+    const signer = profile === "devnet"
+      ? await runPreflightCheck(profile, "wallet", "Loaded the configured devnet wallet adapter.", "Check STRYKE_WALLET_ADAPTER_PATH and STRYKE_WALLET_KEYPAIR_PATH; follow docs/quickstart.md to create the keypair.", () => loadSigner(config))
+      : undefined;
     const rpc = createSolanaRpc(config.solanaRpcUrl ?? "http://127.0.0.1:8899");
+    if (profile === "paper") {
+      emitPreflight(profile, "wallet", "skipped", "Paper mode never loads a wallet.");
+      emitPreflight(profile, "rpc", "skipped", "Paper mode makes no wallet RPC checks.");
+      emitPreflight(profile, "funding", "skipped", "Paper mode requires no wallet funding.");
+    } else if (signer) {
+      const balance = await runPreflightCheck(
+        profile,
+        "rpc",
+        `Connected to devnet RPC for wallet ${signer.address}.`,
+        "Check STRYKE_SOLANA_RPC_URL and confirm the endpoint is reachable and set to devnet.",
+        async () => (await rpc.getBalance(signer.address, { commitment: "confirmed" }).send()).value
+      );
+      const minimumBalance = requiredDevnetBalance(config.maximumTradeSizeLamports);
+      if (balance < minimumBalance) {
+        const remediation = `Run \`solana airdrop 2 ${signer.address} --url devnet\`, then retry.`;
+        emitPreflight(profile, "funding", "failed", `Wallet ${signer.address} has ${balance} lamports; at least ${minimumBalance} are required.`, remediation);
+        throw new StrykeSdkError("configuration", remediation);
+      }
+      emitPreflight(profile, "funding", "passed", `Wallet ${signer.address} has enough devnet SOL for the configured trade cap and execution buffer.`);
+    }
     const checkpoint = new FileActionCheckpointStore(
       resolve(process.env.INIT_CWD ?? process.cwd(), config.checkpointPath)
     );

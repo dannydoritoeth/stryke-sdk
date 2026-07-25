@@ -1,5 +1,24 @@
 # Typed Error Recovery
 
+## Startup preflight
+
+Read the first `reference_bot_preflight` line whose `status` is `failed`, apply
+its `remediation`, and rerun the same command. Later errors are usually a
+consequence of that first failed check.
+
+| Failed check | What to do |
+| --- | --- |
+| `environment` | Run `cp .env.example .env`, inspect it, and retry |
+| `api` | Correct `STRYKE_API_BASE_URL`; confirm the invited API is healthy and compatible |
+| `pyth` | Check internet access and `STRYKE_PYTH_HERMES_URL`; never substitute another feed |
+| `wallet` | Check both wallet paths; generate the dedicated keypair using the quickstart if missing |
+| `rpc` | Correct `STRYKE_SOLANA_RPC_URL` and confirm it is a reachable devnet endpoint |
+| `funding` | Run the exact devnet `solana airdrop` command printed in `remediation` |
+
+The wallet address and file path may be printed, but keypair bytes are never
+printed. Do not paste the keypair JSON, a seed phrase, or signed transaction
+into an issue, log, or coding-agent prompt.
+
 Catch `StrykeSdkError`, inspect `code` and `retryable`, and log only its bounded
 context. A retryable flag means the condition may recover; it does not override
 quote freshness, action reconciliation, or any signing precondition.
