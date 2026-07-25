@@ -46,6 +46,11 @@ exported `estimateFairProbability` seam in
 effective non-secret config and each waiting, blocked, hold, entry, exit, claim,
 or refund reason. No command forces a trade.
 
+Each quote includes `closingProtection`. During `closing`, the bot evaluates
+the exact `effectiveFeeBps`; during `locked`, it opens no position, holds any
+existing position until settlement, then claims or refunds once. Locked trades
+are not retried for that market.
+
 Startup prints one structured preflight line per dependency. A failed line
 includes a `remediation` field with the next command or setting to fix; the bot
 exits before its loop or signing. Paper explicitly skips wallet, RPC, and

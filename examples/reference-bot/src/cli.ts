@@ -21,11 +21,8 @@ import { pathToFileURL } from "node:url";
 
 import { runReferenceBot } from "./bot.js";
 import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, resolveReferenceBotRuntimeBindings, type ReferenceBotProfile } from "./config.js";
-import { decideEntry } from "./entry.js";
-import { emitDecision } from "./logging.js";
 import { emitPreflight, requireRootEnvFile, requiredDevnetBalance, runPreflightCheck } from "./preflight.js";
 import { createSdkRuntimeAdapter } from "./sdk-runtime.js";
-import { estimateFairProbability } from "./strategy.js";
 import { loadWalletForLiveTrading } from "./wallet.js";
 
 const compatibility = { sdkVersion: SDK_VERSION, apiVersion: SUPPORTED_API_VERSION, apiSchemaVersion: SUPPORTED_API_SCHEMA_VERSION, programId: SUPPORTED_PROGRAM_ID, programVersion: SUPPORTED_PROGRAM_VERSION };
@@ -39,12 +36,41 @@ const sampleQuote: ExecutableQuote = {
   executableProbabilityBps: 4800, priceImpactBps: 25, raw: {},
 };
 
-const runFixtureSmoke = () => {
+const runFixtureSmoke = async () => {
   const now = Math.floor(Date.now() / 1_000);
   const input = { currentPrice: 100_100, strikePrice: 100_000, secondsRemaining: 180, priceHistory: [{ price: 100_000, publishTime: now - 1 }, { price: 100_100, publishTime: now }] };
   const config = parseReferenceBotConfig({ killSwitchEnabled: false });
-  const decision = decideEntry({ fairProbability: estimateFairProbability(input, config.estimator), quote: sampleQuote, config, secondsRemaining: input.secondsRemaining, tradeSizeLamports: config.tradeSizeLamports, aggregateExposureLamports: 0n, openPositions: 0, dataFresh: true });
-  emitDecision({ event: "reference_bot_decision", market: { asset: config.asset, expiryFamily: config.expiryFamily, mode: "documentation_smoke" }, marketState: "open", marketStateVersion: sampleQuote.marketStateVersion, pyth: { price: input.currentPrice, publishTime: now }, fairProbability: decision.fairProbability, quote: { quoteId: decision.quoteId, executableProbability: decision.quoteProbability }, decision: { action: decision.action, reason: decision.reason }, safetyChecks: decision.safetyChecks });
+  const closingQuote: ExecutableQuote = {
+    ...sampleQuote,
+    closingProtection: { ...sampleQuote.closingProtection, phase: "closing", closingFeeBps: 700, effectiveFeeBps: 700 },
+  };
+  let cycle = 0;
+  await runReferenceBot({
+    config,
+    maximumTicks: 2,
+    wait: async () => {},
+    adapter: {
+      loadCheckpoint: async () => undefined,
+      reconcilePending: async () => ({ state: "confirmed", clientActionId: "unused" }),
+      listPositions: async () => [],
+      evaluatePosition: async () => { throw new StrykeSdkError("configuration", "fixture has no position"); },
+      evaluateEntry: async () => {
+        cycle += 1;
+        if (cycle === 2) throw new StrykeSdkError("quote_blocked", "TradingLockedBeforeExpiry", false, { phase: "locked" });
+        return {
+          market: { marketId: "documentation-smoke", asset: config.asset, expiryFamily: config.expiryFamily } as never,
+          estimatorInput: input,
+          buyQuote: closingQuote,
+          aggregateExposureLamports: 0n,
+          openPositions: 0,
+          dataFresh: true,
+        };
+      },
+      executeBuy: async () => ({ clientActionId: "unused" }),
+      executeSell: async () => ({ clientActionId: "unused" }),
+      executeTerminal: async () => ({ clientActionId: "unused" }),
+    },
+  });
   console.log(JSON.stringify({ event: "stryke_compatibility", ...compatibility }));
 };
 
@@ -172,7 +198,7 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
 try {
   if (process.argv.some((argument) => argument.startsWith("--profile="))) await runSdkBot(selectedProfile());
   else if (process.argv.includes("--live") || process.argv.includes("--live-data")) await runSdkBot(process.argv.includes("--live") ? "devnet" : "paper");
-  else runFixtureSmoke();
+  else await runFixtureSmoke();
 } catch (error) {
   const failure = error instanceof StrykeSdkError ? { code: error.code, message: error.message, retryable: error.retryable } : { code: "configuration", message: error instanceof Error ? error.message : "Reference bot startup failed", retryable: false };
   console.error(JSON.stringify({ event: "reference_bot_error", ...failure }));

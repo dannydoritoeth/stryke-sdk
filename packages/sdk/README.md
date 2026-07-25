@@ -33,6 +33,11 @@ const quote = await new QuotesClient(client).get({
 });
 ```
 
+Inspect `quote.closingProtection.phase` and `effectiveFeeBps`. `closing` quotes
+remain executable at the returned fee. `locked` and `expired` are returned as
+non-retryable `quote_blocked` errors; missing or unknown policy fields fail
+closed as incompatible API data.
+
 Use the returned `market` and `quote` unchanged with `TransactionsClient`.
 Simulate before wallet approval, then submit, confirm, and reconcile the same
 stable action ID. Use `PositionsClient` and its API-authoritative terminal

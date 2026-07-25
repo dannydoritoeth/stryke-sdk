@@ -40,7 +40,7 @@ quote freshness, action reconciliation, or any signing precondition.
 | `api_response` | Inspect status/path, fix the contract or wait for a healthy compatible API |
 | `source_unavailable` | Wait for the exact required source; do not substitute |
 | `source_stale` | Wait for a fresh exact-feed/market response |
-| `quote_blocked` | Request a fresh quote after the blocking state clears |
+| `quote_blocked` | If `context.phase` is `locked`/`expired`, do not retry that market; otherwise request a fresh quote after the blocking state clears |
 | `intent_mismatch` | Discard the preparation and restart from exact intent/quote review |
 | `wallet_rejected` | Stop; request wallet approval only for a newly reviewed intent |
 | `simulation_failed` | Stop and diagnose; do not submit the failed simulation |

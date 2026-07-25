@@ -32,6 +32,12 @@ the quote expired or market-state version changed. Before signing and again
 before submission, reject an expired recent blockhash/last-valid-block-height.
 Minimum output is the on-chain slippage boundary, not an estimate to discard.
 
+Minimal-Pyth quotes also carry versioned closing protection. The closing fee is
+`max(baseFeeBps, closingFeeBps)`, not their sum. Trading remains available in
+`closing` at the quoted effective fee. The final hard-lock window blocks both
+buy and sell; a bot holds through expiry and proceeds only with API-authored
+claim/refund state.
+
 A signature is evidence of submission, not confirmation. Only confirmed,
 refreshed activity and position evidence completes the action.
 
