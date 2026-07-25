@@ -20,7 +20,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { runReferenceBot } from "./bot.js";
-import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, type ReferenceBotProfile } from "./config.js";
+import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, resolveReferenceBotRuntimeBindings, type ReferenceBotProfile } from "./config.js";
 import { decideEntry } from "./entry.js";
 import { emitDecision } from "./logging.js";
 import { emitPreflight, requireRootEnvFile, requiredDevnetBalance, runPreflightCheck } from "./preflight.js";
@@ -47,10 +47,10 @@ const runFixtureSmoke = () => {
   console.log(JSON.stringify({ event: "stryke_compatibility", ...compatibility }));
 };
 
-const loadSigner = async (config: ReturnType<typeof parseReferenceBotEnv>) => loadWalletForLiveTrading<TransactionSigner>(config, async (path) => {
+const loadSigner = async (config: ReturnType<typeof parseReferenceBotEnv>, walletAdapterPath?: string) => loadWalletForLiveTrading<TransactionSigner>(config, async (path) => {
   let module: { default?: unknown };
   try {
-    module = (await import(pathToFileURL(resolve(process.env.INIT_CWD ?? process.cwd(), path)).href)) as { default?: unknown };
+    module = (await import(pathToFileURL(walletAdapterPath ?? resolve(process.env.INIT_CWD ?? process.cwd(), path)).href)) as { default?: unknown };
   } catch (error) {
     const detail = error instanceof Error ? error.message : "adapter import failed";
     throw new StrykeSdkError("configuration", `Cannot load STRYKE_WALLET_ADAPTER_PATH: ${detail}`);
@@ -95,16 +95,17 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
     throw error;
   }
   if (!config.apiBaseUrl) throw new StrykeSdkError("configuration", "STRYKE_API_BASE_URL is required for live-data mode");
+  const bindings = resolveReferenceBotRuntimeBindings(config);
   console.log(JSON.stringify({ event: "reference_bot_config", config: publicConfig(config), ...compatibility }));
   const client = await runPreflightCheck(
     profile,
     "api",
     "Connected to a compatible Stryke API.",
     "Check STRYKE_API_BASE_URL and confirm the invited devnet API is healthy and compatible.",
-    () => StrykeClient.connect({ apiBaseUrl: config.apiBaseUrl! })
+    () => StrykeClient.connect({ apiBaseUrl: bindings.apiBaseUrl! })
   );
   const priceStore = new PriceStore({ maximumHistoryPoints: config.priceHistoryMaxPoints });
-  const pythEndpoint = process.env.STRYKE_PYTH_HERMES_URL ?? "https://hermes.pyth.network";
+  const pythEndpoint = bindings.pythHermesUrl;
   const pythRemediation = "Check STRYKE_PYTH_HERMES_URL and network access, then retry; do not substitute another price source.";
   const subscription = await runPreflightCheck(
     profile,
@@ -123,9 +124,9 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
       throw error;
     }
     const signer = profile === "devnet"
-      ? await runPreflightCheck(profile, "wallet", "Loaded the configured devnet wallet adapter.", "Check STRYKE_WALLET_ADAPTER_PATH and STRYKE_WALLET_KEYPAIR_PATH; follow docs/quickstart.md to create the keypair.", () => loadSigner(config))
+      ? await runPreflightCheck(profile, "wallet", "Loaded the configured devnet wallet adapter.", "Check STRYKE_WALLET_ADAPTER_PATH and STRYKE_WALLET_KEYPAIR_PATH; follow docs/quickstart.md to create the keypair.", () => loadSigner(config, bindings.walletAdapterPath))
       : undefined;
-    const rpc = createSolanaRpc(config.solanaRpcUrl ?? "http://127.0.0.1:8899");
+    const rpc = createSolanaRpc(bindings.solanaRpcUrl);
     if (profile === "paper") {
       emitPreflight(profile, "wallet", "skipped", "Paper mode never loads a wallet.");
       emitPreflight(profile, "rpc", "skipped", "Paper mode makes no wallet RPC checks.");
@@ -150,9 +151,7 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
       console.log(JSON.stringify({ event: "reference_bot_preflight_complete", profile }));
       return;
     }
-    const checkpoint = new FileActionCheckpointStore(
-      resolve(process.env.INIT_CWD ?? process.cwd(), config.checkpointPath)
-    );
+    const checkpoint = new FileActionCheckpointStore(bindings.checkpointPath);
     let executor: ReviewedTransactionExecutor | undefined;
     if (signer) {
       const transactions = new TransactionsClient(client, rpc);

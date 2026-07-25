@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { parseReferenceBotConfig, parseReferenceBotEnv, referenceBotDefaults } from "../src/config.js";
+import { parseReferenceBotConfig, parseReferenceBotEnv, referenceBotDefaults, resolveReferenceBotRuntimeBindings } from "../src/config.js";
 import { loadWalletForLiveTrading } from "../src/wallet.js";
 
 describe("reference bot config", () => {
@@ -44,8 +44,72 @@ describe("reference bot config", () => {
       STRYKE_TICK_INTERVAL_MS: "1000", STRYKE_STOP_LOSS_BPS: "10", STRYKE_TAKE_PROFIT_BPS: "11",
       STRYKE_PRICE_HISTORY_MAX_POINTS: "12", STRYKE_READ_ONLY_MODE: "true",
       STRYKE_LIVE_TRADING_ENABLED: "false", STRYKE_KILL_SWITCH_ENABLED: "true",
+      STRYKE_API_BASE_URL: "https://api.example.com", STRYKE_SOLANA_RPC_URL: "https://rpc.example.com",
+      STRYKE_PYTH_HERMES_URL: "https://hermes.example.com", STRYKE_CHECKPOINT_PATH: "state/checkpoint.json",
+      STRYKE_WALLET_ADAPTER_PATH: "./wallet.mjs",
     });
-    expect(config).toMatchObject({ asset: "SOL", expiryFamily: "one_minute", side: "no", estimator: "distance_momentum", tradeSizeLamports: 1_000_001n, minimumEntryEdgeBps: 7, tickIntervalMs: 1000, stopLossBps: 10, takeProfitBps: 11 });
+    expect(config).toEqual(expect.objectContaining({
+      asset: "SOL", expiryFamily: "one_minute", side: "no", estimator: "distance_momentum",
+      tradeSizeLamports: 1_000_001n, maximumTradeSizeLamports: 2_000_000n,
+      maximumAggregateExposureLamports: 3_000_000n, minimumEntryEdgeBps: 7,
+      maximumPriceImpactBps: 8, minimumSecondsToExpiry: 9, maximumOpenPositions: 2,
+      tickIntervalMs: 1000, stopLossBps: 10, takeProfitBps: 11, priceHistoryMaxPoints: 12,
+      apiBaseUrl: "https://api.example.com", solanaRpcUrl: "https://rpc.example.com",
+      pythHermesUrl: "https://hermes.example.com", checkpointPath: "state/checkpoint.json",
+      walletAdapterPath: "./wallet.mjs",
+    }));
+  });
+
+  it("validates_each_documented_numeric_control_at_its_boundaries", () => {
+    const bounded = [
+      ["minimumEntryEdgeBps", 0, 10_000],
+      ["maximumPriceImpactBps", 0, 9_999],
+      ["minimumSecondsToExpiry", 0, Number.MAX_SAFE_INTEGER],
+      ["maximumOpenPositions", 1, Number.MAX_SAFE_INTEGER],
+      ["tickIntervalMs", 1_000, Number.MAX_SAFE_INTEGER],
+      ["stopLossBps", 1, 10_000],
+      ["takeProfitBps", 1, Number.MAX_SAFE_INTEGER],
+      ["priceHistoryMaxPoints", 2, 10_000],
+    ] as const;
+    for (const [name, minimum, maximum] of bounded) {
+      expect(parseReferenceBotConfig({ [name]: minimum })).toHaveProperty(name, minimum);
+      expect(parseReferenceBotConfig({ [name]: maximum })).toHaveProperty(name, maximum);
+      expect(() => parseReferenceBotConfig({ [name]: minimum - 1 })).toThrow(name);
+      expect(() => parseReferenceBotConfig({ [name]: maximum + 1 })).toThrow(name);
+      expect(() => parseReferenceBotConfig({ [name]: minimum + 0.5 })).toThrow(name);
+    }
+  });
+
+  it("validates_enum_decimal_connection_and_precedence_controls_independently", () => {
+    for (const [name, value] of [
+      ["asset", "ETH"], ["expiryFamily", "daily"], ["side", "up"], ["estimator", "magic"],
+      ["apiBaseUrl", ""], ["solanaRpcUrl", ""], ["pythHermesUrl", ""],
+      ["checkpointPath", ""], ["walletAdapterPath", ""],
+    ] as const) expect(() => parseReferenceBotConfig({ [name]: value })).toThrow(name);
+
+    expect(parseReferenceBotEnv({ STRYKE_TRADE_SIZE_SOL: "0.000000001" }).tradeSizeLamports).toBe(1n);
+    for (const value of ["0", "-1", "1.0000000001", "1e-3", " 1"]) {
+      expect(() => parseReferenceBotEnv({ STRYKE_TRADE_SIZE_SOL: value })).toThrow("STRYKE_TRADE_SIZE_SOL");
+    }
+    expect(() => parseReferenceBotEnv({ STRYKE_TRADE_SIZE_SOL: "0.002", STRYKE_MAXIMUM_TRADE_SIZE_SOL: "0.001" })).toThrow("tradeSizeLamports");
+    expect(() => parseReferenceBotEnv({ STRYKE_MAXIMUM_TRADE_SIZE_SOL: "0.002", STRYKE_MAXIMUM_AGGREGATE_EXPOSURE_SOL: "0.001" })).toThrow("maximumAggregateExposureLamports");
+  });
+
+  it("projects_connection_and_file_controls_into_the_cli_runtime_consumers", () => {
+    const config = parseReferenceBotEnv({
+      STRYKE_API_BASE_URL: "https://api.example.com",
+      STRYKE_SOLANA_RPC_URL: "https://rpc.example.com",
+      STRYKE_PYTH_HERMES_URL: "https://hermes.example.com",
+      STRYKE_CHECKPOINT_PATH: "state/checkpoint.json",
+      STRYKE_WALLET_ADAPTER_PATH: "wallet/adapter.mjs",
+    });
+    expect(resolveReferenceBotRuntimeBindings(config, "/tmp/reference-bot")).toEqual({
+      apiBaseUrl: "https://api.example.com",
+      solanaRpcUrl: "https://rpc.example.com",
+      pythHermesUrl: "https://hermes.example.com",
+      checkpointPath: "/tmp/reference-bot/state/checkpoint.json",
+      walletAdapterPath: "/tmp/reference-bot/wallet/adapter.mjs",
+    });
   });
 
   it("active_live_requires_every_explicit_control_before_wallet_or_api_work", () => {

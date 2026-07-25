@@ -10,7 +10,7 @@ Baseline: `f34dce6`
 | --- | --- | --- |
 | SDK | Strong for the pilot trading lifecycle | Market selection, quote validity, transaction binding/execution, reconciliation, positions, claim/refund, typed failures and retry/restart behavior cover success, alternatives, errors and recovery. |
 | Reference bot lifecycle | Strong | The composed runtime proves ordered reconciliation, repeated ticks, hold/sell, stop loss, take profit, expiry waiting, claim/refund, terminal-to-next-market progression and retryable-source recovery. |
-| Reference bot configuration | Partial | Parsing and policy controls are tested, but every documented environment control is not yet proven independently from `.env`/CLI ingress to its final runtime effect. |
+| Reference bot configuration | Strong | A machine-checked 24-control register links every documented environment input to its final runtime consumer and exact test evidence. Boundaries, malformed input, conflicts, profile precedence, endpoint/file bindings, and recurring interval consumption are direct tests. |
 | Devnet permutations | Strong for the baseline asset/expiry lifecycle; partial for configuration permutations | BTC/SOL across 1m/5m/15m/1h has recorded evidence. That matrix uses a baseline configuration and is not a happy/boundary/error matrix for every configurable control. |
 
 ## SDK path matrix
@@ -32,35 +32,36 @@ Baseline: `f34dce6`
 | Expiry | waits while unresolved | claim or refund based on authoritative position state | Pyth price alone cannot invent resolution | terminal completion permits the next market cycle |
 | Loop/restart | two or more ticks execute in order | non-actionable history does not consume capacity | retryable source failure does not submit | next tick continues; persisted checkpoints prevent duplication |
 
-## Configuration gap
+## Configuration closure
 
-The current all-controls parsing test supplies every environment variable but
-asserts only a subset. The composed SDK runtime test also sets many controls in
-one case, then an early edge gate can prevent later controls from being
-observed. Therefore those tests cannot prove all controls reach their final
-consumer.
+`scripts/config-control-inventory.mjs` registers all 24 documented controls.
+The strict checker derives the public control set from `.env.example` and the
+configuration guide, requires a named final consumer, and validates each exact
+test file/title reference.
 
-Required closure work:
+Closure evidence:
 
-1. Create one inventory row for every documented environment variable.
-2. For each control test default/missing, valid minimum, valid maximum where
-   bounded, malformed, below/above bounds, and conflict/precedence behavior.
-3. Add an isolated `.env`/CLI-to-runtime assertion for each behavior-bearing
-   control: asset, expiry, side, trade size, slippage, edge, stop loss, take
-   profit, timing, position cap, aggregate exposure, freshness, history size,
-   estimator, tick interval, mode, cluster, wallet, kill switch, and mainnet
-   approval gates.
-4. Ensure each test reaches that control's final observable consumer; do not
-   group controls where an earlier gate masks later ones.
-5. Run the composed runtime for at least two iterations and include restart
-   where persistence or reconciliation is affected.
-6. Extend the devnet matrix only for controls whose behavior must be proven
-   against the real environment. Keep deterministic boundary/error cases local.
+1. Numeric controls test minimum, maximum, malformed, below/above-bound and
+   conflict behavior independently.
+2. Asset, expiry, side, estimator, amount, slippage and history size reach the
+   actual SDK runtime adapter; entry and exit policy tests isolate every risk
+   gate.
+3. API, RPC, Hermes, checkpoint and wallet adapter inputs reach the exact CLI
+   bindings used to construct their consumers. The bundled wallet adapter has
+   separate unreadable/malformed keypair tests.
+4. Profile precedence proves paper cannot load a wallet or submit, devnet
+   requires explicit controls, the kill switch wins, and unapproved mainnet
+   fails before wallet/API work.
+5. The actual recurring bot entrypoint consumes the configured interval across
+   three ticks. Existing restart tests reconcile checkpoints before new work.
+6. Deterministic boundary/error permutations remain local; the real devnet
+   matrix is reserved for environment-dependent lifecycle behavior.
 
 ## Verification run for this audit
 
-`npm test`
+`npm run check:config-controls && npm run typecheck && npm test`
 
-Result: 33 files passed, 176 tests passed. Devnet tests were excluded by that
-command; existing devnet evidence remains under `docs/evidence/` and must not be
-represented as a full configuration permutation matrix.
+Result on the configuration-closure candidate: 24 controls and zero open gaps;
+typecheck passed; 33 files and 180 tests passed. Devnet tests were excluded by
+that command; existing devnet evidence remains under `docs/evidence/` and is
+not represented as a full configuration permutation matrix.

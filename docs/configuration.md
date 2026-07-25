@@ -29,7 +29,8 @@ safe mode precedence: paper is read-only, devnet enables signed devnet actions,
 and live fails closed pending mainnet approval. The checkpoint defaults to
 `.stryke/reference-bot-action.json`.
 `STRYKE_PYTH_HERMES_URL` may select the supplied Hermes endpoint; otherwise the
-public endpoint is used.
+public endpoint is used. It is validated with the rest of the typed config and
+printed in the non-secret effective configuration.
 
 The bundled example wallet adapter reads `STRYKE_WALLET_KEYPAIR_PATH`. Point it
 to an absolute path outside the repository for a separately funded devnet
@@ -45,3 +46,6 @@ SOL values convert once to exact lamports. Quotes, shares, proceeds, cost basis,
 and payout math stay in integer base units. The wallet module default-exports an
 `@solana/kit` `TransactionSigner`; inline keys, seed phrases, mnemonics, signed
 transactions, and wallet material are rejected or redacted.
+
+Maintainers can run `npm run check:config-controls` to verify every documented
+control still has a named final runtime consumer and exact test evidence.

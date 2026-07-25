@@ -53,6 +53,14 @@ describe("reference bot composed runtime", () => {
     expect(buyCalls).toBe(1);
   });
 
+  it("runtime_tick_interval_reaches_the_recurring_wait_consumer", async () => {
+    const wait = vi.fn(async () => {});
+    const config = parseReferenceBotConfig({ tickIntervalMs: 1_234, killSwitchEnabled: false });
+    const events = await runReferenceBot({ config, adapter: adapter(), maximumTicks: 3, wait });
+    expect(events).toHaveLength(3);
+    expect(wait.mock.calls).toEqual([[1_234], [1_234]]);
+  });
+
   it("runtime_open_position_holds_then_sells_from_fresh_executable_values", async () => {
     const open = position();
     let proceeds = "95";

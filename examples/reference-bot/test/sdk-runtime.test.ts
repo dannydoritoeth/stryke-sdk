@@ -55,6 +55,14 @@ describe("SDK runtime composition", () => {
     expect(calls[0]!.path).toContain("symbol=SOL");
     expect(calls[0]!.path).toContain("expiryFamily=one_minute");
     expect(calls[1]!.body).toMatchObject({ action: "buy", side: "no", amount: "1234567", maxSlippageBps: 77 });
+    const evaluation = await adapter.evaluateEntry();
+    expect(evaluation.estimatorInput.priceHistory).toHaveLength(2);
+    expect(config).toMatchObject({
+      estimator: "distance_momentum", minimumEntryEdgeBps: 9_999,
+      minimumSecondsToExpiry: 10, maximumOpenPositions: 1,
+      maximumAggregateExposureLamports: 3_000_000n, stopLossBps: 321,
+      takeProfitBps: 654, priceHistoryMaxPoints: 2,
+    });
   });
 
   it("confirmed_buy_blocks_restart_until_portfolio_materializes", async () => {

@@ -1,4 +1,5 @@
 import { StrykeSdkError, type PilotAsset, type PilotExpiryFamily } from "@stryke/sdk";
+import { resolve } from "node:path";
 
 import type { BaselineEstimator } from "./strategy.js";
 
@@ -24,6 +25,7 @@ export type ReferenceBotConfig = {
   killSwitchEnabled: boolean;
   apiBaseUrl?: string;
   solanaRpcUrl?: string;
+  pythHermesUrl: string;
   checkpointPath: string;
   walletAdapterPath?: string;
 };
@@ -50,6 +52,7 @@ export const referenceBotDefaults: ReferenceBotConfig = {
   readOnlyMode: true,
   liveTradingEnabled: false,
   killSwitchEnabled: true,
+  pythHermesUrl: "https://hermes.pyth.network",
   checkpointPath: ".stryke/reference-bot-action.json",
 };
 
@@ -115,7 +118,7 @@ export const parseReferenceBotConfig = (
   config.priceHistoryMaxPoints = integer(config.priceHistoryMaxPoints, "priceHistoryMaxPoints", 2, 10_000);
   if (config.tradeSizeLamports > config.maximumTradeSizeLamports) configurationError("tradeSizeLamports");
   if (config.maximumAggregateExposureLamports < config.maximumTradeSizeLamports) configurationError("maximumAggregateExposureLamports");
-  for (const key of ["apiBaseUrl", "solanaRpcUrl", "walletAdapterPath"] as const) {
+  for (const key of ["apiBaseUrl", "solanaRpcUrl", "pythHermesUrl", "walletAdapterPath"] as const) {
     if (config[key] !== undefined && (typeof config[key] !== "string" || !config[key])) configurationError(key);
   }
   if (typeof config.checkpointPath !== "string" || !config.checkpointPath) configurationError("checkpointPath");
@@ -171,6 +174,7 @@ export const parseReferenceBotEnv = (
     priceHistoryMaxPoints: numeric("STRYKE_PRICE_HISTORY_MAX_POINTS", referenceBotDefaults.priceHistoryMaxPoints),
     readOnlyMode, liveTradingEnabled, killSwitchEnabled,
     checkpointPath: profiledEnv.STRYKE_CHECKPOINT_PATH ?? referenceBotDefaults.checkpointPath,
+    pythHermesUrl: profiledEnv.STRYKE_PYTH_HERMES_URL ?? referenceBotDefaults.pythHermesUrl,
     ...(profiledEnv.STRYKE_API_BASE_URL ? { apiBaseUrl: profiledEnv.STRYKE_API_BASE_URL } : {}),
     ...(profiledEnv.STRYKE_SOLANA_RPC_URL ? { solanaRpcUrl: profiledEnv.STRYKE_SOLANA_RPC_URL } : {}),
     ...(profiledEnv.STRYKE_WALLET_ADAPTER_PATH ? { walletAdapterPath: profiledEnv.STRYKE_WALLET_ADAPTER_PATH } : {}),
@@ -187,4 +191,17 @@ export const publicConfig = (config: ReferenceBotConfig) => ({
   maximumTradeSizeLamports: config.maximumTradeSizeLamports.toString(),
   maximumAggregateExposureLamports: config.maximumAggregateExposureLamports.toString(),
   walletAdapterPath: config.walletAdapterPath ? "[configured]" : undefined,
+});
+
+export const resolveReferenceBotRuntimeBindings = (
+  config: ReferenceBotConfig,
+  cwd = process.env.INIT_CWD ?? process.cwd()
+) => ({
+  apiBaseUrl: config.apiBaseUrl,
+  solanaRpcUrl: config.solanaRpcUrl ?? "http://127.0.0.1:8899",
+  pythHermesUrl: config.pythHermesUrl,
+  checkpointPath: resolve(cwd, config.checkpointPath),
+  walletAdapterPath: config.walletAdapterPath
+    ? resolve(cwd, config.walletAdapterPath)
+    : undefined,
 });

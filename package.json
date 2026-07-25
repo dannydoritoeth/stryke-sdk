@@ -15,6 +15,7 @@
     "test:localnet": "vitest run test/localnet/pilot-lifecycle.test.ts",
     "devnet:bot-matrix": "npm run build && node --env-file=.env scripts/devnet-bot-matrix.mjs",
     "check:public-boundary": "vitest run test/repository-boundary.test.ts",
+    "check:config-controls": "node scripts/check-config-controls.mjs",
     "clean": "npm run clean -ws --if-present"
   },
   "devDependencies": {
