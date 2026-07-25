@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "stryke.referenceBotDevnetPreflight.v1",
+  "repository": "stryke-sdk",
+  "revision": "f758e14",
+  "generatedAt": "2026-07-25T06:04:25.000Z",
+  "command": "npm run start:devnet -w @stryke/reference-bot -- --preflight-only",
+  "profile": "devnet",
+  "configuration": {
+    "asset": "BTC",
+    "expiryFamily": "five_minute",
+    "estimator": "distance_to_strike",
+    "tradeSizeLamports": "1000000",
+    "pythHermesUrl": "https://hermes.pyth.network",
+    "walletAdapterConfigured": true
+  },
+  "checks": {
+    "environment": "passed",
+    "apiCompatibility": "passed",
+    "pythSubscription": "passed",
+    "pythFreshOrderedHistory": "passed",
+    "walletAdapter": "passed",
+    "devnetRpc": "passed",
+    "funding": "passed"
+  },
+  "status": "passed",
+  "notes": [
+    "No transaction was submitted because the candidate change affects configuration wiring only.",
+    "The unchanged eight-cell signed lifecycle matrix remains historical evidence and is not relabeled as candidate-specific proof."
+  ]
+}

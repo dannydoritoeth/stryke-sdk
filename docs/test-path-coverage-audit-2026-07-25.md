@@ -2,7 +2,7 @@
 
 Date: 2026-07-25  
 Repository: `stryke-sdk`  
-Baseline: `f34dce6`
+Baseline: `f34dce6`; configuration closure candidate: `f758e14`
 
 ## Result
 
@@ -65,3 +65,12 @@ Result on the configuration-closure candidate: 24 controls and zero open gaps;
 typecheck passed; 33 files and 180 tests passed. Devnet tests were excluded by
 that command; existing devnet evidence remains under `docs/evidence/` and is
 not represented as a full configuration permutation matrix.
+
+Candidate `f758e14` also passed the real `start:devnet --preflight-only`
+composition entrypoint: repository environment, API compatibility, typed Pyth
+Hermes subscription and two fresh ordered prices, wallet adapter/keypair, RPC,
+and funding all passed. The redacted repository-local record is
+`docs/evidence/reference-bot-devnet-preflight-f758e14.json`. No transaction was
+submitted because this candidate changes configuration wiring only; the prior
+eight-cell signed lifecycle matrix remains historical rather than being
+misrepresented as candidate-specific evidence.
