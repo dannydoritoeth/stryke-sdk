@@ -54,6 +54,15 @@ const responseBody = (action: "buy" | "sell") => ({
       normalTradingFeeBps: 100,
       feeBpsApplied: 100,
     },
+    closingProtection: {
+      policyVersion: 1,
+      phase: "open",
+      baseFeeBps: 100,
+      closingFeeBps: 0,
+      effectiveFeeBps: 100,
+      hardLockTs: 1_799_999_995,
+      secondsUntilLock: 295,
+    },
     ...(action === "buy"
       ? { expectedShares: "1981585268214571657" }
       : { expectedProceeds: "461934000" }),
@@ -118,13 +127,82 @@ describe("executable quote client", () => {
   it("stale_quote_is_blocked", async () => {
     const stale = new QuotesClient({
       requestJson: async () => ({
-        quote: { amount: "1", stale: true, unavailableReason: "stale" },
+        quote: {
+          amount: "1",
+          stale: true,
+          unavailableReason: "stale",
+          closingProtection: responseBody("buy").quote.closingProtection,
+        },
         metadata: { stale: true },
       }),
     } as never);
     await expect(
       stale.buy({ market, side: "yes", amount: "1", maximumSlippageBps: 0 })
     ).rejects.toBeInstanceOf(StrykeSdkError);
+  });
+
+  it("closing_quote_exposes_exact_effective_fee", async () => {
+    const client = {
+      requestJson: async () => ({
+        ...responseBody("buy"),
+        quote: {
+          ...responseBody("buy").quote,
+          fee: "70000000",
+          feeBreakdown: {
+            ...responseBody("buy").quote.feeBreakdown,
+            feeMode: "closing",
+            grossTradeFeeCollateralUnits: "70000000",
+            feeBpsApplied: 700,
+          },
+          closingProtection: {
+            ...responseBody("buy").quote.closingProtection,
+            phase: "closing",
+            closingFeeBps: 700,
+            effectiveFeeBps: 700,
+            secondsUntilLock: 8,
+          },
+        },
+      }),
+    };
+    await expect(
+      new QuotesClient(client as never, () => Date.parse("2026-07-22T00:00:01Z")).buy({
+        market, side: "yes", amount: "1000000000", maximumSlippageBps: 100,
+      })
+    ).resolves.toMatchObject({
+      closingProtection: { phase: "closing", effectiveFeeBps: 700 },
+      feeBreakdown: { feeMode: "closing", feeBpsApplied: 700 },
+    });
+  });
+
+  it("locked_quote_is_non_retryable_and_missing_policy_fails_closed", async () => {
+    const locked = new QuotesClient({
+      requestJson: async () => ({
+        quote: {
+          amount: "1",
+          stale: false,
+          unavailableReason: "Trading is locked before settlement.",
+          closingProtection: {
+            ...responseBody("buy").quote.closingProtection,
+            phase: "locked",
+            secondsUntilLock: 0,
+          },
+        },
+        metadata: { stale: false },
+      }),
+    } as never);
+    await expect(
+      locked.buy({ market, side: "yes", amount: "1", maximumSlippageBps: 0 })
+    ).rejects.toMatchObject({
+      code: "quote_blocked",
+      retryable: false,
+      context: { phase: "locked", policyVersion: 1 },
+    });
+    const missing = new QuotesClient({
+      requestJson: async () => ({ ...responseBody("buy"), quote: { ...responseBody("buy").quote, closingProtection: undefined } }),
+    } as never);
+    await expect(
+      missing.buy({ market, side: "yes", amount: "1000000000", maximumSlippageBps: 100 })
+    ).rejects.toMatchObject({ code: "api_response" });
   });
 
   it("changed_market_state_version_is_blocked", async () => {

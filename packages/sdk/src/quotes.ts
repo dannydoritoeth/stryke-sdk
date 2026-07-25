@@ -13,6 +13,16 @@ export type QuoteFeeBreakdown = {
   feeBpsApplied: number;
 };
 
+export type ClosingProtection = {
+  policyVersion: 1;
+  phase: "open" | "closing" | "locked" | "expired";
+  baseFeeBps: number;
+  closingFeeBps: number;
+  effectiveFeeBps: number;
+  hardLockTs: number;
+  secondsUntilLock: number;
+};
+
 export type ExecutableQuote = {
   quoteId: string;
   generatedAt: string;
@@ -24,6 +34,7 @@ export type ExecutableQuote = {
   amount: string;
   fee: string;
   feeBreakdown: QuoteFeeBreakdown;
+  closingProtection: ClosingProtection;
   expectedShares?: string;
   expectedNetProceeds?: string;
   minimumOutput: string;
@@ -75,6 +86,35 @@ const feeBreakdown = (value: unknown): QuoteFeeBreakdown => {
     ),
     feeBpsApplied: integer(row.feeBpsApplied, "feeBreakdown.feeBpsApplied"),
   };
+};
+
+const closingProtection = (value: unknown): ClosingProtection => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new StrykeSdkError("api_response", "Closing protection is unavailable");
+  }
+  const row = value as Record<string, unknown>;
+  const policyVersion = integer(row.policyVersion, "closingProtection.policyVersion");
+  const phase = text(row.phase, "closingProtection.phase");
+  if (policyVersion !== 1 || !["open", "closing", "locked", "expired"].includes(phase)) {
+    throw new StrykeSdkError("compatibility", "Closing protection policy is unsupported");
+  }
+  const parsed = {
+    policyVersion: 1 as const,
+    phase: phase as ClosingProtection["phase"],
+    baseFeeBps: integer(row.baseFeeBps, "closingProtection.baseFeeBps"),
+    closingFeeBps: integer(row.closingFeeBps, "closingProtection.closingFeeBps"),
+    effectiveFeeBps: integer(row.effectiveFeeBps, "closingProtection.effectiveFeeBps"),
+    hardLockTs: integer(row.hardLockTs, "closingProtection.hardLockTs"),
+    secondsUntilLock: integer(row.secondsUntilLock, "closingProtection.secondsUntilLock"),
+  };
+  if (
+    parsed.baseFeeBps < 0 || parsed.closingFeeBps < 0 ||
+    parsed.effectiveFeeBps !== Math.max(parsed.baseFeeBps, parsed.closingFeeBps) ||
+    parsed.hardLockTs <= 0 || parsed.secondsUntilLock < 0
+  ) {
+    throw new StrykeSdkError("api_response", "Closing protection fields are inconsistent");
+  }
+  return parsed;
 };
 
 export const assertQuoteUsable = (
@@ -143,13 +183,15 @@ export class QuotesClient {
       }),
     });
     const quote = response.quote;
+    const protection = closingProtection(quote.closingProtection);
     if (response.metadata.stale || quote.stale === true || quote.unavailableReason) {
       throw new StrykeSdkError(
         quote.unavailableReason === "stale" ? "source_stale" : "quote_blocked",
         typeof quote.unavailableReason === "string"
           ? quote.unavailableReason
           : "Executable quote is stale or unavailable",
-        true
+        protection.phase !== "locked" && protection.phase !== "expired",
+        { phase: protection.phase, policyVersion: protection.policyVersion }
       );
     }
     const expiresAt = text(quote.expiresAt, "expiresAt");
@@ -211,6 +253,7 @@ export class QuotesClient {
       amount: responseAmount,
       fee: integerString(quote.fee, "fee"),
       feeBreakdown: feeBreakdown(quote.feeBreakdown),
+      closingProtection: protection,
       ...(expectedShares === undefined ? {} : { expectedShares }),
       ...(expectedNetProceeds === undefined ? {} : { expectedNetProceeds }),
       minimumOutput,

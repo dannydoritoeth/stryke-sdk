@@ -78,6 +78,7 @@ export type {
 export { QuotesClient, assertQuoteUsable } from "./quotes.js";
 export type {
   ExecutableQuote,
+  ClosingProtection,
   QuoteFeeBreakdown,
   QuoteAction,
   QuoteSide,
