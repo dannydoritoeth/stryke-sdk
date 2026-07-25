@@ -30,6 +30,8 @@ to make minimum-size signed devnet trades when the estimator and every safety
 gate pass. It continuously manages positions, exits or waits for expiry,
 claims/refunds, reconciles, and repeats.
 
+Before the first devnet run, follow the [quickstart wallet steps](docs/quickstart.md#2-create-and-fund-a-dedicated-devnet-wallet) to create a dedicated keypair, fund its public address, and set its file path in `.env`.
+
 ```bash
 npm run start:live -w @stryke/reference-bot
 ```

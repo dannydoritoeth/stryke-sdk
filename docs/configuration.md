@@ -33,7 +33,10 @@ public endpoint is used.
 
 The bundled example wallet adapter reads `STRYKE_WALLET_KEYPAIR_PATH`. Point it
 to an absolute path outside the repository for a separately funded devnet
-keypair; the key bytes are never copied into `.env` or logs.
+keypair, or use the quickstart's `../stryke-devnet-wallet.json` path. Generate
+that dedicated wallet with `solana-keygen new`; its JSON file contains private
+key material and must not be committed or shared. The key bytes are never
+copied into `.env` or logs.
 
 In the typed config, `readOnlyMode` Overrides live enablement and
 `killSwitchEnabled` Overrides live enablement.

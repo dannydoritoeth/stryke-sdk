@@ -16,7 +16,27 @@ SDK/API/program compatibility fields `sdkVersion`, `apiVersion`,
 `apiSchemaVersion`, `programId`, and `programVersion`. It never loads a wallet
 or submits.
 
-## 2. Make minimum-size devnet trades
+## 2. Create and fund a dedicated devnet wallet
+
+Install the Solana CLI, then create a new devnet-only wallet outside this
+repository:
+
+```bash
+solana-keygen new --outfile ../stryke-devnet-wallet.json
+solana-keygen pubkey ../stryke-devnet-wallet.json
+solana airdrop 2 "$(solana-keygen pubkey ../stryke-devnet-wallet.json)" --url devnet
+```
+
+The JSON file contains the wallet's private key material. Anyone with it can
+control the wallet: never commit, share, or use it as a personal/mainnet
+wallet. Set its path in `.env`:
+
+```env
+STRYKE_WALLET_ADAPTER_PATH=./examples/reference-bot/wallet-adapter.example.mjs
+STRYKE_WALLET_KEYPAIR_PATH=../stryke-devnet-wallet.json
+```
+
+## 3. Make minimum-size devnet trades
 
 Configure the separately funded wallet adapter in `.env`, inspect every value,
 then run `npm run start:devnet -w @stryke/reference-bot`. It uses the same
@@ -26,7 +46,7 @@ estimator and all safety checks pass.
 Unavailable/stale data blocks decisions. There is no alternate-price or
 inferred-market fallback.
 
-## 3. Choose or replace the estimator
+## 4. Choose or replace the estimator
 
 `distance_to_strike` and `distance_momentum` are bundled educational baselines.
 Select one with `STRYKE_ESTIMATOR`. To supply your own signal, replace the
@@ -56,7 +76,7 @@ export const estimateFairProbability = ({
 Return a finite probability from `0` to `1`. No included estimator makes an
 accuracy or profitability claim.
 
-## 4. Understand the loop
+## 5. Understand the loop
 
 Every tick reconciles a saved action before doing anything else. A submitted or
 unknown action blocks duplicates. The bot then handles one stable position:
@@ -71,7 +91,7 @@ current market. Entry needs estimator edge plus every freshness, impact, time,
 size, position, exposure, checkpoint, mode, and kill-switch check. Every outcome
 prints a reason.
 
-## 5. Keep mainnet closed until approved
+## 6. Keep mainnet closed until approved
 
 `npm run start:live -w @stryke/reference-bot` is reserved for a separately
 approved compatible mainnet deployment. This devnet pilot rejects it before

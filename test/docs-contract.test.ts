@@ -38,6 +38,15 @@ describe("pilot documentation contract", () => {
     expect(quickstart).toMatch(/one-minute live strategy performance is experimental/i);
   });
 
+  it("quickstart_creates_funds_and_protects_a_dedicated_devnet_wallet", () => {
+    expect(quickstart).toContain("solana-keygen new --outfile ../stryke-devnet-wallet.json");
+    expect(quickstart).toContain("solana-keygen pubkey ../stryke-devnet-wallet.json");
+    expect(quickstart).toContain("solana airdrop 2");
+    expect(quickstart).toContain("STRYKE_WALLET_KEYPAIR_PATH=../stryke-devnet-wallet.json");
+    expect(quickstart).toMatch(/JSON file contains.*private key material/is);
+    expect(quickstart).toMatch(/never commit, share.*personal\/mainnet/is);
+  });
+
   it("docs_define_strike_time_resolution_equality_and_refund_semantics", () => {
     for (const phrase of ["target_value", "Solana Clock", "prev_publish_time < expiry_ts <= publish_time", "underfunded", "zero-winner"]) expect(mechanics).toContain(phrase);
     expect(mechanics).toMatch(/Equality\s+resolves NO/);
