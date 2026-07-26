@@ -165,7 +165,12 @@ export const runMarketTick = async ({
       positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "position_data_stale" });
       continue;
     }
-    const model = modelEvaluation(evaluation.estimatorInput, config);
+    let model: ReturnType<typeof modelEvaluation>;
+    try { model = modelEvaluation(evaluation.estimatorInput, config); }
+    catch {
+      positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "model_inputs_unavailable" });
+      continue;
+    }
     const fairProbability = model.fairProbability;
     const decision: PositionDecision = decidePositionExit({
       side: exposure.side, fairProbability, sellQuote: evaluation.sellQuote,
@@ -219,7 +224,9 @@ export const runMarketTick = async ({
     if (isTradingLockedError(error)) return event(tick, "entry", "blocked", "trading_locked_until_settlement");
     throw error;
   }
-  const model = modelEvaluation(evaluation.estimatorInput, config);
+  let model: ReturnType<typeof modelEvaluation>;
+  try { model = modelEvaluation(evaluation.estimatorInput, config); }
+  catch { return event(tick, "entry", "decision_unavailable", "model_inputs_unavailable", { marketId: evaluation.market.marketId }); }
   const fairProbability = model.fairProbability;
   const decision: BestEntryDecision = decideBestEntry({
     fairProbability, quotes: evaluation.buyQuotes, config,

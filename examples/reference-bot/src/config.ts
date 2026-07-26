@@ -44,7 +44,7 @@ export const referenceBotDefaults: ReferenceBotConfig = {
   asset: "BTC",
   expiryFamily: "five_minute",
   side: "yes",
-  estimator: "distance_to_strike",
+  estimator: "volatility_adjusted_probability",
   tradeSizeLamports: 1_000_000n,
   maximumTradeSizeLamports: 10_000_000n,
   maximumAggregateExposureLamports: 50_000_000n,

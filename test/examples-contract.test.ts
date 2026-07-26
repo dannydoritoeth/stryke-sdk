@@ -11,7 +11,7 @@ describe("documented example contract", () => {
     const result = spawnSync("npm", ["run", "start:read-only", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8", env: { ...process.env, STRYKE_WALLET_ADAPTER_PATH: "" } });
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toContain('"action":"dry_run"');
-    expect(result.stdout).toContain('"effectiveFeeBps":700');
+    expect(result.stdout).toContain('"effectiveFeeBps":0');
     expect(result.stdout).toContain('"tick":2,"phase":"entry","action":"blocked","reason":"trading_locked_until_settlement"');
     expect(result.stdout).toContain('"event":"stryke_compatibility"');
   }, 30_000);

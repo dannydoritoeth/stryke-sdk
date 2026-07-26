@@ -5,6 +5,7 @@ import { loadWalletForLiveTrading } from "../src/wallet.js";
 
 describe("reference bot config", () => {
   it("uses_a_conservative_edge_and_exactly_one_active_position", () => {
+    expect(referenceBotDefaults.estimator).toBe("volatility_adjusted_probability");
     expect(referenceBotDefaults.minimumEntryEdgeBps).toBe(500);
     expect(referenceBotDefaults.maximumOpenPositions).toBe(1);
     expect(() => parseReferenceBotConfig({ maximumOpenPositions: 2 })).toThrow(/maximumOpenPositions/);

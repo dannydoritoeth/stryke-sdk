@@ -6,8 +6,14 @@ outcomes are not guaranteed. Node.js 22+ is required.
 
 The SDK supplies typed markets, Pyth prices/history, executable quotes, reviewed
 transactions, restart-safe reconciliation, positions, sells, claims, and
-refunds. The reference bot continuously reconciles → manages/exits → settles →
-evaluates the next market. It includes two transparent educational estimators.
+refunds. The reference bot continuously reconciles → evaluates every open
+position → manages/exits → settles → evaluates the next market.
+
+The recommended baseline uses realised volatility, exact time remaining and
+strike distance. It quotes YES and NO at the same executable size, chooses the
+stronger qualifying edge, and opens only inside buffered fee-free activation
+capacity before closing protection begins. The two earlier distance estimators
+remain as transparent educational integration examples.
 
 ## Three-step confidence ladder
 
@@ -40,14 +46,14 @@ npm run start:live -w @stryke/reference-bot
 wallet loading because this pilot is devnet-only and mainnet requires separate
 approval and compatible API/program deployment.
 
-Both bundled estimators are simple educational baselines. Replace only the
-exported `estimateFairProbability` seam in
-`examples/reference-bot/src/strategy.ts` for your own signal. Every run prints
+Select `volatility_adjusted_probability` for the recommended generic baseline.
+Replace only the exported estimator seam in `examples/reference-bot/src/strategy.ts`
+for your own signal. Every run prints
 effective non-secret config and each waiting, blocked, hold, entry, exit, claim,
 or refund reason. No command forces a trade.
 
-Each quote includes `closingProtection`. During `closing`, the bot evaluates
-the exact `effectiveFeeBps`; during `locked`, it opens no position, holds any
+Each quote includes `closingProtection`. During `closing` or `locked`, the bot
+opens no position; during `locked`, it holds any
 existing position until settlement, then claims or refunds once. Locked trades
 are not retried for that market.
 
@@ -61,3 +67,7 @@ Never put a seed phrase, private key, secret key, or signed transaction in confi
 or logs. See the [quickstart](docs/quickstart.md),
 [configuration](docs/configuration.md), [market mechanics](docs/market-mechanics.md),
 and [error recovery](docs/troubleshooting.md).
+
+No included strategy guarantees accuracy or profit. The recommended baseline
+is deliberately small and inspectable; validate and calibrate it for your own
+use before risking funds.

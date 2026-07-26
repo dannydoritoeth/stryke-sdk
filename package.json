@@ -16,6 +16,7 @@
     "devnet:bot-matrix": "npm run build && node --env-file=.env scripts/devnet-bot-matrix.mjs",
     "check:public-boundary": "vitest run test/repository-boundary.test.ts",
     "check:config-controls": "node scripts/check-config-controls.mjs",
+    "check:strategy-claim": "node scripts/check-strategy-readme-claim.mjs",
     "clean": "npm run clean -ws --if-present"
   },
   "devDependencies": {

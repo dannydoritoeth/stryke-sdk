@@ -30,7 +30,7 @@ const compatibility = { sdkVersion: SDK_VERSION, apiVersion: SUPPORTED_API_VERSI
 const sampleQuote: ExecutableQuote = {
   quoteId: "read-only-smoke", generatedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString(),
   marketStateVersion: "documentation-smoke", action: "buy", side: "yes", amount: "10000000", fee: "0",
-  feeBreakdown: { feeMode: "documentation_smoke", normalTradingFeeWaivedCollateralUnits: "0", grossTradeFeeCollateralUnits: "0", normalTradingFeeBps: 0, feeBpsApplied: 0 },
+  feeBreakdown: { feeMode: "activation_waived", normalTradingFeeWaivedCollateralUnits: "0", grossTradeFeeCollateralUnits: "0", normalTradingFeeBps: 0, feeBpsApplied: 0 },
   closingProtection: { policyVersion: 1, phase: "open", baseFeeBps: 0, closingFeeBps: 0, effectiveFeeBps: 0, hardLockTs: 1_800_000_000, secondsUntilLock: 60 },
   expectedShares: "20000000", minimumOutput: "19800000", maximumSlippageBpsApplied: 100,
   executableProbabilityBps: 4800, priceImpactBps: 25, raw: {},
@@ -38,12 +38,8 @@ const sampleQuote: ExecutableQuote = {
 
 const runFixtureSmoke = async () => {
   const now = Math.floor(Date.now() / 1_000);
-  const input = { currentPrice: 100_100, strikePrice: 100_000, secondsRemaining: 180, priceHistory: [{ price: 100_000, publishTime: now - 1 }, { price: 100_100, publishTime: now }] };
+  const input = { currentPrice: 100_100, strikePrice: 100_000, secondsRemaining: 180, priceHistory: [{ price: 100_000, publishTime: now - 600 }, { price: 100_050, publishTime: now - 300 }, { price: 100_100, publishTime: now }] };
   const config = parseReferenceBotConfig({ killSwitchEnabled: false });
-  const closingQuote: ExecutableQuote = {
-    ...sampleQuote,
-    closingProtection: { ...sampleQuote.closingProtection, phase: "closing", closingFeeBps: 700, effectiveFeeBps: 700 },
-  };
   let cycle = 0;
   await runReferenceBot({
     config,
@@ -58,9 +54,9 @@ const runFixtureSmoke = async () => {
         cycle += 1;
         if (cycle === 2) throw new StrykeSdkError("quote_blocked", "TradingLockedBeforeExpiry", false, { phase: "locked" });
         return {
-          market: { marketId: "documentation-smoke", asset: config.asset, expiryFamily: config.expiryFamily } as never,
+          market: { marketId: "documentation-smoke", asset: config.asset, expiryFamily: config.expiryFamily, pools: { yes: "0", no: "0", stale: false } } as never,
           estimatorInput: input,
-          buyQuotes: [closingQuote, { ...closingQuote, quoteId: "read-only-smoke-no", side: "no", executableProbabilityBps: 6000 }],
+          buyQuotes: [sampleQuote, { ...sampleQuote, quoteId: "read-only-smoke-no", side: "no", executableProbabilityBps: 6000 }],
           proposedSizeLamports: config.tradeSizeLamports,
           aggregateExposureLamports: 0n,
           openPositions: 0,

@@ -48,8 +48,15 @@ inferred-market fallback.
 
 ## 4. Choose or replace the estimator
 
-`distance_to_strike` and `distance_momentum` are bundled educational baselines.
-Select one with `STRYKE_ESTIMATOR`. To supply your own signal, replace the
+`volatility_adjusted_probability` is the recommended generic baseline. It uses
+timestamped Pyth log returns, exact time remaining and strike distance, then
+compares both sides with matched executable quotes. It needs the configured
+history window to fill before it can trade; until then decisions fail closed as
+`model_inputs_unavailable`.
+
+`distance_to_strike` and `distance_momentum` remain educational examples, not
+credible probability or profitability claims. Select an estimator with
+`STRYKE_ESTIMATOR`. To supply your own signal, replace the
 exported `estimateFairProbability` seam in
 `examples/reference-bot/src/strategy.ts`. Its input is:
 
@@ -86,10 +93,13 @@ unknown action blocks duplicates. The bot then handles one stable position:
 - awaiting resolution: wait; or
 - claimable/refundable: use only the API-authoritative terminal action.
 
-Only after prior work is economically complete does it evaluate the next
-current market. Entry needs estimator edge plus every freshness, impact, time,
-size, position, exposure, checkpoint, mode, and kill-switch check. Every outcome
-prints a reason.
+Every actionable open position is evaluated each tick, although the MVP opens
+only one economically active position at a time and submits at most one
+transaction per tick. Only after prior work is economically complete does it
+evaluate the next current market. Entry needs matched YES/NO executable quotes,
+the higher model edge, buffered fee-free real-pool capacity, open closing state,
+and every freshness, impact, time, size, exposure, checkpoint, mode and
+kill-switch check. Every outcome prints a reason.
 
 ## 6. Keep mainnet closed until approved
 

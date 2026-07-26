@@ -12,7 +12,7 @@ const position = (state: PilotPosition["lifecycle"]["state"] = "sellable", overr
   positionId: "position-1", owner: "owner", market: {}, yesShares: "100", noShares: "0",
   yesCostBasisCollateralUnits: "100", lifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state, rawStatus: state, rawReason: state, observedAt: new Date().toISOString() }, raw: {}, ...overrides,
 });
-const live = parseReferenceBotConfig({ readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+const live = parseReferenceBotConfig({ estimator: "distance_to_strike", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
 
 const adapter = (overrides: Partial<ReferenceBotRuntimeAdapter> = {}): ReferenceBotRuntimeAdapter => ({
   loadCheckpoint: vi.fn(async () => undefined),
@@ -144,7 +144,7 @@ describe("reference bot composed runtime", () => {
 
   it("runtime_read_only_uses_real_sdk_tick_without_wallet_or_submission", async () => {
     const runtime = adapter();
-    await expect(runMarketTick({ tick: 1, config: parseReferenceBotConfig({ killSwitchEnabled: false }), adapter: runtime })).resolves.toMatchObject({ action: "dry_run", reason: "read_only" });
+    await expect(runMarketTick({ tick: 1, config: parseReferenceBotConfig({ estimator: "distance_to_strike", killSwitchEnabled: false }), adapter: runtime })).resolves.toMatchObject({ action: "dry_run", reason: "read_only" });
     expect(runtime.executeBuy).not.toHaveBeenCalled();
   });
 
@@ -152,7 +152,7 @@ describe("reference bot composed runtime", () => {
     const controller = new AbortController();
     let calls = 0;
     const runtime = adapter({ evaluateEntry: async () => { calls += 1; if (calls === 1) throw new StrykeSdkError("source_unavailable", "rolling market unavailable", true); return adapter().evaluateEntry(); } });
-    const events = await runReferenceBot({ config: parseReferenceBotConfig({ killSwitchEnabled: false }), adapter: runtime, wait: async () => {}, onEvent: () => { if (calls === 2) controller.abort(); }, signal: controller.signal });
+    const events = await runReferenceBot({ config: parseReferenceBotConfig({ estimator: "distance_to_strike", killSwitchEnabled: false }), adapter: runtime, wait: async () => {}, onEvent: () => { if (calls === 2) controller.abort(); }, signal: controller.signal });
     expect(events.map(({ reason }) => reason)).toEqual(["retryable_source_unavailable", "read_only"]);
   });
 
@@ -262,5 +262,21 @@ describe("reference bot composed runtime", () => {
       yesEdgeBps: expect.any(Number), noEdgeBps: expect.any(Number), feeMode: "waived", closingPhase: "open",
       selectedSide: "yes", proposedSize: live.tradeSizeLamports.toString(),
     });
+  });
+
+  it("insufficient_volatility_history_blocks_then_recovers_on_a_later_tick", async () => {
+    let enough = false;
+    const runtime = adapter({
+      evaluateEntry: async () => ({
+        ...(await adapter().evaluateEntry()),
+        estimatorInput: enough
+          ? { currentPrice: 101, strikePrice: 100, secondsRemaining: 60, priceHistory: [{ price: 100, publishTime: 0 }, { price: 100.5, publishTime: 90 }, { price: 101, publishTime: 180 }] }
+          : { currentPrice: 101, strikePrice: 100, secondsRemaining: 60, priceHistory: [{ price: 100, publishTime: 179 }, { price: 101, publishTime: 180 }] },
+      }),
+    });
+    const config = parseReferenceBotConfig({ estimator: "volatility_adjusted_probability", killSwitchEnabled: false });
+    await expect(runMarketTick({ tick: 1, config, adapter: runtime })).resolves.toMatchObject({ action: "decision_unavailable", reason: "model_inputs_unavailable" });
+    enough = true;
+    await expect(runMarketTick({ tick: 2, config, adapter: runtime })).resolves.toMatchObject({ phase: "entry" });
   });
 });
