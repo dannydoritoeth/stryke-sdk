@@ -15,6 +15,8 @@ stronger qualifying edge, and opens only inside buffered fee-free activation
 capacity before closing protection begins. The two earlier distance estimators
 remain as transparent educational integration examples.
 
+The reference bot includes a volatility- and time-adjusted baseline that evaluates both sides against executable Stryke pricing and understands the fee-free activation region. It is intended as a credible starting point, not a guaranteed profitable strategy.
+
 ## Three-step confidence ladder
 
 ```bash
