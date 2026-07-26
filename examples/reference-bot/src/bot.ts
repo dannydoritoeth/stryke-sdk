@@ -230,6 +230,7 @@ export const runMarketTick = async ({
   try { evaluation = await adapter.evaluateEntry(); }
   catch (error) {
     if (isTradingLockedError(error)) return event(tick, "entry", "blocked", "trading_locked_until_settlement");
+    if (isQuoteRevalidationError(error)) return event(tick, "entry", "blocked", "market_changed_during_quote");
     throw error;
   }
   let model: ReturnType<typeof modelEvaluation>;
