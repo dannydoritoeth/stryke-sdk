@@ -7,7 +7,6 @@ export type ReferenceBotConfig = {
   profile: ReferenceBotProfile;
   asset: PilotAsset;
   expiryFamily: PilotExpiryFamily;
-  side: "yes" | "no";
   estimator: ReferenceEstimator;
   historyLookbackSeconds: Record<PilotExpiryFamily, number>;
   minimumHistoryCoverageBps: number;
@@ -43,7 +42,6 @@ export const referenceBotDefaults: ReferenceBotConfig = {
   profile: "paper",
   asset: "BTC",
   expiryFamily: "five_minute",
-  side: "yes",
   estimator: "volatility_adjusted_probability",
   tradeSizeLamports: 1_000_000n,
   maximumTradeSizeLamports: 10_000_000n,
@@ -121,7 +119,6 @@ export const parseReferenceBotConfig = (
   if (!["paper", "devnet", "live"].includes(config.profile)) configurationError("profile");
   if (!["BTC", "SOL"].includes(config.asset)) configurationError("asset");
   if (!["one_minute", "five_minute", "fifteen_minute", "hourly"].includes(config.expiryFamily)) configurationError("expiryFamily");
-  if (!["yes", "no"].includes(config.side)) configurationError("side");
   if (!["distance_to_strike", "distance_momentum", "volatility_adjusted_probability"].includes(config.estimator)) configurationError("estimator");
   for (const key of ["readOnlyMode", "liveTradingEnabled", "killSwitchEnabled"] as const) {
     if (typeof config[key] !== "boolean") configurationError(key);
@@ -185,7 +182,6 @@ export const parseReferenceBotEnv = (
   };
   const asset = required("STRYKE_ASSET", referenceBotDefaults.asset) as PilotAsset;
   const expiryFamily = required("STRYKE_EXPIRY_FAMILY", referenceBotDefaults.expiryFamily) as PilotExpiryFamily;
-  const side = required("STRYKE_SIDE", referenceBotDefaults.side) as "yes" | "no";
   const estimator = required("STRYKE_ESTIMATOR", referenceBotDefaults.estimator) as ReferenceEstimator;
   const sol = (name: string, fallback: bigint) => solToLamports(required(name, `${Number(fallback) / 1e9}`), name);
   const numeric = (name: string, fallback: number) => {
@@ -193,7 +189,7 @@ export const parseReferenceBotEnv = (
     return numberEnv(profiledEnv, name, fallback);
   };
   const config = parseReferenceBotConfig({
-    profile, asset, expiryFamily, side, estimator,
+    profile, asset, expiryFamily, estimator,
     tradeSizeLamports: sol("STRYKE_TRADE_SIZE_SOL", referenceBotDefaults.tradeSizeLamports),
     maximumTradeSizeLamports: sol("STRYKE_MAXIMUM_TRADE_SIZE_SOL", referenceBotDefaults.maximumTradeSizeLamports),
     maximumAggregateExposureLamports: sol("STRYKE_MAXIMUM_AGGREGATE_EXPOSURE_SOL", referenceBotDefaults.maximumAggregateExposureLamports),

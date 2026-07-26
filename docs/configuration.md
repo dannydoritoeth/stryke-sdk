@@ -8,7 +8,6 @@ profile; missing or invalid input fails before wallet or transaction work.
 | --- | --- |
 | `STRYKE_ASSET` | `BTC`, `SOL` |
 | `STRYKE_EXPIRY_FAMILY` | `one_minute`, `five_minute`, `fifteen_minute`, `hourly` |
-| `STRYKE_SIDE` | Legacy educational-estimator preference; the recommended baseline evaluates both sides |
 | `STRYKE_ESTIMATOR` | `volatility_adjusted_probability` (recommended), `distance_to_strike`, `distance_momentum` (educational) |
 | `STRYKE_TRADE_SIZE_SOL` | positive decimal, maximum 9 decimals |
 | `STRYKE_MAXIMUM_TRADE_SIZE_SOL` | positive decimal; ≥ trade size |

@@ -14,7 +14,6 @@ const entryEvidence = {
 export const configControlInventory = {
   STRYKE_ASSET: { consumer: "SDK market discovery and Pyth selection", evidence: runtimeEvidence("actual_sdk_tick_consumes_market_side_size_slippage_estimator_and_risk_config") },
   STRYKE_EXPIRY_FAMILY: { consumer: "SDK market discovery", evidence: runtimeEvidence("actual_sdk_tick_consumes_market_side_size_slippage_estimator_and_risk_config") },
-  STRYKE_SIDE: { consumer: "buy quote and decision side", evidence: runtimeEvidence("actual_sdk_tick_consumes_market_side_size_slippage_estimator_and_risk_config") },
   STRYKE_ESTIMATOR: { consumer: "entry and exit probability estimator", evidence: runtimeEvidence("actual_sdk_tick_consumes_market_side_size_slippage_estimator_and_risk_config") },
   STRYKE_TRADE_SIZE_SOL: { consumer: "buy quote amount", evidence: runtimeEvidence("actual_sdk_tick_consumes_market_side_size_slippage_estimator_and_risk_config") },
   STRYKE_MAXIMUM_TRADE_SIZE_SOL: { consumer: "entry size gate and devnet funding preflight", evidence: entryEvidence },

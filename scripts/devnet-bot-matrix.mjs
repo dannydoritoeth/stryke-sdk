@@ -65,6 +65,7 @@ const runCell = ({ asset, expiry }) => new Promise((complete) => {
     ...process.env,
     STRYKE_ASSET: asset,
     STRYKE_EXPIRY_FAMILY: expiry,
+    STRYKE_ESTIMATOR: "volatility_adjusted_probability",
     ...(expiry === "one_minute" ? { STRYKE_MINIMUM_SECONDS_TO_EXPIRY: process.env.STRYKE_MATRIX_ONE_MINUTE_MINIMUM_SECONDS ?? "5" } : {}),
     STRYKE_CHECKPOINT_PATH: checkpoint,
   };

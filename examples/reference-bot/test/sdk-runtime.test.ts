@@ -17,7 +17,7 @@ describe("SDK runtime composition", () => {
   it("actual_sdk_tick_consumes_market_side_size_slippage_estimator_and_risk_config", async () => {
     const now = Date.now();
     const config = parseReferenceBotConfig({
-      asset: "SOL", expiryFamily: "one_minute", side: "no", estimator: "distance_momentum",
+      asset: "SOL", expiryFamily: "one_minute", estimator: "distance_momentum",
       tradeSizeLamports: 1_234_567n, maximumTradeSizeLamports: 2_000_000n,
       maximumAggregateExposureLamports: 3_000_000n, minimumEntryEdgeBps: 9_999,
       maximumPriceImpactBps: 77, minimumSecondsToExpiry: 10, maximumOpenPositions: 1,

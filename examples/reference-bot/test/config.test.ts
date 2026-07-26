@@ -57,7 +57,7 @@ describe("reference bot config", () => {
 
   it("parses_exact_decimal_sol_and_all_runtime_controls", () => {
     const config = parseReferenceBotEnv({
-      STRYKE_ASSET: "SOL", STRYKE_EXPIRY_FAMILY: "one_minute", STRYKE_SIDE: "no",
+      STRYKE_ASSET: "SOL", STRYKE_EXPIRY_FAMILY: "one_minute",
       STRYKE_ESTIMATOR: "distance_momentum", STRYKE_TRADE_SIZE_SOL: "0.001000001",
       STRYKE_MAXIMUM_TRADE_SIZE_SOL: "0.002", STRYKE_MAXIMUM_AGGREGATE_EXPOSURE_SOL: "0.003",
       STRYKE_MINIMUM_ENTRY_EDGE_BPS: "7", STRYKE_MAXIMUM_PRICE_IMPACT_BPS: "8",
@@ -70,7 +70,7 @@ describe("reference bot config", () => {
       STRYKE_WALLET_ADAPTER_PATH: "./wallet.mjs",
     });
     expect(config).toEqual(expect.objectContaining({
-      asset: "SOL", expiryFamily: "one_minute", side: "no", estimator: "distance_momentum",
+      asset: "SOL", expiryFamily: "one_minute", estimator: "distance_momentum",
       tradeSizeLamports: 1_000_001n, maximumTradeSizeLamports: 2_000_000n,
       maximumAggregateExposureLamports: 3_000_000n, minimumEntryEdgeBps: 7,
       maximumPriceImpactBps: 8, minimumSecondsToExpiry: 9, maximumOpenPositions: 1,
@@ -103,7 +103,7 @@ describe("reference bot config", () => {
 
   it("validates_enum_decimal_connection_and_precedence_controls_independently", () => {
     for (const [name, value] of [
-      ["asset", "ETH"], ["expiryFamily", "daily"], ["side", "up"], ["estimator", "magic"],
+      ["asset", "ETH"], ["expiryFamily", "daily"], ["estimator", "magic"],
       ["apiBaseUrl", ""], ["solanaRpcUrl", ""], ["pythHermesUrl", ""],
       ["checkpointPath", ""], ["walletAdapterPath", ""],
     ] as const) expect(() => parseReferenceBotConfig({ [name]: value })).toThrow(name);
