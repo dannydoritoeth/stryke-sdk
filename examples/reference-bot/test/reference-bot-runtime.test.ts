@@ -7,7 +7,7 @@ import { parseReferenceBotConfig } from "../src/config.js";
 import { quote } from "./fixtures.js";
 
 const history = [{ price: 99, publishTime: 1 }, { price: 100, publishTime: 2 }];
-const market = { marketId: "market-1" } as never;
+const market = { marketId: "market-1", pools: { yes: "10", no: "20", stale: false } } as never;
 const position = (state: PilotPosition["lifecycle"]["state"] = "sellable", overrides: Partial<PilotPosition> = {}): PilotPosition => ({
   positionId: "position-1", owner: "owner", market: {}, yesShares: "100", noShares: "0",
   yesCostBasisCollateralUnits: "100", lifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state, rawStatus: state, rawReason: state, observedAt: new Date().toISOString() }, raw: {}, ...overrides,
@@ -232,5 +232,35 @@ describe("reference bot composed runtime", () => {
     const restarted = await runMarketTick({ tick: 3, config: live, adapter: runtime });
     expect([first.action, second.action, restarted.action]).toEqual(["hold", "claim", "blocked"]);
     expect(terminalCalls).toBe(1);
+  });
+
+  it("composed_loop_orders_buy_monitor_claim_and_next_market_over_multiple_iterations", async () => {
+    let portfolioTick = 0;
+    const actions: string[] = [];
+    const runtime = adapter({
+      listPositions: async () => {
+        portfolioTick += 1;
+        if (portfolioTick === 1) return [];
+        if (portfolioTick === 2) return [position("sellable")];
+        if (portfolioTick === 3) return [position("claimable", { claimableAmount: "10", actionDeadline: new Date(Date.now() + 60_000).toISOString() })];
+        return [position("claimed")];
+      },
+      evaluatePosition: async (value, exposure) => ({ ...(await adapter().evaluatePosition(value, exposure)), sellQuote: quote({ action: "sell", side: "yes", amount: "100", expectedShares: undefined, expectedNetProceeds: "95", expiresAt: new Date(Date.now() + 60_000).toISOString() }) }),
+      executeBuy: async () => { actions.push("buy"); return { clientActionId: "buy" }; },
+      executeTerminal: async () => { actions.push("claim"); return { clientActionId: "claim" }; },
+    });
+    const events = await runReferenceBot({ config: live, adapter: runtime, maximumTicks: 4, wait: async () => {} });
+    expect(events.map(({ action }) => action)).toEqual(["buy", "hold", "claim", "buy"]);
+    expect(actions).toEqual(["buy", "claim", "buy"]);
+  });
+
+  it("entry_event_records_both_model_quote_fee_pool_and_size_inputs", async () => {
+    const result = await runMarketTick({ tick: 1, config: live, adapter: adapter() });
+    expect(result.details).toMatchObject({
+      estimator: "distance_to_strike", yesModelProbability: expect.any(Number), noModelProbability: expect.any(Number),
+      yesExecutableProbabilityBps: 4000, noExecutableProbabilityBps: 6000,
+      yesEdgeBps: expect.any(Number), noEdgeBps: expect.any(Number), feeMode: "waived", closingPhase: "open",
+      selectedSide: "yes", proposedSize: live.tradeSizeLamports.toString(),
+    });
   });
 });

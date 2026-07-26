@@ -33,4 +33,13 @@ describe("structured decision logs", () => {
     expect(output).not.toContain('"secret"');
     expect(output).toContain("public-signature");
   });
+
+  it("decision_record_redacts_wallet_and_secret_material_recursively", () => {
+    const write = vi.fn();
+    emitDecision({ ...event(), decision: { action: "skip", walletMaterial: { seedPhrase: "twelve words" }, nested: [{ keypair: [1, 2, 3] }] } }, write);
+    const output = write.mock.calls[0]![0] as string;
+    expect(output).not.toContain("twelve words");
+    expect(output).not.toContain("1,2,3");
+    expect(output).toContain("[REDACTED]");
+  });
 });

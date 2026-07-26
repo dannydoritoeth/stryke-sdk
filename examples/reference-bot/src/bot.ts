@@ -13,7 +13,7 @@ import {
 import type { ReferenceBotConfig } from "./config.js";
 import { decideBestEntry, type BestEntryDecision } from "./entry.js";
 import { decidePositionExit, type PositionDecision } from "./manage-position.js";
-import { estimateFairProbability, type FairProbabilityInput } from "./strategy.js";
+import { estimateFairProbability, volatilityAdjustedProbabilities, type FairProbabilityInput } from "./strategy.js";
 
 export type RuntimeAction = "buy" | "sell" | "claim" | "refund";
 
@@ -31,6 +31,7 @@ export type RuntimeEvent = {
     positionId: string;
     action: "sell" | "hold" | "claim" | "refund" | "decision_unavailable";
     reason: string;
+    details?: Readonly<Record<string, string | number | boolean>>;
   }[];
 };
 
@@ -79,6 +80,27 @@ const isTradingLockedError = (error: unknown): boolean =>
 const event = (tick: number, phase: RuntimeEvent["phase"], action: RuntimeEvent["action"], reason: string, extra: Partial<RuntimeEvent> = {}): RuntimeEvent =>
   ({ tick, phase, action, reason, ...extra });
 
+const modelEvaluation = (input: FairProbabilityInput, config: ReferenceBotConfig) => {
+  const settings = {
+    lookbackSeconds: config.historyLookbackSeconds[config.expiryFamily], minimumHistoryCoverageBps: config.minimumHistoryCoverageBps,
+    minimumVolatilityBpsPerSqrtHour: config.minimumVolatilityBpsPerSqrtHour, maximumVolatilityBpsPerSqrtHour: config.maximumVolatilityBpsPerSqrtHour,
+    maximumModelProbabilityBps: config.maximumModelProbabilityBps,
+  };
+  if (config.estimator === "volatility_adjusted_probability") {
+    const result = volatilityAdjustedProbabilities(input, settings);
+    return {
+      fairProbability: result.yesProbability,
+      diagnostics: {
+        estimator: config.estimator, yesModelProbability: result.yesProbability, noModelProbability: result.noProbability,
+        volatilityBpsPerSqrtHour: result.snapshot.volatilityBpsPerSqrtHour, lookbackSeconds: result.snapshot.lookbackSeconds,
+        historyCoverageBps: result.snapshot.coverageBps, historyPointCount: result.snapshot.pointCount, secondsRemaining: input.secondsRemaining,
+      },
+    };
+  }
+  const fairProbability = estimateFairProbability(input, config.estimator, settings);
+  return { fairProbability, diagnostics: { estimator: config.estimator, yesModelProbability: fairProbability, noModelProbability: 1 - fairProbability, secondsRemaining: input.secondsRemaining } };
+};
+
 export const runMarketTick = async ({
   tick,
   config,
@@ -111,6 +133,7 @@ export const runMarketTick = async ({
     positionId: string;
     action: "sell" | "hold" | "claim" | "refund" | "decision_unavailable";
     reason: string;
+    details?: Readonly<Record<string, string | number | boolean>>;
   }> = [];
   for (const position of positions) {
     if (terminalStates.has(position.lifecycle.state)) {
@@ -142,11 +165,8 @@ export const runMarketTick = async ({
       positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "position_data_stale" });
       continue;
     }
-    const fairProbability = estimateFairProbability(evaluation.estimatorInput, config.estimator, {
-      lookbackSeconds: config.historyLookbackSeconds[config.expiryFamily], minimumHistoryCoverageBps: config.minimumHistoryCoverageBps,
-      minimumVolatilityBpsPerSqrtHour: config.minimumVolatilityBpsPerSqrtHour, maximumVolatilityBpsPerSqrtHour: config.maximumVolatilityBpsPerSqrtHour,
-      maximumModelProbabilityBps: config.maximumModelProbabilityBps,
-    });
+    const model = modelEvaluation(evaluation.estimatorInput, config);
+    const fairProbability = model.fairProbability;
     const decision: PositionDecision = decidePositionExit({
       side: exposure.side, fairProbability, sellQuote: evaluation.sellQuote,
       shares: exposure.shares,
@@ -154,8 +174,8 @@ export const runMarketTick = async ({
       ifWinPayout: evaluation.ifWinPayout, stopLossBps: config.stopLossBps,
       takeProfitBps: config.takeProfitBps,
     });
-    const details = { fairProbability, ...(decision.pnlBps === undefined ? {} : { pnlBps: decision.pnlBps.toString() }), ...(decision.sellNowValue === undefined ? {} : { sellNowValue: decision.sellNowValue.toString() }), ...(decision.holdValue === undefined ? {} : { holdValue: decision.holdValue.toString() }) };
-    positionDecisions.push({ positionId: position.positionId, action: decision.action, reason: decision.reason });
+    const details = { ...model.diagnostics, fairProbability, ...(decision.pnlBps === undefined ? {} : { pnlBps: decision.pnlBps.toString() }), ...(decision.sellNowValue === undefined ? {} : { sellNowValue: decision.sellNowValue.toString() }), ...(decision.holdValue === undefined ? {} : { holdValue: decision.holdValue.toString() }) };
+    positionDecisions.push({ positionId: position.positionId, action: decision.action, reason: decision.reason, details });
     if (decision.action === "sell") sellCandidates.push({ position, exposure, evaluation, decision, details });
   }
 
@@ -199,11 +219,8 @@ export const runMarketTick = async ({
     if (isTradingLockedError(error)) return event(tick, "entry", "blocked", "trading_locked_until_settlement");
     throw error;
   }
-  const fairProbability = estimateFairProbability(evaluation.estimatorInput, config.estimator, {
-    lookbackSeconds: config.historyLookbackSeconds[config.expiryFamily], minimumHistoryCoverageBps: config.minimumHistoryCoverageBps,
-    minimumVolatilityBpsPerSqrtHour: config.minimumVolatilityBpsPerSqrtHour, maximumVolatilityBpsPerSqrtHour: config.maximumVolatilityBpsPerSqrtHour,
-    maximumModelProbabilityBps: config.maximumModelProbabilityBps,
-  });
+  const model = modelEvaluation(evaluation.estimatorInput, config);
+  const fairProbability = model.fairProbability;
   const decision: BestEntryDecision = decideBestEntry({
     fairProbability, quotes: evaluation.buyQuotes, config,
     secondsRemaining: evaluation.estimatorInput.secondsRemaining,
@@ -212,7 +229,18 @@ export const runMarketTick = async ({
     openPositions: evaluation.openPositions,
     dataFresh: evaluation.dataFresh,
   });
-  const details = { fairProbability: decision.fairProbability, sideFairProbability: decision.sideFairProbability, quoteProbability: decision.quoteProbability, edgeBps: decision.edgeBps, effectiveFeeBps: decision.quote.closingProtection.effectiveFeeBps, selectedSide: decision.quote.side, proposedSize: evaluation.proposedSizeLamports.toString() };
+  const yesQuote = evaluation.buyQuotes.find((quote) => quote.side === "yes")!;
+  const noQuote = evaluation.buyQuotes.find((quote) => quote.side === "no")!;
+  const details = {
+    ...model.diagnostics, fairProbability: decision.fairProbability, sideFairProbability: decision.sideFairProbability,
+    quoteProbability: decision.quoteProbability, edgeBps: decision.edgeBps,
+    yesExecutableProbabilityBps: yesQuote.executableProbabilityBps, noExecutableProbabilityBps: noQuote.executableProbabilityBps,
+    yesEdgeBps: Math.round((fairProbability - yesQuote.executableProbabilityBps / 10_000) * 10_000),
+    noEdgeBps: Math.round(((1 - fairProbability) - noQuote.executableProbabilityBps / 10_000) * 10_000),
+    effectiveFeeBps: decision.quote.closingProtection.effectiveFeeBps, feeMode: decision.quote.feeBreakdown.feeMode,
+    closingPhase: decision.quote.closingProtection.phase, selectedSide: decision.quote.side,
+    proposedSize: evaluation.proposedSizeLamports.toString(), yesRealPool: evaluation.market.pools.yes, noRealPool: evaluation.market.pools.no,
+  };
   if (decision.action !== "buy") return event(tick, "entry", decision.action, decision.reason, { marketId: evaluation.market.marketId, details });
   let result: RuntimeExecution;
   try { result = await adapter.executeBuy(evaluation, decision.quote); }
