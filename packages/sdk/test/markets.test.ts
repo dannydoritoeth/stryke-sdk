@@ -296,11 +296,11 @@ describe("pilot market discovery", () => {
     expect(calls).toHaveLength(2);
   });
 
-  it("rejects_display_only_pools_without_typed_activation_state", () => {
+  it("allows_discovery_only_rows_without_activation_state", () => {
     const value = row("BTC", "five_minute", 1_800_000_000);
-    expect(() => parsePilotMarket({
+    expect(parsePilotMarket({
       ...value,
       selectedMarket: { pools: { yesPool: "0 SOL", noPool: "0 SOL", stale: false }, odds: value.selectedMarket.odds },
-    }, false)).toThrowError(expect.objectContaining({ code: "validation" }));
+    }, false).activation).toBeUndefined();
   });
 });

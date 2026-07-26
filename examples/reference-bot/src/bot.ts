@@ -154,10 +154,14 @@ export const runMarketTick = async ({
     let evaluation: PositionEvaluation;
     try { evaluation = await adapter.evaluatePosition(position, exposure); }
     catch (error) {
+      const errorDetails = error instanceof StrykeSdkError
+        ? { errorCode: error.code, errorMessage: error.message }
+        : { errorCode: "unexpected", errorMessage: error instanceof Error ? error.message : "Unknown position evaluation error" };
       positionDecisions.push({
         positionId: position.positionId,
         action: isTradingLockedError(error) ? "hold" : "decision_unavailable",
         reason: isTradingLockedError(error) ? "trading_locked_until_settlement" : "position_evaluation_unavailable",
+        details: errorDetails,
       });
       continue;
     }
@@ -247,8 +251,8 @@ export const runMarketTick = async ({
     effectiveFeeBps: decision.quote.closingProtection.effectiveFeeBps, feeMode: decision.quote.feeBreakdown.feeMode,
     closingPhase: decision.quote.closingProtection.phase, selectedSide: decision.quote.side,
     proposedSize: evaluation.proposedSizeLamports.toString(),
-    yesRealPool: evaluation.market.activation.yes.realPoolCollateralUnits,
-    noRealPool: evaluation.market.activation.no.realPoolCollateralUnits,
+    yesRealPool: evaluation.market.activation!.yes.realPoolCollateralUnits,
+    noRealPool: evaluation.market.activation!.no.realPoolCollateralUnits,
   };
   if (decision.action !== "buy") return event(tick, "entry", decision.action, decision.reason, { marketId: evaluation.market.marketId, details });
   let result: RuntimeExecution;

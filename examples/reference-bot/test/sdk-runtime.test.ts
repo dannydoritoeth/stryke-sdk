@@ -3,9 +3,18 @@ import { MemoryActionCheckpointStore, PYTH_FEED_IDS, PriceStore } from "@stryke/
 
 import { runMarketTick } from "../src/bot.js";
 import { parseReferenceBotConfig } from "../src/config.js";
-import { createSdkRuntimeAdapter, positionCountsTowardEntryCapacity } from "../src/sdk-runtime.js";
+import { authoritativeActivationFor, createSdkRuntimeAdapter, positionCountsTowardEntryCapacity } from "../src/sdk-runtime.js";
 
 describe("SDK runtime composition", () => {
+  it("trading_requires_authoritative_activation_state_and_matching_policy", () => {
+    expect(() => authoritativeActivationFor({} as never, 10_000n)).toThrowError(expect.objectContaining({ code: "compatibility" }));
+    const market = { activation: {
+      yes: { thresholdCollateralUnits: "10000" },
+      no: { thresholdCollateralUnits: "10000" },
+    } } as never;
+    expect(authoritativeActivationFor(market, 10_000n)).toBe(market.activation);
+    expect(() => authoritativeActivationFor(market, 9_999n)).toThrowError(expect.objectContaining({ code: "configuration" }));
+  });
   it("non_actionable_terminal_history_does_not_consume_entry_capacity", () => {
     for (const state of ["claimable", "refundable", "lost", "claimed", "refunded"] as const) {
       expect(positionCountsTowardEntryCapacity({ lifecycle: { state } } as never)).toBe(false);

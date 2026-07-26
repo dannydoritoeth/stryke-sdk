@@ -24,6 +24,17 @@ import { calculateBufferedEntrySize } from "./sizing.js";
 export const positionCountsTowardEntryCapacity = (position: PilotPosition): boolean =>
   ["pending_confirmation", "open_position", "sellable", "awaiting_resolution"].includes(position.lifecycle.state);
 
+export const authoritativeActivationFor = (market: PilotMarket, configuredLimit: bigint) => {
+  if (!market.activation) {
+    throw new StrykeSdkError("compatibility", "Authoritative market activation state is unavailable");
+  }
+  if (
+    BigInt(market.activation.yes.thresholdCollateralUnits) !== configuredLimit ||
+    BigInt(market.activation.no.thresholdCollateralUnits) !== configuredLimit
+  ) throw new StrykeSdkError("configuration", "Configured fee-free activation limit does not match the authoritative market policy");
+  return market.activation;
+};
+
 const marketMatchesPosition = (market: PilotMarket, position: PilotPosition): boolean => {
   const identity = position.market;
   return identity.tokenMint === market.tokenMint && identity.expiryFamily === market.expiryFamily &&
@@ -182,12 +193,9 @@ export const createSdkRuntimeAdapter = ({
       );
       const aggregateExposureLamports = activePortfolio.reduce((sum, position) => sum + BigInt(position.yesCostBasisCollateralUnits ?? "0") + BigInt(position.noCostBasisCollateralUnits ?? "0"), 0n);
       const openPositions = activePortfolio.length;
-      const yesActivation = market.activation.yes;
-      const noActivation = market.activation.no;
-      if (
-        BigInt(yesActivation.thresholdCollateralUnits) !== config.feeFreeActivationLimitLamports ||
-        BigInt(noActivation.thresholdCollateralUnits) !== config.feeFreeActivationLimitLamports
-      ) throw new StrykeSdkError("configuration", "Configured fee-free activation limit does not match the authoritative market policy");
+      const activation = authoritativeActivationFor(market, config.feeFreeActivationLimitLamports);
+      const yesActivation = activation.yes;
+      const noActivation = activation.no;
       const proposedSizeLamports = calculateBufferedEntrySize({
         configuredTradeSize: config.tradeSizeLamports, maximumTradeSize: config.maximumTradeSizeLamports,
         aggregateExposure: aggregateExposureLamports, maximumAggregateExposure: config.maximumAggregateExposureLamports,

@@ -31,7 +31,7 @@ export type PilotMarket = CanonicalMarketIdentity & {
   };
   stale: boolean;
   pools: { yes: string; no: string; stale: boolean };
-  activation: { yes: PilotActivationSide; no: PilotActivationSide };
+  activation?: { yes: PilotActivationSide; no: PilotActivationSide };
   probability: { yesBps: number; noBps: number };
   lifecycle: PilotLifecycleEvidence<PilotMarketLifecycleState>;
   rawStatus: string;
@@ -105,8 +105,11 @@ export const parsePilotMarket = (
     ? record(surfaceValue, "surface")
     : record(row.selectedMarket, "selectedMarket");
   const pools = record(selectedMarket.pools, "surface.pools");
-  const activation = record(selectedMarket.activation, "surface.activation");
+  const activation = selectedMarket.activation === undefined
+    ? undefined
+    : record(selectedMarket.activation, "surface.activation");
   const parseActivationSide = (side: "yes" | "no"): PilotActivationSide => {
+    if (!activation) throw new StrykeSdkError("validation", "Market activation state is unavailable");
     const value = record(activation[side], `surface.activation.${side}`);
     const buyMode = text(value.feeModeForNextBuy, `surface.activation.${side}.feeModeForNextBuy`);
     const sellMode = text(value.feeModeForNextSell, `surface.activation.${side}.feeModeForNextSell`);
@@ -179,7 +182,7 @@ export const parsePilotMarket = (
       no: text(pools.noPool, "surface.pools.noPool"),
       stale: boolean(pools.stale, "surface.pools.stale"),
     },
-    activation: { yes: parseActivationSide("yes"), no: parseActivationSide("no") },
+    ...(activation ? { activation: { yes: parseActivationSide("yes"), no: parseActivationSide("no") } } : {}),
     probability: {
       yesBps: bps(odds.yesBps, "surface.odds.yesBps"),
       noBps: bps(odds.noBps, "surface.odds.noBps"),
