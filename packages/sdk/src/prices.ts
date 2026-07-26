@@ -113,7 +113,9 @@ export class PriceStore {
 }
 
 export const seedHermesHistory = async ({
-  endpoint, asset, store, lookbackSeconds, sampleCount = 9, now = Date.now, request = fetch,
+  endpoint, asset, store, lookbackSeconds, sampleCount = 9, now = Date.now,
+  request = fetch, wait = (milliseconds) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)),
+  maximumAttempts = 5,
 }: {
   endpoint: string;
   asset: PilotAsset;
@@ -122,8 +124,10 @@ export const seedHermesHistory = async ({
   sampleCount?: number;
   now?: () => number;
   request?: typeof fetch;
+  wait?: (milliseconds: number) => Promise<void>;
+  maximumAttempts?: number;
 }): Promise<number> => {
-  if (!Number.isSafeInteger(lookbackSeconds) || lookbackSeconds <= 0 || !Number.isSafeInteger(sampleCount) || sampleCount < 2 || sampleCount > 100) {
+  if (!Number.isSafeInteger(lookbackSeconds) || lookbackSeconds <= 0 || !Number.isSafeInteger(sampleCount) || sampleCount < 2 || sampleCount > 100 || !Number.isSafeInteger(maximumAttempts) || maximumAttempts < 1 || maximumAttempts > 10) {
     throw new StrykeSdkError("configuration", "Historical Pyth sampling configuration is invalid");
   }
   const endpointUrl = new URL(endpoint);
@@ -134,8 +138,21 @@ export const seedHermesHistory = async ({
     const url = new URL(`/v2/updates/price/${timestamp}`, endpointUrl);
     url.searchParams.append("ids[]", PYTH_FEED_IDS[asset].slice(2));
     url.searchParams.set("parsed", "true");
-    const response = await request(url, { headers: { accept: "application/json" } });
-    if (!response.ok) throw new StrykeSdkError("source_unavailable", `Pyth history request failed (${response.status})`, true);
+    let response: Response | undefined;
+    for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+      response = await request(url, { headers: { accept: "application/json" } });
+      if (response.ok) break;
+      const retryable = response.status === 429 || response.status >= 500;
+      if (!retryable || attempt === maximumAttempts) {
+        throw new StrykeSdkError("source_unavailable", `Pyth history request failed (${response.status}) after ${attempt} attempt${attempt === 1 ? "" : "s"}`, retryable);
+      }
+      const retryAfterSeconds = Number(response.headers.get("retry-after"));
+      const backoffMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0
+        ? Math.min(retryAfterSeconds * 1_000, 30_000)
+        : Math.min(1_000 * 2 ** (attempt - 1), 30_000);
+      await wait(backoffMs);
+    }
+    if (!response?.ok) throw new StrykeSdkError("source_unavailable", "Pyth history request failed", true);
     store.seedHistorical(asset, await response.json());
   }
   return timestamps.length;

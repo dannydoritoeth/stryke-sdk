@@ -32,6 +32,36 @@ describe("Pyth price store", () => {
     expect(store.history("BTC")).toHaveLength(3);
     expect(store.current("BTC").publishTime).toBe(requested.at(-1));
   });
+  it("retries_rate_limited_history_with_bounded_backoff", async () => {
+    const now = 1_800_000_000_000;
+    const store = new PriceStore({ now: () => now, historyWindowMs: 700_000 });
+    const waits: number[] = [];
+    let requests = 0;
+    const request = async (input: string | URL | Request) => {
+      requests += 1;
+      if (requests === 1) return new Response("rate limited", { status: 429, headers: { "retry-after": "2" } });
+      const timestamp = Number(new URL(String(input)).pathname.split("/").at(-1));
+      return new Response(JSON.stringify(update("BTC", timestamp)), { status: 200 });
+    };
+    await expect(seedHermesHistory({
+      endpoint: "https://hermes.example.test", asset: "BTC", store,
+      lookbackSeconds: 600, sampleCount: 2, now: () => now,
+      request: request as typeof fetch, wait: async (milliseconds) => { waits.push(milliseconds); },
+    })).resolves.toBe(2);
+    expect(waits).toEqual([2_000]);
+    expect(requests).toBe(3);
+  });
+
+  it("fails_non_retryable_history_responses_without_waiting", async () => {
+    const waits: number[] = [];
+    await expect(seedHermesHistory({
+      endpoint: "https://hermes.example.test", asset: "BTC", store: new PriceStore(),
+      lookbackSeconds: 600, sampleCount: 2,
+      request: (async () => new Response("bad request", { status: 400 })) as typeof fetch,
+      wait: async (milliseconds) => { waits.push(milliseconds); },
+    })).rejects.toMatchObject({ code: "source_unavailable", retryable: false });
+    expect(waits).toEqual([]);
+  });
   it("maps_btc_and_sol_to_approved_fixed_pyth_feeds", () => {
     expect(PYTH_FEED_IDS).toEqual({
       BTC: "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
