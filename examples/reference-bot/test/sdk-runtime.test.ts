@@ -35,7 +35,14 @@ describe("SDK runtime composition", () => {
             expiryTs: Math.floor(now / 1_000) + 60, targetValue: "10000000000", status: "open", rawStatus: "active",
             pilotLifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "open", rawStatus: "active", rawReason: "market_open", observedAt: new Date(now).toISOString() },
             tradeability: { canQuote: true, canPrepareTransaction: true, disabledReasons: [] },
-            selectedMarket: { pools: { yesPool: "10", noPool: "10", stale: false }, odds: { yesBps: 5000, noBps: 5000 } },
+            selectedMarket: {
+              pools: { yesPool: "0 SOL", noPool: "0 SOL", stale: false },
+              activation: {
+                yes: { activated: false, thresholdCollateralUnits: "10000000000", realPoolCollateralUnits: "10", feeModeForNextBuy: "activation_waived", feeModeForNextSell: "activation_waived" },
+                no: { activated: false, thresholdCollateralUnits: "10000000000", realPoolCollateralUnits: "10", feeModeForNextBuy: "activation_waived", feeModeForNextSell: "activation_waived" },
+              },
+              odds: { yesBps: 5000, noBps: 5000 },
+            },
           }],
           metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: new Date(now).toISOString(), stale: false },
         };

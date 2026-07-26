@@ -31,11 +31,20 @@ export type PilotMarket = CanonicalMarketIdentity & {
   };
   stale: boolean;
   pools: { yes: string; no: string; stale: boolean };
+  activation: { yes: PilotActivationSide; no: PilotActivationSide };
   probability: { yesBps: number; noBps: number };
   lifecycle: PilotLifecycleEvidence<PilotMarketLifecycleState>;
   rawStatus: string;
   generatedAt: string;
   raw: Readonly<Record<string, unknown>>;
+};
+
+export type PilotActivationSide = {
+  activated: boolean;
+  thresholdCollateralUnits: string;
+  realPoolCollateralUnits: string;
+  feeModeForNextBuy: "normal" | "activation_waived";
+  feeModeForNextSell: "normal" | "activation_waived";
 };
 
 type MarketsResponse = {
@@ -96,6 +105,22 @@ export const parsePilotMarket = (
     ? record(surfaceValue, "surface")
     : record(row.selectedMarket, "selectedMarket");
   const pools = record(selectedMarket.pools, "surface.pools");
+  const activation = record(selectedMarket.activation, "surface.activation");
+  const parseActivationSide = (side: "yes" | "no"): PilotActivationSide => {
+    const value = record(activation[side], `surface.activation.${side}`);
+    const buyMode = text(value.feeModeForNextBuy, `surface.activation.${side}.feeModeForNextBuy`);
+    const sellMode = text(value.feeModeForNextSell, `surface.activation.${side}.feeModeForNextSell`);
+    if (!["normal", "activation_waived"].includes(buyMode) || !["normal", "activation_waived"].includes(sellMode)) {
+      throw new StrykeSdkError("validation", `Invalid activation fee mode: ${side}`);
+    }
+    return {
+      activated: boolean(value.activated, `surface.activation.${side}.activated`),
+      thresholdCollateralUnits: amount(value.thresholdCollateralUnits, `surface.activation.${side}.thresholdCollateralUnits`),
+      realPoolCollateralUnits: amount(value.realPoolCollateralUnits, `surface.activation.${side}.realPoolCollateralUnits`),
+      feeModeForNextBuy: buyMode as PilotActivationSide["feeModeForNextBuy"],
+      feeModeForNextSell: sellMode as PilotActivationSide["feeModeForNextSell"],
+    };
+  };
   const odds = record(selectedMarket.odds, "surface.odds");
   const disabledReasons = tradeability.disabledReasons;
   const strikePrice = text(row.targetValue, "targetValue");
@@ -154,6 +179,7 @@ export const parsePilotMarket = (
       no: text(pools.noPool, "surface.pools.noPool"),
       stale: boolean(pools.stale, "surface.pools.stale"),
     },
+    activation: { yes: parseActivationSide("yes"), no: parseActivationSide("no") },
     probability: {
       yesBps: bps(odds.yesBps, "surface.odds.yesBps"),
       noBps: bps(odds.noBps, "surface.odds.noBps"),

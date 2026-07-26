@@ -58,6 +58,10 @@ const contractCase = (
               },
               selectedMarket: {
                 pools: { yesPool: "500000000", noPool: "500000000", stale: false },
+                activation: {
+                  yes: { activated: false, thresholdCollateralUnits: "10000000000", realPoolCollateralUnits: "500000000", feeModeForNextBuy: "activation_waived", feeModeForNextSell: "activation_waived" },
+                  no: { activated: false, thresholdCollateralUnits: "10000000000", realPoolCollateralUnits: "500000000", feeModeForNextBuy: "activation_waived", feeModeForNextSell: "activation_waived" },
+                },
                 odds: { yesBps: 5000, noBps: 5000 },
               },
             },

@@ -7,7 +7,14 @@ import { parseReferenceBotConfig } from "../src/config.js";
 import { quote } from "./fixtures.js";
 
 const history = [{ price: 99, publishTime: 1 }, { price: 100, publishTime: 2 }];
-const market = { marketId: "market-1", pools: { yes: "10", no: "20", stale: false } } as never;
+const market = {
+  marketId: "market-1",
+  pools: { yes: "10", no: "20", stale: false },
+  activation: {
+    yes: { realPoolCollateralUnits: "10" },
+    no: { realPoolCollateralUnits: "20" },
+  },
+} as never;
 const position = (state: PilotPosition["lifecycle"]["state"] = "sellable", overrides: Partial<PilotPosition> = {}): PilotPosition => ({
   positionId: "position-1", owner: "owner", market: {}, yesShares: "100", noShares: "0",
   yesCostBasisCollateralUnits: "100", lifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state, rawStatus: state, rawReason: state, observedAt: new Date().toISOString() }, raw: {}, ...overrides,

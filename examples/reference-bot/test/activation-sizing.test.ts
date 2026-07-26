@@ -5,15 +5,17 @@ import { quote } from "./fixtures.js";
 
 describe("activation-aware entry sizing", () => {
   it("activation_capacity_excludes_virtual_liquidity", () => {
-    expect(calculateBufferedEntrySize({ configuredTradeSize: 1_000n, maximumTradeSize: 2_000n, aggregateExposure: 0n, maximumAggregateExposure: 5_000n, yesRealPool: 8_000n, noRealPool: 8_500n, activationLimit: 10_000n, activationBuffer: 500n })).toBe(1_000n);
+    expect(calculateBufferedEntrySize({ configuredTradeSize: 1_000n, maximumTradeSize: 2_000n, aggregateExposure: 0n, maximumAggregateExposure: 5_000n, yesRealPool: 8_000n, noRealPool: 8_500n, yesActivated: false, noActivated: false, activationLimit: 10_000n, activationBuffer: 500n })).toBe(1_000n);
   });
   it("threshold_crossing_and_buffer_cannot_be_exceeded", () => {
-    expect(calculateBufferedEntrySize({ configuredTradeSize: 1_000n, maximumTradeSize: 2_000n, aggregateExposure: 0n, maximumAggregateExposure: 5_000n, yesRealPool: 9_250n, noRealPool: 9_000n, activationLimit: 10_000n, activationBuffer: 500n })).toBe(250n);
+    expect(calculateBufferedEntrySize({ configuredTradeSize: 1_000n, maximumTradeSize: 2_000n, aggregateExposure: 0n, maximumAggregateExposure: 5_000n, yesRealPool: 9_250n, noRealPool: 9_000n, yesActivated: false, noActivated: false, activationLimit: 10_000n, activationBuffer: 500n })).toBe(250n);
   });
   it("all_size_caps_reach_the_final_minimum", () => {
-    const base = { configuredTradeSize: 1_000n, maximumTradeSize: 2_000n, aggregateExposure: 0n, maximumAggregateExposure: 5_000n, yesRealPool: 0n, noRealPool: 0n, activationLimit: 10_000n, activationBuffer: 500n };
+    const base = { configuredTradeSize: 1_000n, maximumTradeSize: 2_000n, aggregateExposure: 0n, maximumAggregateExposure: 5_000n, yesRealPool: 0n, noRealPool: 0n, yesActivated: false, noActivated: false, activationLimit: 10_000n, activationBuffer: 500n };
     expect(calculateBufferedEntrySize({ ...base, maximumTradeSize: 700n })).toBe(700n);
     expect(calculateBufferedEntrySize({ ...base, aggregateExposure: 4_400n })).toBe(600n);
+    expect(calculateBufferedEntrySize({ ...base, yesRealPool: 20_000n, yesActivated: true })).toBe(1_000n);
+    expect(calculateBufferedEntrySize({ ...base, yesActivated: true, noActivated: true })).toBe(0n);
   });
   it("closing_and_locked_phases_never_open_positions", () => {
     expect(activationEntryDecision(quote()).allowed).toBe(true);

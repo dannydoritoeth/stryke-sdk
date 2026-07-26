@@ -55,7 +55,11 @@ const runFixtureSmoke = async () => {
         cycle += 1;
         if (cycle === 2) throw new StrykeSdkError("quote_blocked", "TradingLockedBeforeExpiry", false, { phase: "locked" });
         return {
-          market: { marketId: "documentation-smoke", asset: config.asset, expiryFamily: config.expiryFamily, pools: { yes: "0", no: "0", stale: false } } as never,
+          market: {
+            marketId: "documentation-smoke", asset: config.asset, expiryFamily: config.expiryFamily,
+            pools: { yes: "0 SOL", no: "0 SOL", stale: false },
+            activation: { yes: { realPoolCollateralUnits: "0" }, no: { realPoolCollateralUnits: "0" } },
+          } as never,
           estimatorInput: input,
           buyQuotes: [sampleQuote, { ...sampleQuote, quoteId: "read-only-smoke-no", side: "no", executableProbabilityBps: 6000 }],
           proposedSizeLamports: config.tradeSizeLamports,

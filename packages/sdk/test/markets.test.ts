@@ -40,6 +40,10 @@ const row = (symbol: "BTC" | "SOL", expiryFamily: string, expiryTs: number) => (
   },
   selectedMarket: {
     pools: { yesPool: "200", noPool: "300", stale: false },
+    activation: {
+      yes: { activated: false, thresholdCollateralUnits: "10000000000", realPoolCollateralUnits: "200", feeModeForNextBuy: "activation_waived", feeModeForNextSell: "activation_waived" },
+      no: { activated: false, thresholdCollateralUnits: "10000000000", realPoolCollateralUnits: "300", feeModeForNextBuy: "activation_waived", feeModeForNextSell: "activation_waived" },
+    },
     odds: { yesBps: 4000, noBps: 6000 },
   },
 });
@@ -210,6 +214,10 @@ describe("pilot market discovery", () => {
       strikePriceDecimal: 70000,
       rawStatus: "active",
       pools: { yes: "200", no: "300", stale: false },
+      activation: {
+        yes: { activated: false, realPoolCollateralUnits: "200", thresholdCollateralUnits: "10000000000" },
+        no: { activated: false, realPoolCollateralUnits: "300", thresholdCollateralUnits: "10000000000" },
+      },
       probability: { yesBps: 4000, noBps: 6000 },
       generatedAt: "2026-07-22T00:00:01.000Z",
       lifecycle: {
@@ -281,10 +289,18 @@ describe("pilot market discovery", () => {
     const client = { requestJson: async (path: string) => {
       calls.push(path);
       return path.includes("/surface")
-        ? { surface: { pools: { yesPool: "11", noPool: "12", stale: false }, odds: { yesBps: 4783, noBps: 5217 } }, metadata: { stale: false } }
+        ? { surface: { pools: { yesPool: "11", noPool: "12", stale: false }, activation: row("BTC", "five_minute", 1).selectedMarket.activation, odds: { yesBps: 4783, noBps: 5217 } }, metadata: { stale: false } }
         : { markets: [candidate], metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: "2026-07-22T00:00:00.000Z", stale: false } };
     } };
     await expect(new MarketsClient(client as never).current("BTC", "five_minute")).resolves.toMatchObject({ pools: { yes: "11", no: "12" }, probability: { yesBps: 4783, noBps: 5217 } });
     expect(calls).toHaveLength(2);
+  });
+
+  it("rejects_display_only_pools_without_typed_activation_state", () => {
+    const value = row("BTC", "five_minute", 1_800_000_000);
+    expect(() => parsePilotMarket({
+      ...value,
+      selectedMarket: { pools: { yesPool: "0 SOL", noPool: "0 SOL", stale: false }, odds: value.selectedMarket.odds },
+    }, false)).toThrowError(expect.objectContaining({ code: "validation" }));
   });
 });

@@ -56,7 +56,7 @@ export type {
   PilotPositionLifecycleState,
 } from "./lifecycle.js";
 export { MarketsClient, parsePilotMarket } from "./markets.js";
-export type { CanonicalMarketIdentity, PilotMarket } from "./markets.js";
+export type { CanonicalMarketIdentity, PilotActivationSide, PilotMarket } from "./markets.js";
 export {
   PYTH_FEED_IDS,
   PriceStore,

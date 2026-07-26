@@ -5,6 +5,8 @@ export const calculateBufferedEntrySize = ({
   maximumAggregateExposure,
   yesRealPool,
   noRealPool,
+  yesActivated,
+  noActivated,
   activationLimit,
   activationBuffer,
 }: {
@@ -14,6 +16,8 @@ export const calculateBufferedEntrySize = ({
   maximumAggregateExposure: bigint;
   yesRealPool: bigint;
   noRealPool: bigint;
+  yesActivated: boolean;
+  noActivated: boolean;
   activationLimit: bigint;
   activationBuffer: bigint;
 }): bigint => {
@@ -21,6 +25,11 @@ export const calculateBufferedEntrySize = ({
   const usableActivation = activationLimit - activationBuffer;
   const yesCapacity = usableActivation - yesRealPool;
   const noCapacity = usableActivation - noRealPool;
-  return [configuredTradeSize, maximumTradeSize, remainingExposure, yesCapacity, noCapacity]
+  const sideCapacities = [
+    ...(yesActivated ? [] : [yesCapacity]),
+    ...(noActivated ? [] : [noCapacity]),
+  ];
+  if (sideCapacities.length === 0) return 0n;
+  return [configuredTradeSize, maximumTradeSize, remainingExposure, ...sideCapacities]
     .reduce((minimum, value) => value < minimum ? value : minimum);
 };

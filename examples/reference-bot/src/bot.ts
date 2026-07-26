@@ -246,7 +246,9 @@ export const runMarketTick = async ({
     noEdgeBps: Math.round(((1 - fairProbability) - noQuote.executableProbabilityBps / 10_000) * 10_000),
     effectiveFeeBps: decision.quote.closingProtection.effectiveFeeBps, feeMode: decision.quote.feeBreakdown.feeMode,
     closingPhase: decision.quote.closingProtection.phase, selectedSide: decision.quote.side,
-    proposedSize: evaluation.proposedSizeLamports.toString(), yesRealPool: evaluation.market.pools.yes, noRealPool: evaluation.market.pools.no,
+    proposedSize: evaluation.proposedSizeLamports.toString(),
+    yesRealPool: evaluation.market.activation.yes.realPoolCollateralUnits,
+    noRealPool: evaluation.market.activation.no.realPoolCollateralUnits,
   };
   if (decision.action !== "buy") return event(tick, "entry", decision.action, decision.reason, { marketId: evaluation.market.marketId, details });
   let result: RuntimeExecution;

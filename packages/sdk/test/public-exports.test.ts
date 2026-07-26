@@ -39,6 +39,7 @@ describe("public SDK exports", () => {
       "parsePilotPositionLifecycle",
       "positionIfWinPayout",
       "positionSideExposures",
+      "seedHermesHistory",
       "settlementOutcome",
       "subscribeHermes",
       "terminalActionFor",

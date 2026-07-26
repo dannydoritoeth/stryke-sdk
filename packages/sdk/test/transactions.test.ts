@@ -40,6 +40,10 @@ const market: PilotMarket = {
   },
   stale: false,
   pools: { yes: "0 SOL", no: "0 SOL", stale: false },
+  activation: {
+    yes: { activated: false, thresholdCollateralUnits: "10000000000", realPoolCollateralUnits: "0", feeModeForNextBuy: "activation_waived", feeModeForNextSell: "activation_waived" },
+    no: { activated: false, thresholdCollateralUnits: "10000000000", realPoolCollateralUnits: "0", feeModeForNextBuy: "activation_waived", feeModeForNextSell: "activation_waived" },
+  },
   probability: { yesBps: 5000, noBps: 5000 },
   raw: {
     tokenMint: "So11111111111111111111111111111111111111112",

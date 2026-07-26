@@ -182,10 +182,17 @@ export const createSdkRuntimeAdapter = ({
       );
       const aggregateExposureLamports = activePortfolio.reduce((sum, position) => sum + BigInt(position.yesCostBasisCollateralUnits ?? "0") + BigInt(position.noCostBasisCollateralUnits ?? "0"), 0n);
       const openPositions = activePortfolio.length;
+      const yesActivation = market.activation.yes;
+      const noActivation = market.activation.no;
+      if (
+        BigInt(yesActivation.thresholdCollateralUnits) !== config.feeFreeActivationLimitLamports ||
+        BigInt(noActivation.thresholdCollateralUnits) !== config.feeFreeActivationLimitLamports
+      ) throw new StrykeSdkError("configuration", "Configured fee-free activation limit does not match the authoritative market policy");
       const proposedSizeLamports = calculateBufferedEntrySize({
         configuredTradeSize: config.tradeSizeLamports, maximumTradeSize: config.maximumTradeSizeLamports,
         aggregateExposure: aggregateExposureLamports, maximumAggregateExposure: config.maximumAggregateExposureLamports,
-        yesRealPool: BigInt(market.pools.yes), noRealPool: BigInt(market.pools.no),
+        yesRealPool: BigInt(yesActivation.realPoolCollateralUnits), noRealPool: BigInt(noActivation.realPoolCollateralUnits),
+        yesActivated: yesActivation.activated, noActivated: noActivation.activated,
         activationLimit: config.feeFreeActivationLimitLamports, activationBuffer: config.feeFreeBufferLamports,
       });
       if (proposedSizeLamports <= 0n) throw new StrykeSdkError("quote_blocked", "Buffered fee-free activation capacity is unavailable");
