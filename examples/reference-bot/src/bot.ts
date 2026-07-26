@@ -141,7 +141,11 @@ export const runMarketTick = async ({
       positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "position_data_stale" });
       continue;
     }
-    const fairProbability = estimateFairProbability(evaluation.estimatorInput, config.estimator);
+    const fairProbability = estimateFairProbability(evaluation.estimatorInput, config.estimator, {
+      lookbackSeconds: config.historyLookbackSeconds[config.expiryFamily], minimumHistoryCoverageBps: config.minimumHistoryCoverageBps,
+      minimumVolatilityBpsPerSqrtHour: config.minimumVolatilityBpsPerSqrtHour, maximumVolatilityBpsPerSqrtHour: config.maximumVolatilityBpsPerSqrtHour,
+      maximumModelProbabilityBps: config.maximumModelProbabilityBps,
+    });
     const decision: PositionDecision = decidePositionExit({
       side: exposure.side, fairProbability, sellQuote: evaluation.sellQuote,
       shares: exposure.shares,
@@ -194,7 +198,11 @@ export const runMarketTick = async ({
     if (isTradingLockedError(error)) return event(tick, "entry", "blocked", "trading_locked_until_settlement");
     throw error;
   }
-  const fairProbability = estimateFairProbability(evaluation.estimatorInput, config.estimator);
+  const fairProbability = estimateFairProbability(evaluation.estimatorInput, config.estimator, {
+    lookbackSeconds: config.historyLookbackSeconds[config.expiryFamily], minimumHistoryCoverageBps: config.minimumHistoryCoverageBps,
+    minimumVolatilityBpsPerSqrtHour: config.minimumVolatilityBpsPerSqrtHour, maximumVolatilityBpsPerSqrtHour: config.maximumVolatilityBpsPerSqrtHour,
+    maximumModelProbabilityBps: config.maximumModelProbabilityBps,
+  });
   const decision: EntryDecision = decideEntry({
     fairProbability, quote: evaluation.buyQuote, config,
     secondsRemaining: evaluation.estimatorInput.secondsRemaining,

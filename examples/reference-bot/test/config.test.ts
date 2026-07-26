@@ -9,6 +9,21 @@ describe("reference bot config", () => {
     expect(referenceBotDefaults.maximumOpenPositions).toBe(1);
     expect(() => parseReferenceBotConfig({ maximumOpenPositions: 2 })).toThrow(/maximumOpenPositions/);
   });
+  it("validates_volatility_controls_and_preserves_expiry_family_lookbacks", () => {
+    const config = parseReferenceBotConfig({
+      estimator: "volatility_adjusted_probability",
+      historyLookbackSeconds: { one_minute: 60, five_minute: 1_200, fifteen_minute: 900, hourly: 21_600 },
+      minimumHistoryCoverageBps: 8_000,
+      minimumVolatilityBpsPerSqrtHour: 10,
+      maximumVolatilityBpsPerSqrtHour: 1_000,
+      maximumModelProbabilityBps: 9_500,
+    });
+    expect(config.historyLookbackSeconds).toEqual({ one_minute: 60, five_minute: 1_200, fifteen_minute: 900, hourly: 21_600 });
+    expect(config).toMatchObject({ estimator: "volatility_adjusted_probability", minimumHistoryCoverageBps: 8_000, minimumVolatilityBpsPerSqrtHour: 10, maximumVolatilityBpsPerSqrtHour: 1_000, maximumModelProbabilityBps: 9_500 });
+    expect(() => parseReferenceBotConfig({ historyLookbackSeconds: { one_minute: 59 } as never })).toThrow("historyLookbackSeconds.one_minute");
+    expect(() => parseReferenceBotConfig({ minimumVolatilityBpsPerSqrtHour: 100, maximumVolatilityBpsPerSqrtHour: 99 })).toThrow("maximumVolatilityBpsPerSqrtHour");
+    expect(() => parseReferenceBotConfig({ maximumModelProbabilityBps: 5_000 })).toThrow("maximumModelProbabilityBps");
+  });
   it("defaults_read_only_live_off_and_kill_switch_on", () => {
     expect(referenceBotDefaults).toMatchObject({ readOnlyMode: true, liveTradingEnabled: false, killSwitchEnabled: true });
   });
@@ -74,7 +89,7 @@ describe("reference bot config", () => {
       ["tickIntervalMs", 1_000, Number.MAX_SAFE_INTEGER],
       ["stopLossBps", 1, 10_000],
       ["takeProfitBps", 1, Number.MAX_SAFE_INTEGER],
-      ["priceHistoryMaxPoints", 2, 10_000],
+      ["priceHistoryMaxPoints", 2, 100_000],
     ] as const;
     for (const [name, minimum, maximum] of bounded) {
       expect(parseReferenceBotConfig({ [name]: minimum })).toHaveProperty(name, minimum);

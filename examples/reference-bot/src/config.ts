@@ -1,14 +1,19 @@
 import { StrykeSdkError, type PilotAsset, type PilotExpiryFamily } from "@stryke/sdk";
 import { resolve } from "node:path";
 
-import type { BaselineEstimator } from "./strategy.js";
+import type { ReferenceEstimator } from "./strategy.js";
 
 export type ReferenceBotConfig = {
   profile: ReferenceBotProfile;
   asset: PilotAsset;
   expiryFamily: PilotExpiryFamily;
   side: "yes" | "no";
-  estimator: BaselineEstimator;
+  estimator: ReferenceEstimator;
+  historyLookbackSeconds: Record<PilotExpiryFamily, number>;
+  minimumHistoryCoverageBps: number;
+  minimumVolatilityBpsPerSqrtHour: number;
+  maximumVolatilityBpsPerSqrtHour: number;
+  maximumModelProbabilityBps: number;
   tradeSizeLamports: bigint;
   maximumTradeSizeLamports: bigint;
   maximumAggregateExposureLamports: bigint;
@@ -48,7 +53,12 @@ export const referenceBotDefaults: ReferenceBotConfig = {
   tickIntervalMs: 5_000,
   stopLossBps: 1_000,
   takeProfitBps: 2_000,
-  priceHistoryMaxPoints: 120,
+  priceHistoryMaxPoints: 20_000,
+  historyLookbackSeconds: { one_minute: 180, five_minute: 600, fifteen_minute: 1_800, hourly: 10_800 },
+  minimumHistoryCoverageBps: 8_000,
+  minimumVolatilityBpsPerSqrtHour: 5,
+  maximumVolatilityBpsPerSqrtHour: 2_000,
+  maximumModelProbabilityBps: 9_500,
   readOnlyMode: true,
   liveTradingEnabled: false,
   killSwitchEnabled: true,
@@ -96,12 +106,19 @@ export const parseReferenceBotConfig = (
   for (const forbidden of ["privateKey", "seedPhrase", "mnemonic", "secretKey"]) {
     if (input[forbidden] !== undefined) throw new StrykeSdkError("configuration", "Inline wallet secrets are not supported");
   }
-  const config = { ...referenceBotDefaults, ...input } as ReferenceBotConfig;
+  const config = {
+    ...referenceBotDefaults,
+    ...input,
+    historyLookbackSeconds: {
+      ...referenceBotDefaults.historyLookbackSeconds,
+      ...((input.historyLookbackSeconds as Partial<Record<PilotExpiryFamily, number>> | undefined) ?? {}),
+    },
+  } as ReferenceBotConfig;
   if (!["paper", "devnet", "live"].includes(config.profile)) configurationError("profile");
   if (!["BTC", "SOL"].includes(config.asset)) configurationError("asset");
   if (!["one_minute", "five_minute", "fifteen_minute", "hourly"].includes(config.expiryFamily)) configurationError("expiryFamily");
   if (!["yes", "no"].includes(config.side)) configurationError("side");
-  if (!["distance_to_strike", "distance_momentum"].includes(config.estimator)) configurationError("estimator");
+  if (!["distance_to_strike", "distance_momentum", "volatility_adjusted_probability"].includes(config.estimator)) configurationError("estimator");
   for (const key of ["readOnlyMode", "liveTradingEnabled", "killSwitchEnabled"] as const) {
     if (typeof config[key] !== "boolean") configurationError(key);
   }
@@ -115,7 +132,17 @@ export const parseReferenceBotConfig = (
   config.tickIntervalMs = integer(config.tickIntervalMs, "tickIntervalMs", 1_000, Number.MAX_SAFE_INTEGER);
   config.stopLossBps = integer(config.stopLossBps, "stopLossBps", 1, 10_000);
   config.takeProfitBps = integer(config.takeProfitBps, "takeProfitBps", 1, Number.MAX_SAFE_INTEGER);
-  config.priceHistoryMaxPoints = integer(config.priceHistoryMaxPoints, "priceHistoryMaxPoints", 2, 10_000);
+  config.priceHistoryMaxPoints = integer(config.priceHistoryMaxPoints, "priceHistoryMaxPoints", 2, 100_000);
+  const lookbackBounds: Record<PilotExpiryFamily, readonly [number, number]> = {
+    one_minute: [60, 300], five_minute: [300, 1_200], fifteen_minute: [900, 3_600], hourly: [3_600, 21_600],
+  };
+  for (const family of Object.keys(lookbackBounds) as PilotExpiryFamily[]) {
+    config.historyLookbackSeconds[family] = integer(config.historyLookbackSeconds[family], `historyLookbackSeconds.${family}`, ...lookbackBounds[family]);
+  }
+  config.minimumHistoryCoverageBps = integer(config.minimumHistoryCoverageBps, "minimumHistoryCoverageBps", 1, 10_000);
+  config.minimumVolatilityBpsPerSqrtHour = integer(config.minimumVolatilityBpsPerSqrtHour, "minimumVolatilityBpsPerSqrtHour", 1, 100_000);
+  config.maximumVolatilityBpsPerSqrtHour = integer(config.maximumVolatilityBpsPerSqrtHour, "maximumVolatilityBpsPerSqrtHour", config.minimumVolatilityBpsPerSqrtHour, 100_000);
+  config.maximumModelProbabilityBps = integer(config.maximumModelProbabilityBps, "maximumModelProbabilityBps", 5_001, 9_999);
   if (config.tradeSizeLamports > config.maximumTradeSizeLamports) configurationError("tradeSizeLamports");
   if (config.maximumAggregateExposureLamports < config.maximumTradeSizeLamports) configurationError("maximumAggregateExposureLamports");
   for (const key of ["apiBaseUrl", "solanaRpcUrl", "pythHermesUrl", "walletAdapterPath"] as const) {
@@ -153,7 +180,7 @@ export const parseReferenceBotEnv = (
   const asset = required("STRYKE_ASSET", referenceBotDefaults.asset) as PilotAsset;
   const expiryFamily = required("STRYKE_EXPIRY_FAMILY", referenceBotDefaults.expiryFamily) as PilotExpiryFamily;
   const side = required("STRYKE_SIDE", referenceBotDefaults.side) as "yes" | "no";
-  const estimator = required("STRYKE_ESTIMATOR", referenceBotDefaults.estimator) as BaselineEstimator;
+  const estimator = required("STRYKE_ESTIMATOR", referenceBotDefaults.estimator) as ReferenceEstimator;
   const sol = (name: string, fallback: bigint) => solToLamports(required(name, `${Number(fallback) / 1e9}`), name);
   const numeric = (name: string, fallback: number) => {
     if (activeLive) required(name);
@@ -172,6 +199,16 @@ export const parseReferenceBotEnv = (
     stopLossBps: numeric("STRYKE_STOP_LOSS_BPS", referenceBotDefaults.stopLossBps),
     takeProfitBps: numeric("STRYKE_TAKE_PROFIT_BPS", referenceBotDefaults.takeProfitBps),
     priceHistoryMaxPoints: numeric("STRYKE_PRICE_HISTORY_MAX_POINTS", referenceBotDefaults.priceHistoryMaxPoints),
+    historyLookbackSeconds: {
+      one_minute: numeric("STRYKE_HISTORY_LOOKBACK_SECONDS_1M", referenceBotDefaults.historyLookbackSeconds.one_minute),
+      five_minute: numeric("STRYKE_HISTORY_LOOKBACK_SECONDS_5M", referenceBotDefaults.historyLookbackSeconds.five_minute),
+      fifteen_minute: numeric("STRYKE_HISTORY_LOOKBACK_SECONDS_15M", referenceBotDefaults.historyLookbackSeconds.fifteen_minute),
+      hourly: numeric("STRYKE_HISTORY_LOOKBACK_SECONDS_1H", referenceBotDefaults.historyLookbackSeconds.hourly),
+    },
+    minimumHistoryCoverageBps: numeric("STRYKE_MINIMUM_HISTORY_COVERAGE_BPS", referenceBotDefaults.minimumHistoryCoverageBps),
+    minimumVolatilityBpsPerSqrtHour: numeric("STRYKE_MINIMUM_VOLATILITY_BPS_PER_SQRT_HOUR", referenceBotDefaults.minimumVolatilityBpsPerSqrtHour),
+    maximumVolatilityBpsPerSqrtHour: numeric("STRYKE_MAXIMUM_VOLATILITY_BPS_PER_SQRT_HOUR", referenceBotDefaults.maximumVolatilityBpsPerSqrtHour),
+    maximumModelProbabilityBps: numeric("STRYKE_MAXIMUM_MODEL_PROBABILITY_BPS", referenceBotDefaults.maximumModelProbabilityBps),
     readOnlyMode, liveTradingEnabled, killSwitchEnabled,
     checkpointPath: profiledEnv.STRYKE_CHECKPOINT_PATH ?? referenceBotDefaults.checkpointPath,
     pythHermesUrl: profiledEnv.STRYKE_PYTH_HERMES_URL ?? referenceBotDefaults.pythHermesUrl,

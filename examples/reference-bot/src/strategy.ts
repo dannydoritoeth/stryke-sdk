@@ -6,6 +6,9 @@ export type FairProbabilityInput = {
 };
 
 export type BaselineEstimator = "distance_to_strike" | "distance_momentum";
+export type ReferenceEstimator = BaselineEstimator | "volatility_adjusted_probability";
+
+export type EstimatorSettings = import("./strategy/history.js").VolatilitySettings;
 
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
@@ -53,13 +56,21 @@ export const distanceMomentumProbability = (input: FairProbabilityInput): number
 
 export const estimateFairProbability = (
   input: FairProbabilityInput,
-  estimator: BaselineEstimator = "distance_to_strike"
+  estimator: ReferenceEstimator = "distance_to_strike",
+  settings?: EstimatorSettings
 ): number => {
+  if (estimator === "volatility_adjusted_probability") {
+    if (!settings) throw new RangeError("Volatility estimator settings are required");
+    return volatilityAdjustedProbabilities(input, settings).yesProbability;
+  }
   // Educational baselines only. They make no accuracy or profitability claim.
   return estimator === "distance_momentum"
     ? distanceMomentumProbability(input)
     : distanceToStrikeProbability(input);
 };
+
+export { buildVolatilitySnapshot, type VolatilitySettings, type VolatilitySnapshot } from "./strategy/history.js";
+export { volatilityAdjustedProbabilities, type VolatilityProbabilityResult } from "./strategy/volatility-probability.js";
 
 export const assertFairProbability = (value: number): number => {
   if (!Number.isFinite(value) || value < 0 || value > 1) {
@@ -67,3 +78,4 @@ export const assertFairProbability = (value: number): number => {
   }
   return value;
 };
+import { volatilityAdjustedProbabilities } from "./strategy/volatility-probability.js";
