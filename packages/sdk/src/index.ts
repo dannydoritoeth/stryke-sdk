@@ -61,6 +61,7 @@ export {
   PYTH_FEED_IDS,
   PriceStore,
   parseHermesUpdate,
+  seedHermesHistory,
   subscribeHermes,
 } from "./prices.js";
 export {

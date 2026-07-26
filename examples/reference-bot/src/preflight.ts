@@ -9,6 +9,7 @@ export type PreflightCheck =
   | "environment"
   | "api"
   | "pyth"
+  | "pyth_history"
   | "wallet"
   | "rpc"
   | "funding";

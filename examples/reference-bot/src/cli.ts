@@ -13,6 +13,7 @@ import {
   StrykeSdkError,
   TransactionsClient,
   subscribeHermes,
+  seedHermesHistory,
   type ExecutableQuote,
 } from "@stryke/sdk";
 import { createSolanaRpc, isTransactionSigner, type TransactionSigner } from "@solana/kit";
@@ -128,7 +129,8 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
     "Check STRYKE_API_BASE_URL and confirm the invited devnet API is healthy and compatible.",
     () => StrykeClient.connect({ apiBaseUrl: bindings.apiBaseUrl! })
   );
-  const priceStore = new PriceStore({ maximumHistoryPoints: config.priceHistoryMaxPoints });
+  const lookbackSeconds = config.historyLookbackSeconds[config.expiryFamily];
+  const priceStore = new PriceStore({ maximumHistoryPoints: config.priceHistoryMaxPoints, historyWindowMs: (lookbackSeconds + 60) * 1_000 });
   const pythEndpoint = bindings.pythHermesUrl;
   const pythRemediation = "Check STRYKE_PYTH_HERMES_URL and network access, then retry; do not substitute another price source.";
   const subscription = await runPreflightCheck(
@@ -143,6 +145,11 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
     try {
       await waitForPriceHistory(priceStore, config.asset);
       emitPreflight(profile, "pyth", "passed", `Received two fresh ordered ${config.asset} Pyth prices.`);
+      if (config.estimator === "volatility_adjusted_probability") {
+        emitPreflight(profile, "pyth_history", "checking", `Loading ${lookbackSeconds}s of timestamped ${config.asset} Pyth history.`);
+        await seedHermesHistory({ endpoint: pythEndpoint, asset: config.asset, store: priceStore, lookbackSeconds });
+        emitPreflight(profile, "pyth_history", "passed", `Loaded timestamped ${config.asset} Pyth history for the configured volatility window.`);
+      }
     } catch (error) {
       emitPreflight(profile, "pyth", "failed", error instanceof Error ? error.message : "Pyth startup failed", pythRemediation);
       throw error;

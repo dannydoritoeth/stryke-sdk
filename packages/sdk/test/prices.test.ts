@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PYTH_FEED_IDS, PriceStore, StrykeSdkError } from "../src/index.js";
+import { PYTH_FEED_IDS, PriceStore, StrykeSdkError, seedHermesHistory } from "../src/index.js";
 
 const update = (
   asset: "BTC" | "SOL",
@@ -17,6 +17,21 @@ const update = (
 });
 
 describe("Pyth price store", () => {
+  it("seeds_time_spanning_history_from_the_configured_hermes_endpoint", async () => {
+    const now = 1_800_000_000_000;
+    const store = new PriceStore({ now: () => now, historyWindowMs: 700_000 });
+    const requested: number[] = [];
+    const request = async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      const timestamp = Number(url.pathname.split("/").at(-1));
+      requested.push(timestamp);
+      return new Response(JSON.stringify(update("BTC", timestamp)), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    await expect(seedHermesHistory({ endpoint: "https://hermes.example.test", asset: "BTC", store, lookbackSeconds: 600, sampleCount: 3, now: () => now, request: request as typeof fetch })).resolves.toBe(3);
+    expect(requested.at(-1)! - requested[0]!).toBe(600);
+    expect(store.history("BTC")).toHaveLength(3);
+    expect(store.current("BTC").publishTime).toBe(requested.at(-1));
+  });
   it("maps_btc_and_sol_to_approved_fixed_pyth_feeds", () => {
     expect(PYTH_FEED_IDS).toEqual({
       BTC: "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",

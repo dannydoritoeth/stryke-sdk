@@ -68,6 +68,18 @@ export class PriceStore {
     return parsed;
   }
 
+  seedHistorical(asset: PilotAsset, update: unknown): PricePoint {
+    const parsed = parseHermesUpdate(asset, update);
+    const ageMs = this.now() - parsed.publishTime * 1_000;
+    if (ageMs < -this.futureToleranceMs || ageMs > this.historyWindowMs) {
+      throw new StrykeSdkError("source_stale", "Historical Pyth price is outside the configured history window");
+    }
+    const byTime = new Map((this.points.get(asset) ?? []).map((point) => [point.publishTime, point]));
+    byTime.set(parsed.publishTime, parsed);
+    this.points.set(asset, [...byTime.values()].sort((a, b) => a.publishTime - b.publishTime).slice(-this.maximumHistoryPoints));
+    return parsed;
+  }
+
   current(asset: PilotAsset): PricePoint {
     const point = this.points.get(asset)?.at(-1);
     if (!point || this.now() - point.publishTime * 1_000 > this.staleAfterMs) {
@@ -99,6 +111,35 @@ export class PriceStore {
     return this.states.get(asset) ?? "unavailable";
   }
 }
+
+export const seedHermesHistory = async ({
+  endpoint, asset, store, lookbackSeconds, sampleCount = 9, now = Date.now, request = fetch,
+}: {
+  endpoint: string;
+  asset: PilotAsset;
+  store: PriceStore;
+  lookbackSeconds: number;
+  sampleCount?: number;
+  now?: () => number;
+  request?: typeof fetch;
+}): Promise<number> => {
+  if (!Number.isSafeInteger(lookbackSeconds) || lookbackSeconds <= 0 || !Number.isSafeInteger(sampleCount) || sampleCount < 2 || sampleCount > 100) {
+    throw new StrykeSdkError("configuration", "Historical Pyth sampling configuration is invalid");
+  }
+  const endpointUrl = new URL(endpoint);
+  const end = Math.floor(now() / 1_000) - 2;
+  const start = end - lookbackSeconds;
+  const timestamps = Array.from({ length: sampleCount }, (_, index) => Math.round(start + (lookbackSeconds * index) / (sampleCount - 1)));
+  for (const timestamp of timestamps) {
+    const url = new URL(`/v2/updates/price/${timestamp}`, endpointUrl);
+    url.searchParams.append("ids[]", PYTH_FEED_IDS[asset].slice(2));
+    url.searchParams.set("parsed", "true");
+    const response = await request(url, { headers: { accept: "application/json" } });
+    if (!response.ok) throw new StrykeSdkError("source_unavailable", `Pyth history request failed (${response.status})`, true);
+    store.seedHistorical(asset, await response.json());
+  }
+  return timestamps.length;
+};
 
 export const parseHermesUpdate = (asset: PilotAsset, value: unknown): PricePoint => {
   if (typeof value !== "object" || value === null) {
