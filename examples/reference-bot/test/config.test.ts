@@ -4,6 +4,11 @@ import { parseReferenceBotConfig, parseReferenceBotEnv, referenceBotDefaults, re
 import { loadWalletForLiveTrading } from "../src/wallet.js";
 
 describe("reference bot config", () => {
+  it("uses_a_conservative_edge_and_exactly_one_active_position", () => {
+    expect(referenceBotDefaults.minimumEntryEdgeBps).toBe(500);
+    expect(referenceBotDefaults.maximumOpenPositions).toBe(1);
+    expect(() => parseReferenceBotConfig({ maximumOpenPositions: 2 })).toThrow(/maximumOpenPositions/);
+  });
   it("defaults_read_only_live_off_and_kill_switch_on", () => {
     expect(referenceBotDefaults).toMatchObject({ readOnlyMode: true, liveTradingEnabled: false, killSwitchEnabled: true });
   });
@@ -40,7 +45,7 @@ describe("reference bot config", () => {
       STRYKE_ESTIMATOR: "distance_momentum", STRYKE_TRADE_SIZE_SOL: "0.001000001",
       STRYKE_MAXIMUM_TRADE_SIZE_SOL: "0.002", STRYKE_MAXIMUM_AGGREGATE_EXPOSURE_SOL: "0.003",
       STRYKE_MINIMUM_ENTRY_EDGE_BPS: "7", STRYKE_MAXIMUM_PRICE_IMPACT_BPS: "8",
-      STRYKE_MINIMUM_SECONDS_TO_EXPIRY: "9", STRYKE_MAXIMUM_OPEN_POSITIONS: "2",
+      STRYKE_MINIMUM_SECONDS_TO_EXPIRY: "9", STRYKE_MAXIMUM_OPEN_POSITIONS: "1",
       STRYKE_TICK_INTERVAL_MS: "1000", STRYKE_STOP_LOSS_BPS: "10", STRYKE_TAKE_PROFIT_BPS: "11",
       STRYKE_PRICE_HISTORY_MAX_POINTS: "12", STRYKE_READ_ONLY_MODE: "true",
       STRYKE_LIVE_TRADING_ENABLED: "false", STRYKE_KILL_SWITCH_ENABLED: "true",
@@ -52,7 +57,7 @@ describe("reference bot config", () => {
       asset: "SOL", expiryFamily: "one_minute", side: "no", estimator: "distance_momentum",
       tradeSizeLamports: 1_000_001n, maximumTradeSizeLamports: 2_000_000n,
       maximumAggregateExposureLamports: 3_000_000n, minimumEntryEdgeBps: 7,
-      maximumPriceImpactBps: 8, minimumSecondsToExpiry: 9, maximumOpenPositions: 2,
+      maximumPriceImpactBps: 8, minimumSecondsToExpiry: 9, maximumOpenPositions: 1,
       tickIntervalMs: 1000, stopLossBps: 10, takeProfitBps: 11, priceHistoryMaxPoints: 12,
       apiBaseUrl: "https://api.example.com", solanaRpcUrl: "https://rpc.example.com",
       pythHermesUrl: "https://hermes.example.com", checkpointPath: "state/checkpoint.json",
@@ -65,7 +70,7 @@ describe("reference bot config", () => {
       ["minimumEntryEdgeBps", 0, 10_000],
       ["maximumPriceImpactBps", 0, 9_999],
       ["minimumSecondsToExpiry", 0, Number.MAX_SAFE_INTEGER],
-      ["maximumOpenPositions", 1, Number.MAX_SAFE_INTEGER],
+      ["maximumOpenPositions", 1, 1],
       ["tickIntervalMs", 1_000, Number.MAX_SAFE_INTEGER],
       ["stopLossBps", 1, 10_000],
       ["takeProfitBps", 1, Number.MAX_SAFE_INTEGER],
@@ -76,7 +81,7 @@ describe("reference bot config", () => {
       expect(parseReferenceBotConfig({ [name]: maximum })).toHaveProperty(name, maximum);
       expect(() => parseReferenceBotConfig({ [name]: minimum - 1 })).toThrow(name);
       expect(() => parseReferenceBotConfig({ [name]: maximum + 1 })).toThrow(name);
-      expect(() => parseReferenceBotConfig({ [name]: minimum + 0.5 })).toThrow(name);
+      if (minimum !== maximum) expect(() => parseReferenceBotConfig({ [name]: minimum + 0.5 })).toThrow(name);
     }
   });
 

@@ -27,6 +27,11 @@ export type RuntimeEvent = {
   clientActionId?: string;
   signature?: string;
   details?: Readonly<Record<string, string | number | boolean>>;
+  positionDecisions?: readonly {
+    positionId: string;
+    action: "sell" | "hold" | "claim" | "refund" | "decision_unavailable";
+    reason: string;
+  }[];
 };
 
 export type PositionEvaluation = {
@@ -93,29 +98,49 @@ export const runMarketTick = async ({
 
   const positions = (await adapter.listPositions()).slice().sort((a, b) => a.positionId.localeCompare(b.positionId));
   const nonActionableTerminalPositions = new Set<string>();
+  const terminalCandidates: Array<{ position: PilotPosition; action: PositionTerminalAction }> = [];
+  const sellCandidates: Array<{
+    position: PilotPosition;
+    exposure: PilotPositionSideExposure;
+    evaluation: PositionEvaluation;
+    decision: PositionDecision;
+    details: Record<string, string | number | boolean>;
+  }> = [];
+  const positionDecisions: Array<{
+    positionId: string;
+    action: "sell" | "hold" | "claim" | "refund" | "decision_unavailable";
+    reason: string;
+  }> = [];
   for (const position of positions) {
     if (terminalStates.has(position.lifecycle.state)) {
       let action: PositionTerminalAction;
       try { action = terminalActionFor(position); }
       catch { nonActionableTerminalPositions.add(position.positionId); continue; }
-      if (config.readOnlyMode || !config.liveTradingEnabled || config.killSwitchEnabled) {
-        return event(tick, "position", action, "terminal_dry_run", { positionId: position.positionId });
-      }
-      const result = await adapter.executeTerminal(position, action);
-      return event(tick, "position", action, "terminal_confirmed", { positionId: position.positionId, ...result });
+      terminalCandidates.push({ position, action });
+      positionDecisions.push({ positionId: position.positionId, action, reason: "authoritative_terminal_action" });
+      continue;
     }
     if (!openStates.has(position.lifecycle.state)) continue;
     const exposures = positionSideExposures(position);
-    if (exposures.length !== 1) return event(tick, "position", "decision_unavailable", "position_side_ambiguous", { positionId: position.positionId });
+    if (exposures.length !== 1) {
+      positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "position_side_ambiguous" });
+      continue;
+    }
     const exposure = exposures[0]!;
     let evaluation: PositionEvaluation;
     try { evaluation = await adapter.evaluatePosition(position, exposure); }
     catch (error) {
-      return isTradingLockedError(error)
-        ? event(tick, "position", "hold", "trading_locked_until_settlement", { positionId: position.positionId })
-        : event(tick, "position", "decision_unavailable", "position_evaluation_unavailable", { positionId: position.positionId });
+      positionDecisions.push({
+        positionId: position.positionId,
+        action: isTradingLockedError(error) ? "hold" : "decision_unavailable",
+        reason: isTradingLockedError(error) ? "trading_locked_until_settlement" : "position_evaluation_unavailable",
+      });
+      continue;
     }
-    if (!evaluation.dataFresh) return event(tick, "position", "decision_unavailable", "position_data_stale", { positionId: position.positionId });
+    if (!evaluation.dataFresh) {
+      positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "position_data_stale" });
+      continue;
+    }
     const fairProbability = estimateFairProbability(evaluation.estimatorInput, config.estimator);
     const decision: PositionDecision = decidePositionExit({
       side: exposure.side, fairProbability, sellQuote: evaluation.sellQuote,
@@ -125,19 +150,42 @@ export const runMarketTick = async ({
       takeProfitBps: config.takeProfitBps,
     });
     const details = { fairProbability, ...(decision.pnlBps === undefined ? {} : { pnlBps: decision.pnlBps.toString() }), ...(decision.sellNowValue === undefined ? {} : { sellNowValue: decision.sellNowValue.toString() }), ...(decision.holdValue === undefined ? {} : { holdValue: decision.holdValue.toString() }) };
-    if (decision.action !== "sell") return event(tick, "position", decision.action, decision.reason, { positionId: position.positionId, marketId: evaluation.market.marketId, details });
-    if (config.readOnlyMode || !config.liveTradingEnabled || config.killSwitchEnabled) return event(tick, "position", "sell", `${decision.reason}_dry_run`, { positionId: position.positionId, marketId: evaluation.market.marketId, details });
+    positionDecisions.push({ positionId: position.positionId, action: decision.action, reason: decision.reason });
+    if (decision.action === "sell") sellCandidates.push({ position, exposure, evaluation, decision, details });
+  }
+
+  const terminal = terminalCandidates[0];
+  if (terminal) {
+    if (config.readOnlyMode || !config.liveTradingEnabled || config.killSwitchEnabled) {
+      return event(tick, "position", terminal.action, "terminal_dry_run", { positionId: terminal.position.positionId, positionDecisions });
+    }
+    const result = await adapter.executeTerminal(terminal.position, terminal.action);
+    return event(tick, "position", terminal.action, "terminal_confirmed", { positionId: terminal.position.positionId, positionDecisions, ...result });
+  }
+
+  sellCandidates.sort((a, b) => {
+    const priority = (reason: string) => reason === "stop_loss" ? 0 : reason === "take_profit" ? 1 : 2;
+    return priority(a.decision.reason) - priority(b.decision.reason) || a.position.positionId.localeCompare(b.position.positionId);
+  });
+  const sell = sellCandidates[0];
+  if (sell) {
+    if (config.readOnlyMode || !config.liveTradingEnabled || config.killSwitchEnabled) {
+      return event(tick, "position", "sell", `${sell.decision.reason}_dry_run`, { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions });
+    }
     let result: RuntimeExecution;
-    try { result = await adapter.executeSell(position, exposure, evaluation); }
+    try { result = await adapter.executeSell(sell.position, sell.exposure, sell.evaluation); }
     catch (error) {
-      if (isTradingLockedError(error)) return event(tick, "position", "hold", "trading_locked_until_settlement", { positionId: position.positionId, marketId: evaluation.market.marketId, details });
+      if (isTradingLockedError(error)) return event(tick, "position", "hold", "trading_locked_until_settlement", { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions });
       throw error;
     }
-    return event(tick, "position", "sell", decision.reason, { positionId: position.positionId, marketId: evaluation.market.marketId, details, ...result });
+    return event(tick, "position", "sell", sell.decision.reason, { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions, ...result });
   }
 
   if (positions.some((position) => !completeStates.has(position.lifecycle.state) && !nonActionableTerminalPositions.has(position.positionId))) {
-    return event(tick, "wait", "hold", "position_not_economically_complete");
+    const locked = positionDecisions.find((decision) => decision.reason === "trading_locked_until_settlement");
+    return locked
+      ? event(tick, "position", "hold", locked.reason, { positionId: locked.positionId, positionDecisions })
+      : event(tick, "wait", "hold", "position_not_economically_complete", { positionDecisions });
   }
 
   let evaluation: EntryEvaluation;

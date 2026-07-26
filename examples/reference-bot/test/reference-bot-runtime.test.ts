@@ -73,6 +73,47 @@ describe("reference bot composed runtime", () => {
     await expect(runMarketTick({ tick: 2, config: live, adapter: runtime })).resolves.toMatchObject({ action: "sell", reason: "sell_now_exceeds_probability_weighted_hold" });
   });
 
+  it("all_open_positions_are_evaluated_before_entry", async () => {
+    const first = position("sellable", { positionId: "position-a" });
+    const second = position("sellable", { positionId: "position-b" });
+    const evaluated: string[] = [];
+    const runtime = adapter({
+      listPositions: async () => [second, first],
+      evaluatePosition: async (value, exposure) => {
+        evaluated.push(value.positionId);
+        return {
+          ...(await adapter().evaluatePosition(value, exposure)),
+          sellQuote: quote({ action: "sell", side: "yes", amount: "100", expectedShares: undefined, expectedNetProceeds: value.positionId === "position-b" ? "90" : "95", expiresAt: new Date(Date.now() + 60_000).toISOString() }),
+        };
+      },
+    });
+    const result = await runMarketTick({ tick: 1, config: live, adapter: runtime });
+    expect(evaluated).toEqual(["position-a", "position-b"]);
+    expect(result).toMatchObject({ action: "sell", reason: "stop_loss", positionId: "position-b" });
+    expect(result.positionDecisions).toHaveLength(2);
+    expect(runtime.executeSell).toHaveBeenCalledTimes(1);
+    expect(runtime.evaluateEntry).not.toHaveBeenCalled();
+  });
+
+  it("one_hold_does_not_starve_later_stop_loss_over_two_ticks", async () => {
+    const first = position("sellable", { positionId: "position-a" });
+    const second = position("sellable", { positionId: "position-b" });
+    const counts = new Map<string, number>();
+    const runtime = adapter({
+      listPositions: async () => [first, second],
+      evaluatePosition: async (value, exposure) => {
+        counts.set(value.positionId, (counts.get(value.positionId) ?? 0) + 1);
+        return {
+          ...(await adapter().evaluatePosition(value, exposure)),
+          sellQuote: quote({ action: "sell", side: "yes", amount: "100", expectedShares: undefined, expectedNetProceeds: value.positionId === "position-a" ? "95" : "90", expiresAt: new Date(Date.now() + 60_000).toISOString() }),
+        };
+      },
+    });
+    await runReferenceBot({ config: { ...live, readOnlyMode: true }, adapter: runtime, maximumTicks: 2, wait: async () => {} });
+    expect(Object.fromEntries(counts)).toEqual({ "position-a": 2, "position-b": 2 });
+    expect(runtime.executeSell).not.toHaveBeenCalled();
+  });
+
   it("runtime_stop_loss_and_take_profit_execute_full_position_sell", async () => {
     for (const [proceeds, reason] of [["90", "stop_loss"], ["120", "take_profit"]] as const) {
       const runtime = adapter({ listPositions: async () => [position()], evaluatePosition: async (value, exposure) => ({ ...(await adapter().evaluatePosition(value, exposure)), sellQuote: quote({ action: "sell", side: "yes", amount: "100", expectedShares: undefined, expectedNetProceeds: proceeds, expiresAt: new Date(Date.now() + 60_000).toISOString() }) }) });
@@ -133,7 +174,7 @@ describe("reference bot composed runtime", () => {
       }),
     });
 
-    await expect(runMarketTick({ tick: 1, config: live, adapter: runtime })).resolves.toMatchObject({
+    await expect(runMarketTick({ tick: 1, config: { ...live, minimumEntryEdgeBps: 0 }, adapter: runtime })).resolves.toMatchObject({
       action: "buy",
       details: { effectiveFeeBps: 700 },
     });
