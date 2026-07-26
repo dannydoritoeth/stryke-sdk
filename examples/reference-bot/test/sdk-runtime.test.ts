@@ -54,7 +54,10 @@ describe("SDK runtime composition", () => {
     await expect(runMarketTick({ tick: 1, config, adapter })).resolves.toMatchObject({ phase: "entry", action: "skip", reason: "edge", marketId: "sol-1m" });
     expect(calls[0]!.path).toContain("symbol=SOL");
     expect(calls[0]!.path).toContain("expiryFamily=one_minute");
-    expect(calls[1]!.body).toMatchObject({ action: "buy", side: "no", amount: "1234567", maxSlippageBps: 77 });
+    expect(calls.slice(1, 3).map(({ body }) => body)).toEqual([
+      expect.objectContaining({ action: "buy", side: "yes", amount: "1234567", maxSlippageBps: 77 }),
+      expect.objectContaining({ action: "buy", side: "no", amount: "1234567", maxSlippageBps: 77 }),
+    ]);
     const evaluation = await adapter.evaluateEntry();
     expect(evaluation.estimatorInput.priceHistory).toHaveLength(2);
     expect(config).toMatchObject({

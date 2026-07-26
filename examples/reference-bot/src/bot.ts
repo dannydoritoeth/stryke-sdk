@@ -11,7 +11,7 @@ import {
 } from "@stryke/sdk";
 
 import type { ReferenceBotConfig } from "./config.js";
-import { decideEntry, type EntryDecision } from "./entry.js";
+import { decideBestEntry, type BestEntryDecision } from "./entry.js";
 import { decidePositionExit, type PositionDecision } from "./manage-position.js";
 import { estimateFairProbability, type FairProbabilityInput } from "./strategy.js";
 
@@ -45,7 +45,8 @@ export type PositionEvaluation = {
 export type EntryEvaluation = {
   market: PilotMarket;
   estimatorInput: FairProbabilityInput;
-  buyQuote: ExecutableQuote;
+  buyQuotes: readonly [ExecutableQuote, ExecutableQuote];
+  proposedSizeLamports: bigint;
   aggregateExposureLamports: bigint;
   openPositions: number;
   dataFresh: boolean;
@@ -59,7 +60,7 @@ export interface ReferenceBotRuntimeAdapter {
   listPositions(): Promise<PilotPosition[]>;
   evaluatePosition(position: PilotPosition, exposure: PilotPositionSideExposure): Promise<PositionEvaluation>;
   evaluateEntry(): Promise<EntryEvaluation>;
-  executeBuy(evaluation: EntryEvaluation): Promise<RuntimeExecution>;
+  executeBuy(evaluation: EntryEvaluation, quote: ExecutableQuote): Promise<RuntimeExecution>;
   executeSell(position: PilotPosition, exposure: PilotPositionSideExposure, evaluation: PositionEvaluation): Promise<RuntimeExecution>;
   executeTerminal(position: PilotPosition, action: PositionTerminalAction): Promise<RuntimeExecution>;
 }
@@ -203,18 +204,18 @@ export const runMarketTick = async ({
     minimumVolatilityBpsPerSqrtHour: config.minimumVolatilityBpsPerSqrtHour, maximumVolatilityBpsPerSqrtHour: config.maximumVolatilityBpsPerSqrtHour,
     maximumModelProbabilityBps: config.maximumModelProbabilityBps,
   });
-  const decision: EntryDecision = decideEntry({
-    fairProbability, quote: evaluation.buyQuote, config,
+  const decision: BestEntryDecision = decideBestEntry({
+    fairProbability, quotes: evaluation.buyQuotes, config,
     secondsRemaining: evaluation.estimatorInput.secondsRemaining,
-    tradeSizeLamports: config.tradeSizeLamports,
+    tradeSizeLamports: evaluation.proposedSizeLamports,
     aggregateExposureLamports: evaluation.aggregateExposureLamports,
     openPositions: evaluation.openPositions,
     dataFresh: evaluation.dataFresh,
   });
-  const details = { fairProbability: decision.fairProbability, sideFairProbability: decision.sideFairProbability, quoteProbability: decision.quoteProbability, edgeBps: decision.edgeBps, effectiveFeeBps: evaluation.buyQuote.closingProtection.effectiveFeeBps };
+  const details = { fairProbability: decision.fairProbability, sideFairProbability: decision.sideFairProbability, quoteProbability: decision.quoteProbability, edgeBps: decision.edgeBps, effectiveFeeBps: decision.quote.closingProtection.effectiveFeeBps, selectedSide: decision.quote.side, proposedSize: evaluation.proposedSizeLamports.toString() };
   if (decision.action !== "buy") return event(tick, "entry", decision.action, decision.reason, { marketId: evaluation.market.marketId, details });
   let result: RuntimeExecution;
-  try { result = await adapter.executeBuy(evaluation); }
+  try { result = await adapter.executeBuy(evaluation, decision.quote); }
   catch (error) {
     if (isTradingLockedError(error)) return event(tick, "entry", "blocked", "trading_locked_until_settlement", { marketId: evaluation.market.marketId, details });
     throw error;
@@ -257,9 +258,11 @@ export const runReferenceBot = async ({
 };
 
 export * from "./config.js";
+export * from "./activation-policy.js";
 export * from "./entry.js";
 export * from "./logging.js";
 export * from "./manage-position.js";
 export * from "./sdk-runtime.js";
+export * from "./sizing.js";
 export * from "./strategy.js";
 export * from "./wallet.js";

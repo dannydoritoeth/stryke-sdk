@@ -2,6 +2,7 @@ import type { ActionCheckpoint, ExecutableQuote, QuoteSide } from "@stryke/sdk";
 
 import type { ReferenceBotConfig } from "./config.js";
 import { assertFairProbability } from "./strategy.js";
+import { activationEntryDecision } from "./activation-policy.js";
 
 export type EntryDecision = {
   action: "buy" | "skip" | "blocked" | "dry_run";
@@ -13,6 +14,42 @@ export type EntryDecision = {
   edgeBps: number;
   safetyChecks: Readonly<Record<string, boolean>>;
   quoteId: string;
+};
+
+export type BestEntryDecision = EntryDecision & { quote: ExecutableQuote };
+
+export const decideBestEntry = ({
+  fairProbability,
+  quotes,
+  config,
+  secondsRemaining,
+  tradeSizeLamports,
+  aggregateExposureLamports,
+  openPositions,
+  dataFresh,
+}: {
+  fairProbability: number;
+  quotes: readonly [ExecutableQuote, ExecutableQuote];
+  config: ReferenceBotConfig;
+  secondsRemaining: number;
+  tradeSizeLamports: bigint;
+  aggregateExposureLamports: bigint;
+  openPositions: number;
+  dataFresh: boolean;
+}): BestEntryDecision => {
+  if (quotes[0].marketStateVersion !== quotes[1].marketStateVersion || quotes[0].amount !== quotes[1].amount) {
+    const unavailable = decideEntry({ fairProbability, quote: quotes[0], config, secondsRemaining, tradeSizeLamports, aggregateExposureLamports, openPositions, dataFresh: false });
+    return { ...unavailable, action: "blocked", reason: "paired_quote_mismatch", quote: quotes[0] };
+  }
+  const decisions = quotes.map((quote) => ({
+    quote,
+    decision: decideEntry({ fairProbability, quote, config, secondsRemaining, tradeSizeLamports, aggregateExposureLamports, openPositions, dataFresh }),
+  }));
+  const eligible = decisions.filter(({ decision }) => Object.values(decision.safetyChecks).every(Boolean));
+  const ranked = (eligible.length > 0 ? eligible : decisions).sort((left, right) => right.decision.edgeBps - left.decision.edgeBps || left.quote.side.localeCompare(right.quote.side));
+  const [best, second] = ranked as [typeof decisions[number], typeof decisions[number] | undefined];
+  if (second && best.decision.edgeBps === second.decision.edgeBps) return { ...best.decision, action: "skip", reason: "edge_tie", quote: best.quote };
+  return { ...best.decision, quote: best.quote };
 };
 
 export const decideEntry = ({
@@ -50,6 +87,7 @@ export const decideEntry = ({
     fresh: dataFresh,
     checkpoint: checkpoint?.state !== "submitted" && checkpoint?.state !== "unknown",
     killSwitch: !config.killSwitchEnabled,
+    feeFreeOpen: activationEntryDecision(quote).allowed,
   } as const;
   const failed = Object.entries(safetyChecks).find(([, passed]) => !passed)?.[0];
   const base = { side: quote.side, fairProbability, sideFairProbability, quoteProbability, edgeBps, safetyChecks, quoteId: quote.quoteId };

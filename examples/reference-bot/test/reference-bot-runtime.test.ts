@@ -19,7 +19,7 @@ const adapter = (overrides: Partial<ReferenceBotRuntimeAdapter> = {}): Reference
   reconcilePending: vi.fn(async (checkpoint: ActionCheckpoint) => ({ state: "confirmed", clientActionId: checkpoint.clientActionId })),
   listPositions: vi.fn(async () => []),
   evaluatePosition: vi.fn(async () => ({ market, estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 120, priceHistory: history }, sellQuote: quote({ action: "sell", side: "yes", amount: "100", expectedShares: undefined, expectedNetProceeds: "90", expiresAt: new Date(Date.now() + 60_000).toISOString() }), ifWinPayout: "200", dataFresh: true })),
-  evaluateEntry: vi.fn(async () => ({ market, estimatorInput: { currentPrice: 101, strikePrice: 100, secondsRemaining: 120, priceHistory: history }, buyQuote: quote({ side: "yes", amount: live.tradeSizeLamports.toString(), executableProbabilityBps: 4000 }), aggregateExposureLamports: 0n, openPositions: 0, dataFresh: true })),
+  evaluateEntry: vi.fn(async () => ({ market, estimatorInput: { currentPrice: 101, strikePrice: 100, secondsRemaining: 120, priceHistory: history }, buyQuotes: [quote({ side: "yes", amount: live.tradeSizeLamports.toString(), executableProbabilityBps: 4000 }), quote({ side: "no", amount: live.tradeSizeLamports.toString(), executableProbabilityBps: 6000 })], proposedSizeLamports: live.tradeSizeLamports, aggregateExposureLamports: 0n, openPositions: 0, dataFresh: true })),
   executeBuy: vi.fn(async () => ({ clientActionId: "buy-1", signature: "buy-signature" })),
   executeSell: vi.fn(async () => ({ clientActionId: "sell-1", signature: "sell-signature" })),
   executeTerminal: vi.fn(async () => ({ clientActionId: "terminal-1", signature: "terminal-signature" })),
@@ -160,7 +160,7 @@ describe("reference bot composed runtime", () => {
     const runtime = adapter({
       evaluateEntry: async () => ({
         ...(await adapter().evaluateEntry()),
-        buyQuote: quote({
+        buyQuotes: [quote({
           closingProtection: {
             policyVersion: 1,
             phase: "closing",
@@ -170,12 +170,13 @@ describe("reference bot composed runtime", () => {
             hardLockTs: 1_800_000_000,
             secondsUntilLock: 8,
           },
-        }),
+        }), quote({ side: "no", amount: live.tradeSizeLamports.toString(), executableProbabilityBps: 6000 })],
+        proposedSizeLamports: live.tradeSizeLamports,
       }),
     });
 
     await expect(runMarketTick({ tick: 1, config: { ...live, minimumEntryEdgeBps: 0 }, adapter: runtime })).resolves.toMatchObject({
-      action: "buy",
+      action: "blocked",
       details: { effectiveFeeBps: 700 },
     });
   });

@@ -17,6 +17,8 @@ export type ReferenceBotConfig = {
   tradeSizeLamports: bigint;
   maximumTradeSizeLamports: bigint;
   maximumAggregateExposureLamports: bigint;
+  feeFreeActivationLimitLamports: bigint;
+  feeFreeBufferLamports: bigint;
   minimumEntryEdgeBps: number;
   maximumPriceImpactBps: number;
   minimumSecondsToExpiry: number;
@@ -46,6 +48,8 @@ export const referenceBotDefaults: ReferenceBotConfig = {
   tradeSizeLamports: 1_000_000n,
   maximumTradeSizeLamports: 10_000_000n,
   maximumAggregateExposureLamports: 50_000_000n,
+  feeFreeActivationLimitLamports: 10_000_000_000n,
+  feeFreeBufferLamports: 500_000_000n,
   minimumEntryEdgeBps: 500,
   maximumPriceImpactBps: 100,
   minimumSecondsToExpiry: 60,
@@ -122,9 +126,10 @@ export const parseReferenceBotConfig = (
   for (const key of ["readOnlyMode", "liveTradingEnabled", "killSwitchEnabled"] as const) {
     if (typeof config[key] !== "boolean") configurationError(key);
   }
-  for (const key of ["tradeSizeLamports", "maximumTradeSizeLamports", "maximumAggregateExposureLamports"] as const) {
+  for (const key of ["tradeSizeLamports", "maximumTradeSizeLamports", "maximumAggregateExposureLamports", "feeFreeActivationLimitLamports"] as const) {
     if (typeof config[key] !== "bigint" || config[key] <= 0n) configurationError(key);
   }
+  if (typeof config.feeFreeBufferLamports !== "bigint" || config.feeFreeBufferLamports < 0n) configurationError("feeFreeBufferLamports");
   config.minimumEntryEdgeBps = integer(config.minimumEntryEdgeBps, "minimumEntryEdgeBps", 0, 10_000);
   config.maximumPriceImpactBps = integer(config.maximumPriceImpactBps, "maximumPriceImpactBps", 0, 9_999);
   config.minimumSecondsToExpiry = integer(config.minimumSecondsToExpiry, "minimumSecondsToExpiry", 0, Number.MAX_SAFE_INTEGER);
@@ -145,6 +150,7 @@ export const parseReferenceBotConfig = (
   config.maximumModelProbabilityBps = integer(config.maximumModelProbabilityBps, "maximumModelProbabilityBps", 5_001, 9_999);
   if (config.tradeSizeLamports > config.maximumTradeSizeLamports) configurationError("tradeSizeLamports");
   if (config.maximumAggregateExposureLamports < config.maximumTradeSizeLamports) configurationError("maximumAggregateExposureLamports");
+  if (config.feeFreeBufferLamports >= config.feeFreeActivationLimitLamports) configurationError("feeFreeBufferLamports");
   for (const key of ["apiBaseUrl", "solanaRpcUrl", "pythHermesUrl", "walletAdapterPath"] as const) {
     if (config[key] !== undefined && (typeof config[key] !== "string" || !config[key])) configurationError(key);
   }
@@ -191,6 +197,8 @@ export const parseReferenceBotEnv = (
     tradeSizeLamports: sol("STRYKE_TRADE_SIZE_SOL", referenceBotDefaults.tradeSizeLamports),
     maximumTradeSizeLamports: sol("STRYKE_MAXIMUM_TRADE_SIZE_SOL", referenceBotDefaults.maximumTradeSizeLamports),
     maximumAggregateExposureLamports: sol("STRYKE_MAXIMUM_AGGREGATE_EXPOSURE_SOL", referenceBotDefaults.maximumAggregateExposureLamports),
+    feeFreeActivationLimitLamports: sol("STRYKE_FEE_FREE_ACTIVATION_LIMIT_SOL", referenceBotDefaults.feeFreeActivationLimitLamports),
+    feeFreeBufferLamports: profiledEnv.STRYKE_FEE_FREE_BUFFER_SOL === "0" ? 0n : sol("STRYKE_FEE_FREE_BUFFER_SOL", referenceBotDefaults.feeFreeBufferLamports),
     minimumEntryEdgeBps: numeric("STRYKE_MINIMUM_ENTRY_EDGE_BPS", referenceBotDefaults.minimumEntryEdgeBps),
     maximumPriceImpactBps: numeric("STRYKE_MAXIMUM_PRICE_IMPACT_BPS", referenceBotDefaults.maximumPriceImpactBps),
     minimumSecondsToExpiry: numeric("STRYKE_MINIMUM_SECONDS_TO_EXPIRY", referenceBotDefaults.minimumSecondsToExpiry),
@@ -227,6 +235,8 @@ export const publicConfig = (config: ReferenceBotConfig) => ({
   tradeSizeLamports: config.tradeSizeLamports.toString(),
   maximumTradeSizeLamports: config.maximumTradeSizeLamports.toString(),
   maximumAggregateExposureLamports: config.maximumAggregateExposureLamports.toString(),
+  feeFreeActivationLimitLamports: config.feeFreeActivationLimitLamports.toString(),
+  feeFreeBufferLamports: config.feeFreeBufferLamports.toString(),
   walletAdapterPath: config.walletAdapterPath ? "[configured]" : undefined,
 });
 

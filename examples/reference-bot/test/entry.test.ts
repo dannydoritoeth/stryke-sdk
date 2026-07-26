@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseReferenceBotConfig } from "../src/config.js";
-import { decideEntry } from "../src/entry.js";
+import { decideBestEntry, decideEntry } from "../src/entry.js";
 import { quote } from "./fixtures.js";
 
 const live = parseReferenceBotConfig({ readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false, walletAdapterPath: "./wallet.js" });
@@ -37,5 +37,17 @@ describe("entry decisions", () => {
   it("dry_run_records_decision_without_wallet_or_submission", () => {
     const decision = decideEntry({ ...input(), config: parseReferenceBotConfig({ killSwitchEnabled: false }) });
     expect(decision).toMatchObject({ action: "dry_run", reason: "read_only", quoteId: "quote-1" });
+  });
+
+  it("selects_yes_no_or_neither_from_executable_edge", () => {
+    const yes = quote({ side: "yes", executableProbabilityBps: 4_000 });
+    const no = quote({ side: "no", executableProbabilityBps: 6_000 });
+    expect(decideBestEntry({ ...input(), quotes: [yes, no] }).quote.side).toBe("yes");
+    expect(decideBestEntry({ ...input(), fairProbability: 0.3, quotes: [quote({ side: "yes", executableProbabilityBps: 6_000 }), quote({ side: "no", executableProbabilityBps: 4_000 })] }).quote.side).toBe("no");
+    expect(decideBestEntry({ ...input(), fairProbability: 0.5, quotes: [quote({ side: "yes" }), quote({ side: "no" })] })).toMatchObject({ action: "skip", reason: "edge_tie" });
+  });
+
+  it("paired_quote_identity_or_amount_mismatch_fails_closed", () => {
+    expect(decideBestEntry({ ...input(), quotes: [quote({ side: "yes" }), quote({ side: "no", marketStateVersion: "other" })] })).toMatchObject({ action: "blocked", reason: "paired_quote_mismatch" });
   });
 });

@@ -19,6 +19,7 @@ import {
 
 import type { ReferenceBotRuntimeAdapter, RuntimeExecution } from "./bot.js";
 import type { ReferenceBotConfig } from "./config.js";
+import { calculateBufferedEntrySize } from "./sizing.js";
 
 export const positionCountsTowardEntryCapacity = (position: PilotPosition): boolean =>
   ["pending_confirmation", "open_position", "sellable", "awaiting_resolution"].includes(position.lifecycle.state);
@@ -181,9 +182,21 @@ export const createSdkRuntimeAdapter = ({
       );
       const aggregateExposureLamports = activePortfolio.reduce((sum, position) => sum + BigInt(position.yesCostBasisCollateralUnits ?? "0") + BigInt(position.noCostBasisCollateralUnits ?? "0"), 0n);
       const openPositions = activePortfolio.length;
-      return { market, estimatorInput: estimatorInput(market), buyQuote: await quotes.buy({ market, side: config.side, amount: config.tradeSizeLamports.toString(), maximumSlippageBps: config.maximumPriceImpactBps }), aggregateExposureLamports, openPositions, dataFresh: !market.stale };
+      const proposedSizeLamports = calculateBufferedEntrySize({
+        configuredTradeSize: config.tradeSizeLamports, maximumTradeSize: config.maximumTradeSizeLamports,
+        aggregateExposure: aggregateExposureLamports, maximumAggregateExposure: config.maximumAggregateExposureLamports,
+        yesRealPool: BigInt(market.pools.yes), noRealPool: BigInt(market.pools.no),
+        activationLimit: config.feeFreeActivationLimitLamports, activationBuffer: config.feeFreeBufferLamports,
+      });
+      if (proposedSizeLamports <= 0n) throw new StrykeSdkError("quote_blocked", "Buffered fee-free activation capacity is unavailable");
+      const amount = proposedSizeLamports.toString();
+      const [yesQuote, noQuote] = await Promise.all([
+        quotes.buy({ market, side: "yes", amount, maximumSlippageBps: config.maximumPriceImpactBps }),
+        quotes.buy({ market, side: "no", amount, maximumSlippageBps: config.maximumPriceImpactBps }),
+      ]);
+      return { market, estimatorInput: estimatorInput(market), buyQuotes: [yesQuote, noQuote], proposedSizeLamports, aggregateExposureLamports, openPositions, dataFresh: !market.stale };
     },
-    executeBuy: (evaluation) => prepareAndExecute(evaluation.market, evaluation.buyQuote),
+    executeBuy: (evaluation, quote) => prepareAndExecute(evaluation.market, quote),
     executeSell: (position, exposure, evaluation) => prepareAndExecute(evaluation.market, evaluation.sellQuote, { positionId: position.positionId, sharesBefore: exposure.shares }),
     executeTerminal: async (position, action) => {
       const live = requireLive();

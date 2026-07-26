@@ -60,7 +60,8 @@ const runFixtureSmoke = async () => {
         return {
           market: { marketId: "documentation-smoke", asset: config.asset, expiryFamily: config.expiryFamily } as never,
           estimatorInput: input,
-          buyQuote: closingQuote,
+          buyQuotes: [closingQuote, { ...closingQuote, quoteId: "read-only-smoke-no", side: "no", executableProbabilityBps: 6000 }],
+          proposedSizeLamports: config.tradeSizeLamports,
           aggregateExposureLamports: 0n,
           openPositions: 0,
           dataFresh: true,
