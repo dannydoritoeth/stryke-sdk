@@ -212,6 +212,23 @@ describe("reference bot composed runtime", () => {
     expect(sellRuntime.executeSell).not.toHaveBeenCalled();
   });
 
+  it("quote_revalidation_races_are_contained_and_retried_on_a_later_tick", async () => {
+    const changed = new StrykeSdkError("quote_blocked", "Pilot quote market state or minimum output changed before preparation");
+    const entryRuntime = adapter({ executeBuy: async () => { throw changed; } });
+    await expect(runMarketTick({ tick: 1, config: live, adapter: entryRuntime })).resolves.toMatchObject({
+      phase: "entry", action: "blocked", reason: "quote_changed_before_submission",
+    });
+
+    const sellRuntime = adapter({
+      listPositions: async () => [position()],
+      evaluatePosition: async (value, exposure) => ({ ...(await adapter().evaluatePosition(value, exposure)), sellQuote: quote({ action: "sell", side: "yes", amount: "100", expectedShares: undefined, expectedNetProceeds: "90", expiresAt: new Date(Date.now() + 60_000).toISOString() }) }),
+      executeSell: async () => { throw changed; },
+    });
+    await expect(runMarketTick({ tick: 1, config: live, adapter: sellRuntime })).resolves.toMatchObject({
+      phase: "position", action: "hold", reason: "quote_changed_before_submission",
+    });
+  });
+
   it("locked_position_holds_then_settles_once_across_restart", async () => {
     let tick = 0;
     let terminalCalls = 0;

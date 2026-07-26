@@ -77,6 +77,9 @@ const isTradingLockedError = (error: unknown): boolean =>
       error.message
     ));
 
+const isQuoteRevalidationError = (error: unknown): boolean =>
+  error instanceof StrykeSdkError && error.code === "quote_blocked";
+
 const event = (tick: number, phase: RuntimeEvent["phase"], action: RuntimeEvent["action"], reason: string, extra: Partial<RuntimeEvent> = {}): RuntimeEvent =>
   ({ tick, phase, action, reason, ...extra });
 
@@ -210,6 +213,7 @@ export const runMarketTick = async ({
     try { result = await adapter.executeSell(sell.position, sell.exposure, sell.evaluation); }
     catch (error) {
       if (isTradingLockedError(error)) return event(tick, "position", "hold", "trading_locked_until_settlement", { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions });
+      if (isQuoteRevalidationError(error)) return event(tick, "position", "hold", "quote_changed_before_submission", { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions });
       throw error;
     }
     return event(tick, "position", "sell", sell.decision.reason, { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions, ...result });
@@ -259,6 +263,7 @@ export const runMarketTick = async ({
   try { result = await adapter.executeBuy(evaluation, decision.quote); }
   catch (error) {
     if (isTradingLockedError(error)) return event(tick, "entry", "blocked", "trading_locked_until_settlement", { marketId: evaluation.market.marketId, details });
+    if (isQuoteRevalidationError(error)) return event(tick, "entry", "blocked", "quote_changed_before_submission", { marketId: evaluation.market.marketId, details });
     throw error;
   }
   return event(tick, "entry", "buy", decision.reason, { marketId: evaluation.market.marketId, details, ...result });
