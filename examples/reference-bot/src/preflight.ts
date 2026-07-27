@@ -51,14 +51,26 @@ export const runPreflightCheck = async <T>(
   message: string,
   remediation: string,
   operation: () => Promise<T>,
-  options: { attempts?: number; retryDelayMs?: number } = {}
+  options: { attempts?: number; retryDelayMs?: number; attemptTimeoutMs?: number } = {}
 ): Promise<T> => {
   emitPreflight(profile, check, "checking", message);
   const attempts = Math.max(1, options.attempts ?? 1);
   let finalError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      const value = await operation();
+      const operationPromise = operation();
+      const value = options.attemptTimeoutMs === undefined
+        ? await operationPromise
+        : await new Promise<T>((resolve, reject) => {
+            const timer = setTimeout(
+              () => reject(new Error(`${check} preflight timed out after ${options.attemptTimeoutMs}ms`)),
+              options.attemptTimeoutMs
+            );
+            operationPromise.then(
+              (result) => { clearTimeout(timer); resolve(result); },
+              (error) => { clearTimeout(timer); reject(error); }
+            );
+          });
       emitPreflight(profile, check, "passed", message);
       return value;
     } catch (error) {

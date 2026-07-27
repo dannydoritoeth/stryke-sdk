@@ -79,6 +79,20 @@ describe("reference bot startup preflight", () => {
     ]);
   });
 
+  it("fails a hanging preflight operation within its bounded attempt timeout", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    await expect(
+      runPreflightCheck(
+        "devnet",
+        "rpc",
+        "Connected.",
+        "Check RPC.",
+        () => new Promise<number>(() => undefined),
+        { attemptTimeoutMs: 10 }
+      )
+    ).rejects.toThrow("rpc preflight timed out after 10ms");
+  });
+
   it("preflight_output_never_exposes_key_material", () => {
     const output: string[] = [];
     vi.spyOn(console, "log").mockImplementation((line) => output.push(String(line)));
