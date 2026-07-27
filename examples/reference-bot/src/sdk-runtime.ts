@@ -80,9 +80,23 @@ export const createSdkRuntimeAdapter = ({
     return { owner, executor };
   };
   const marketFor = async (position: PilotPosition) => {
-    const matches = (await markets.list(config.asset, config.expiryFamily)).filter((candidate) => marketMatchesPosition(candidate, position));
-    if (matches.length !== 1) throw new StrykeSdkError("position_state", "Position market is unavailable or ambiguous");
-    return matches[0]!;
+    const identity = position.market as { expiryFamily?: unknown; expiryTs?: unknown; targetValue?: unknown };
+    if (
+      identity.expiryFamily !== config.expiryFamily ||
+      typeof identity.expiryTs !== "number" ||
+      typeof identity.targetValue !== "string"
+    ) {
+      throw new StrykeSdkError("position_state", "Position market identity is incomplete");
+    }
+    const market = await markets.byIdentity(config.asset, {
+      expiryFamily: config.expiryFamily,
+      expiryTs: identity.expiryTs,
+      targetValue: identity.targetValue,
+    });
+    if (!marketMatchesPosition(market, position)) {
+      throw new StrykeSdkError("position_state", "Position market identity did not match the API surface");
+    }
+    return market;
   };
   const estimatorInput = (market: PilotMarket) => {
     const current = priceStore.current(config.asset);

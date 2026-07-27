@@ -420,6 +420,37 @@ export class MarketsClient {
     }));
   }
 
+  async byIdentity(
+    asset: string,
+    identity: { expiryFamily: PilotExpiryFamily; expiryTs: number; targetValue: string }
+  ): Promise<PilotMarket> {
+    const configured = this.client.capabilities?.assets?.find((row) => row.symbol === asset);
+    if (!configured) {
+      throw new StrykeSdkError("unsupported_asset", `Unsupported pilot asset: ${asset}`);
+    }
+    const marketId = [
+      "pyth_oracle",
+      configured.pythFeedId,
+      "SOL",
+      identity.expiryFamily,
+      identity.expiryTs,
+      identity.targetValue,
+    ].join(":");
+    const response = await this.client.requestJson<{
+      market: unknown;
+      surface: unknown;
+      metadata: { stale?: boolean; generatedAt?: string };
+    }>(`/v1/markets/${encodeURIComponent(marketId)}/surface` as `/v1/${string}`);
+    const generatedAt = response.metadata.generatedAt ?? new Date(0).toISOString();
+    return parsePilotMarket(
+      response.market,
+      response.metadata.stale === true,
+      generatedAt,
+      response.surface,
+      this.client.capabilities.assets.map((row) => row.symbol)
+    );
+  }
+
   async current(
     asset: string,
     expiryFamily: PilotExpiryFamily,
