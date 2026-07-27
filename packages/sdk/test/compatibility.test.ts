@@ -75,4 +75,33 @@ describe("SDK compatibility handshake", () => {
     expect(client.capabilities).toEqual(capabilities);
     expect(client.capabilities).not.toHaveProperty("futureOptionalDiagnostic");
   });
+
+  it("accepts_additional_configured_assets_and_their_expiry_matrix", async () => {
+    const expanded = {
+      ...capabilities,
+      assets: [
+        ...capabilities.assets,
+        { symbol: "ETH", pythFeedId: "eth-feed", state: "enabled", enabledExpiryFamilies: ["five_minute", "fifteen_minute"] },
+      ],
+    };
+    const client = await StrykeClient.connect({
+      apiBaseUrl: "https://pilot.example",
+      fetch: async () => response(expanded),
+    });
+    expect(client.capabilities.assets).toContainEqual(expanded.assets[2]);
+  });
+
+  it("rejects_duplicate_or_malformed_configured_assets", async () => {
+    for (const asset of [
+      { symbol: "BTC", pythFeedId: "duplicate" },
+      { symbol: "eth", pythFeedId: "eth-feed" },
+      { symbol: "ETH", pythFeedId: "" },
+      { symbol: "ETH", pythFeedId: "eth-feed", enabledExpiryFamilies: ["daily"] },
+    ]) {
+      await expect(StrykeClient.connect({
+        apiBaseUrl: "https://pilot.example",
+        fetch: async () => response({ ...capabilities, assets: [...capabilities.assets, asset] }),
+      })).rejects.toMatchObject({ code: "compatibility" });
+    }
+  });
 });

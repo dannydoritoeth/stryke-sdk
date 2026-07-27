@@ -1,6 +1,6 @@
 import type { StrykeClient } from "./client.js";
 import { StrykeSdkError } from "./errors.js";
-import type { PilotMarket } from "./markets.js";
+import { assertMarketTradeable, type PilotMarket } from "./markets.js";
 
 export type QuoteAction = "buy" | "sell";
 export type QuoteSide = "yes" | "no";
@@ -156,6 +156,7 @@ export class QuotesClient {
     amount: string;
     maximumSlippageBps: number;
   }): Promise<ExecutableQuote> {
+    assertMarketTradeable(market, "quote");
     integerString(amount, "amount");
     const collateral = market.raw.collateral;
     if (typeof collateral !== "object" || collateral === null) {

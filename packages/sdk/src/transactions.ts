@@ -14,7 +14,7 @@ import {
 import type { StrykeClient } from "./client.js";
 import { StrykeSdkError } from "./errors.js";
 import type { ExecutableQuote } from "./quotes.js";
-import type { PilotMarket } from "./markets.js";
+import { assertMarketTradeable, type PilotMarket } from "./markets.js";
 import { terminalActionFor, type PilotPosition, type PositionTerminalAction } from "./positions.js";
 
 export type LatestBlockhash = {
@@ -247,6 +247,7 @@ export class TransactionsClient {
     clientActionId: string;
     intentHash: string;
   }): Promise<MaterializedPilotTransaction> {
+    assertMarketTradeable(market, "prepare");
     if (this.now() >= Date.parse(quote.expiresAt)) {
       throw new StrykeSdkError("quote_blocked", "Executable quote has expired");
     }

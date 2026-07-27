@@ -21,9 +21,27 @@ const market: PilotMarket = {
   collateral: "SOL",
   expiryFamily: "five_minute",
   expiryTs: 1_800_000_000,
+  intervalStartTs: 1_799_999_700,
+  intervalLifecycle: "active",
   strikePrice: "7000000000000",
   strikePriceDecimal: 70000,
   status: "open",
+  reference: {
+    assetKey: "btc",
+    expiryFamily: "five_minute",
+    intervalStartTs: 1_799_999_700,
+    intervalEndTs: 1_800_000_000,
+    policy: "polymarket",
+    alignmentStatus: "aligned",
+    status: "locked",
+    targetValue: "7000000000000",
+    targetDecimals: 8,
+    observedAt: new Date(now).toISOString(),
+    externalVenue: "polymarket",
+    externalMarketId: "poly-btc-5m",
+    upTokenId: "poly-up",
+    downTokenId: "poly-down",
+  },
   rawStatus: "active",
   generatedAt: new Date(now).toISOString(),
   lifecycle: {
@@ -304,6 +322,42 @@ describe("pilot transaction materialization", () => {
       })
     ).rejects.toMatchObject({ code: "quote_blocked" });
   });
+
+  it.each(["upcoming", "locked", "closed"] as const)(
+    "prep_blocks_%s_market_before_api_or_rpc",
+    async (intervalLifecycle) => {
+      let apiCalls = 0;
+      let rpcCalls = 0;
+      const blockedMarket: PilotMarket = {
+        ...market,
+        intervalLifecycle,
+        tradeability: {
+          canQuote: false,
+          canPrepareTransaction: false,
+          disabledReasons: ["outside_trading_interval"],
+        },
+      };
+      await expect(new TransactionsClient({
+        requestJson: async () => {
+          apiCalls += 1;
+          return prep;
+        },
+      } as never, {
+        getLatestBlockhash: () => ({ send: async () => {
+          rpcCalls += 1;
+          throw new Error("unexpected RPC");
+        } }),
+      }, () => now).prepare({
+        owner,
+        market: blockedMarket,
+        quote,
+        clientActionId: prep.clientActionId,
+        intentHash: prep.intentHash,
+      })).rejects.toMatchObject({ code: "quote_blocked" });
+      expect(apiCalls).toBe(0);
+      expect(rpcCalls).toBe(0);
+    }
+  );
 
   it("registers and reconciles action state through explicit v1 routes", async () => {
     const calls: string[] = [];

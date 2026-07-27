@@ -41,7 +41,15 @@ describe("SDK runtime composition", () => {
           markets: [{
             marketId: "sol-1m", assetRef: "sol-feed", symbol: "SOL", source: "pyth_oracle",
             collateral: { symbol: "SOL", mint: "11111111111111111111111111111111" }, expiryFamily: "one_minute",
-            expiryTs: Math.floor(now / 1_000) + 60, targetValue: "10000000000", status: "open", rawStatus: "active",
+            expiryTs: Math.floor(now / 1_000) + 60,
+            intervalStartTs: Math.floor(now / 1_000), intervalLifecycle: "active",
+            targetValue: "10000000000", status: "open", rawStatus: "active",
+            marketReference: {
+              assetKey: "sol", expiryFamily: "one_minute",
+              intervalStartTs: Math.floor(now / 1_000), intervalEndTs: Math.floor(now / 1_000) + 60,
+              policy: "stryke_open", alignmentStatus: "native", status: "locked",
+              targetValue: "10000000000", targetDecimals: 8, observedAt: new Date(now).toISOString(),
+            },
             pilotLifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "open", rawStatus: "active", rawReason: "market_open", observedAt: new Date(now).toISOString() },
             tradeability: { canQuote: true, canPrepareTransaction: true, disabledReasons: [] },
             selectedMarket: {

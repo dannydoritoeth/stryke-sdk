@@ -30,7 +30,12 @@ export type ApiCapabilitiesV1 = {
     programVersion: string;
     idlSpecVersion: string;
   };
-  assets: ReadonlyArray<{ symbol: PilotAsset; pythFeedId: string }>;
+  assets: ReadonlyArray<{
+    symbol: string;
+    pythFeedId: string;
+    state?: "enabled";
+    enabledExpiryFamilies?: readonly PilotExpiryFamily[];
+  }>;
   expiryFamilies: readonly PilotExpiryFamily[];
   actions: readonly ("buy" | "sell" | "claim" | "refund")[];
 };
@@ -104,6 +109,36 @@ export const parseCapabilitiesV1 = (value: unknown): ApiCapabilitiesV1 => {
   for (const asset of PILOT_ASSETS) {
     if (!assets.some((row) => isRecord(row) && row.symbol === asset)) {
       throw new StrykeSdkError("compatibility", `Missing pilot asset: ${asset}`);
+    }
+  }
+  const seenAssets = new Set<string>();
+  for (const [index, asset] of assets.entries()) {
+    if (
+      !isRecord(asset) ||
+      typeof asset.symbol !== "string" ||
+      !/^[A-Z0-9]{2,12}$/.test(asset.symbol) ||
+      typeof asset.pythFeedId !== "string" ||
+      asset.pythFeedId.length === 0 ||
+      (asset.state !== undefined && asset.state !== "enabled") ||
+      seenAssets.has(asset.symbol)
+    ) {
+      throw new StrykeSdkError(
+        "compatibility",
+        `Invalid capability asset at index ${index}`
+      );
+    }
+    seenAssets.add(asset.symbol);
+    if (
+      asset.enabledExpiryFamilies !== undefined &&
+      (!Array.isArray(asset.enabledExpiryFamilies) ||
+        asset.enabledExpiryFamilies.some(
+          (family) => !PILOT_EXPIRY_FAMILIES.includes(family as PilotExpiryFamily)
+        ))
+    ) {
+      throw new StrykeSdkError(
+        "compatibility",
+        `Invalid expiry matrix for capability asset: ${asset.symbol}`
+      );
     }
   }
   for (const expiry of PILOT_EXPIRY_FAMILIES) {

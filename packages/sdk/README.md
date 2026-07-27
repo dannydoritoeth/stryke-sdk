@@ -33,6 +33,23 @@ const quote = await new QuotesClient(client).get({
 });
 ```
 
+`market.intervalLifecycle` is the authoritative interval state. Only `active`
+and `closing` markets may be quoted or prepared; `upcoming`, `locked`, and
+`closed` fail locally with `quote_blocked` before an API request. Refresh the
+market list before retrying.
+
+`market.reference` contains the immutable opening target and its provenance:
+
+- `aligned`: the target is linked to the matching Polymarket round;
+- `native`: the one-minute target is Stryke's own opening reference; and
+- `degraded`: Polymarket was unavailable at open and Stryke locked its documented
+  fallback target. Check `fallbackReason`.
+
+Strategies that compare venues must require `aligned`; do not treat `degraded`
+as a Polymarket observation. Enabled market symbols are advertised by
+`client.capabilities.assets`, so `MarketsClient` can accept newly configured
+assets without an SDK release. A missing symbol is rejected before discovery.
+
 Inspect `quote.closingProtection.phase` and `effectiveFeeBps`. `closing` quotes
 remain executable at the returned fee. `locked` and `expired` are returned as
 non-retryable `quote_blocked` errors; missing or unknown policy fields fail

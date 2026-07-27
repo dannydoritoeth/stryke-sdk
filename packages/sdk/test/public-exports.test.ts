@@ -27,6 +27,7 @@ describe("public SDK exports", () => {
       "StrykeClient",
       "StrykeSdkError",
       "TransactionsClient",
+      "assertMarketTradeable",
       "assertQuoteUsable",
       "createPilotIntentHash",
       "createTerminalIntentHash",

@@ -131,12 +131,16 @@ export const seedHermesHistory = async ({
     throw new StrykeSdkError("configuration", "Historical Pyth sampling configuration is invalid");
   }
   const endpointUrl = new URL(endpoint);
+  const feedId = PYTH_FEED_IDS[asset];
+  if (!feedId) {
+    throw new StrykeSdkError("unsupported_asset", `No Pyth feed is configured for ${asset}`);
+  }
   const end = Math.floor(now() / 1_000) - 2;
   const start = end - lookbackSeconds;
   const timestamps = Array.from({ length: sampleCount }, (_, index) => Math.round(start + (lookbackSeconds * index) / (sampleCount - 1)));
   for (const timestamp of timestamps) {
     const url = new URL(`/v2/updates/price/${timestamp}`, endpointUrl);
-    url.searchParams.append("ids[]", PYTH_FEED_IDS[asset].slice(2));
+    url.searchParams.append("ids[]", feedId.slice(2));
     url.searchParams.set("parsed", "true");
     let response: Response | undefined;
     for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
@@ -171,6 +175,9 @@ export const parseHermesUpdate = (asset: PilotAsset, value: unknown): PricePoint
     price?: { price?: unknown; expo?: unknown; publish_time?: unknown };
   };
   const expectedFeed = PYTH_FEED_IDS[asset];
+  if (!expectedFeed) {
+    throw new StrykeSdkError("unsupported_asset", `No Pyth feed is configured for ${asset}`);
+  }
   const actualFeed = typeof update.id === "string" ? `0x${update.id.replace(/^0x/, "")}` : "";
   const raw = update.price?.price;
   const expo = update.price?.expo;
@@ -207,13 +214,20 @@ export const subscribeHermes = async ({
   store: PriceStore;
   onError?: (error: unknown) => void;
 }): Promise<PriceSubscription> => {
+  const feedIds = assets.map((asset) => {
+    const feedId = PYTH_FEED_IDS[asset];
+    if (!feedId) {
+      throw new StrykeSdkError("unsupported_asset", `No Pyth feed is configured for ${asset}`);
+    }
+    return feedId;
+  });
   for (const asset of assets) store.reconnecting(asset);
   const client = new HermesClient(
     endpoint,
     apiKey ? { headers: { Authorization: `Bearer ${apiKey}` } } : {}
   );
   const stream = await client.getPriceUpdatesStream(
-    assets.map((asset) => PYTH_FEED_IDS[asset]),
+    feedIds,
     { parsed: true, allowUnordered: false }
   );
   stream.onmessage = (event) => {
@@ -221,7 +235,7 @@ export const subscribeHermes = async ({
       const value = JSON.parse(event.data) as { parsed?: Array<{ id?: string }> };
       const feedId = value.parsed?.[0]?.id?.replace(/^0x/, "").toLowerCase();
       const asset = assets.find(
-        (candidate) => PYTH_FEED_IDS[candidate].slice(2).toLowerCase() === feedId
+        (candidate) => PYTH_FEED_IDS[candidate]?.slice(2).toLowerCase() === feedId
       );
       if (!asset) throw new StrykeSdkError("validation", "Unexpected Pyth feed");
       store.ingest(asset, value);

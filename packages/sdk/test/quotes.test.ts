@@ -16,9 +16,27 @@ const market = {
   collateral: "SOL",
   expiryFamily: "five_minute",
   expiryTs: 1_800_000_000,
+  intervalStartTs: 1_799_999_700,
+  intervalLifecycle: "active",
   strikePrice: "7000000000000",
   strikePriceDecimal: 70000,
   status: "open",
+  reference: {
+    assetKey: "btc",
+    expiryFamily: "five_minute",
+    intervalStartTs: 1_799_999_700,
+    intervalEndTs: 1_800_000_000,
+    policy: "polymarket",
+    alignmentStatus: "aligned",
+    status: "locked",
+    targetValue: "7000000000000",
+    targetDecimals: 8,
+    observedAt: "2026-07-22T00:00:00.000Z",
+    externalVenue: "polymarket",
+    externalMarketId: "poly-btc-5m",
+    upTokenId: "poly-up",
+    downTokenId: "poly-down",
+  },
   rawStatus: "active",
   generatedAt: "2026-07-22T00:00:00.000Z",
   lifecycle: {
@@ -262,4 +280,43 @@ describe("executable quote client", () => {
       })
     ).resolves.toMatchObject({ amount, expectedShares });
   });
+
+  it.each(["upcoming", "locked", "closed"] as const)(
+    "blocks_%s_market_before_request_and_allows_a_refreshed_active_market",
+    async (intervalLifecycle) => {
+      let requests = 0;
+      const quotes = new QuotesClient({
+        requestJson: async () => {
+          requests += 1;
+          return responseBody("buy");
+        },
+      } as never, () => Date.parse("2026-07-22T00:00:01Z"));
+      const blocked = {
+        ...market,
+        intervalLifecycle,
+        tradeability: {
+          ...market.tradeability,
+          canQuote: false,
+          canPrepareTransaction: false,
+          disabledReasons: ["outside_trading_interval"],
+        },
+      } satisfies PilotMarket;
+
+      await expect(quotes.buy({
+        market: blocked,
+        side: "yes",
+        amount: "1000000000",
+        maximumSlippageBps: 100,
+      })).rejects.toMatchObject({ code: "quote_blocked" });
+      expect(requests).toBe(0);
+
+      await expect(quotes.buy({
+        market,
+        side: "yes",
+        amount: "1000000000",
+        maximumSlippageBps: 100,
+      })).resolves.toMatchObject({ quoteId: "quote_v1_123" });
+      expect(requests).toBe(1);
+    }
+  );
 });

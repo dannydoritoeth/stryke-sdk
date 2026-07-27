@@ -20,7 +20,14 @@ const lifecycle = (
   ...overrides,
 });
 
-const row = (symbol: "BTC" | "SOL", expiryFamily: string, expiryTs: number) => ({
+const expirySeconds = (expiryFamily: string) => ({
+  one_minute: 60,
+  five_minute: 300,
+  fifteen_minute: 900,
+  hourly: 3_600,
+}[expiryFamily] ?? 300);
+
+const row = (symbol: string, expiryFamily: string, expiryTs: number) => ({
   marketId: `pyth:${symbol}:${expiryFamily}:${expiryTs}`,
   assetRef: `${symbol.toLowerCase()}-feed`,
   tokenMint: "So11111111111111111111111111111111111111112",
@@ -29,7 +36,37 @@ const row = (symbol: "BTC" | "SOL", expiryFamily: string, expiryTs: number) => (
   collateral: { symbol: "SOL" },
   expiryFamily,
   expiryTs,
+  intervalStartTs: Math.max(0, expiryTs - expirySeconds(expiryFamily)),
+  intervalLifecycle: "active",
   targetValue: "70000",
+  marketReference: expiryFamily === "one_minute" ? {
+    assetKey: symbol.toLowerCase(),
+    expiryFamily,
+    intervalStartTs: Math.max(0, expiryTs - expirySeconds(expiryFamily)),
+    intervalEndTs: expiryTs,
+    policy: "stryke_open",
+    alignmentStatus: "native",
+    status: "locked",
+    targetValue: "70000",
+    targetDecimals: 8,
+    observedAt: "2026-07-22T00:00:00.000Z",
+  } : {
+    assetKey: symbol.toLowerCase(),
+    expiryFamily,
+    intervalStartTs: Math.max(0, expiryTs - expirySeconds(expiryFamily)),
+    intervalEndTs: expiryTs,
+    policy: "polymarket",
+    alignmentStatus: "aligned",
+    status: "locked",
+    targetValue: "70000",
+    targetDecimals: 8,
+    observedAt: "2026-07-22T00:00:00.000Z",
+    externalVenue: "polymarket",
+    externalMarketId: `poly-${symbol}-${expiryFamily}-${expiryTs}`,
+    externalSlug: `${symbol.toLowerCase()}-${expiryFamily}-${expiryTs}`,
+    upTokenId: "poly-up",
+    downTokenId: "poly-down",
+  },
   status: "open",
   rawStatus: "active",
   pilotLifecycle: lifecycle(),
@@ -46,6 +83,12 @@ const row = (symbol: "BTC" | "SOL", expiryFamily: string, expiryTs: number) => (
     },
     odds: { yesBps: 4000, noBps: 6000 },
   },
+});
+
+const withTarget = <T extends ReturnType<typeof row>>(value: T, targetValue: string) => ({
+  ...value,
+  targetValue,
+  marketReference: { ...value.marketReference, targetValue },
 });
 
 describe("pilot market discovery", () => {
@@ -114,7 +157,7 @@ describe("pilot market discovery", () => {
     const client = {
       requestJson: async () => ({
         markets: [
-          { ...canonical, tokenMint: `0x${"a".repeat(64)}`, targetValue: "7100000000000" },
+          { ...withTarget(canonical, "7100000000000"), tokenMint: `0x${"a".repeat(64)}` },
           canonical,
         ],
         metadata: {
@@ -138,7 +181,7 @@ describe("pilot market discovery", () => {
 
   it("multiple_non_tradeable_initializable_candidates_are_retryable_unavailable", async () => {
     const initializable = (targetValue: string) => ({
-      ...row("BTC", "five_minute", 1_800_000_000), targetValue,
+      ...withTarget(row("BTC", "five_minute", 1_800_000_000), targetValue),
       tokenMint: `0x${targetValue.padStart(64, "a")}`,
       status: "initializable",
       tradeability: { canQuote: false, canPrepareTransaction: false, disabledReasons: ["not_initialized"] },
@@ -147,52 +190,23 @@ describe("pilot market discovery", () => {
     await expect(new MarketsClient(client as never).current("BTC", "five_minute")).rejects.toMatchObject({ code: "source_unavailable", retryable: true });
   });
 
-  it("hourly_initializable_ladder_selects_unique_closest_reference_strike", async () => {
-    const initializable = (targetValue: string) => ({
-      ...row("SOL", "hourly", 1_800_000_000), targetValue, status: "initializable",
-      tradeability: { canQuote: false, canPrepareTransaction: false, disabledReasons: [] },
+  it("hourly_selects_the_single_locked_reference_instead_of_a_legacy_ladder", async () => {
+    const referenced = row("SOL", "hourly", 1_800_000_000);
+    const legacy = (targetValue: string) => ({
+      ...referenced,
+      targetValue,
+      marketReference: undefined,
+      status: "initializable",
+      tradeability: { canQuote: false, canPrepareTransaction: false, disabledReasons: ["legacy_ladder"] },
     });
     const client = { requestJson: async () => ({
-      markets: [initializable("70"), initializable("75"), initializable("80")],
+      markets: [legacy("70"), referenced, legacy("80")],
       metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: "2026-07-22T00:00:00.000Z", stale: false },
     }) };
-    await expect(new MarketsClient(client as never).current("SOL", "hourly", 76)).resolves.toMatchObject({ strikePrice: "75" });
-  });
-
-  it("hourly_initializable_ladder_equal_distance_remains_ambiguous", async () => {
-    const initializable = (targetValue: string) => ({
-      ...row("SOL", "hourly", 1_800_000_000), targetValue, status: "initializable",
-      tradeability: { canQuote: false, canPrepareTransaction: false, disabledReasons: [] },
+    await expect(new MarketsClient(client as never).current("SOL", "hourly")).resolves.toMatchObject({
+      strikePrice: "70000",
+      reference: { alignmentStatus: "aligned", externalVenue: "polymarket" },
     });
-    const client = { requestJson: async () => ({
-      markets: [initializable("70"), initializable("80")],
-      metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: "2026-07-22T00:00:00.000Z", stale: false },
-    }) };
-    await expect(new MarketsClient(client as never).current("SOL", "hourly", 75)).rejects.toMatchObject({ code: "validation" });
-  });
-
-  it("hourly_ladder_collapses_candidate_and_open_duplicate_target", async () => {
-    const candidate = (targetValue: string, status: "initializable" | "open") => ({
-      ...row("SOL", "hourly", 1_800_000_000), targetValue, status,
-      tradeability: { canQuote: false, canPrepareTransaction: false, disabledReasons: [] },
-    });
-    const client = { requestJson: async () => ({
-      markets: [candidate("70", "initializable"), candidate("75", "initializable"), candidate("75", "open"), candidate("80", "initializable")],
-      metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: "2026-07-22T00:00:00.000Z", stale: false },
-    }) };
-    await expect(new MarketsClient(client as never).current("SOL", "hourly", 76)).resolves.toMatchObject({ strikePrice: "75", status: "open" });
-  });
-
-  it("initializable_ladder_never_crosses_expiry_or_source_identity", async () => {
-    const initializable = (targetValue: string, expiryTs: number) => ({
-      ...row("SOL", "hourly", expiryTs), targetValue, status: "initializable",
-      tradeability: { canQuote: false, canPrepareTransaction: false, disabledReasons: [] },
-    });
-    const client = { requestJson: async () => ({
-      markets: [initializable("70", 1_800_000_000), initializable("80", 1_800_000_000), initializable("75", 1_800_003_600)],
-      metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: "2026-07-22T00:00:00.000Z", stale: false },
-    }) };
-    await expect(new MarketsClient(client as never).current("SOL", "hourly", 75)).rejects.toMatchObject({ code: "validation" });
   });
 
   it("rejects_asset_feed_or_expiry_identity_mismatch", () => {
@@ -302,5 +316,74 @@ describe("pilot market discovery", () => {
       ...value,
       selectedMarket: { pools: { yesPool: "0 SOL", noPool: "0 SOL", stale: false }, odds: value.selectedMarket.odds },
     }, false).activation).toBeUndefined();
+  });
+
+  it("exposes_native_aligned_and_degraded_reference_provenance", () => {
+    expect(parsePilotMarket(row("BTC", "one_minute", 1_800_000_000), false).reference)
+      .toMatchObject({ policy: "stryke_open", alignmentStatus: "native" });
+    expect(parsePilotMarket(row("BTC", "five_minute", 1_800_000_000), false).reference)
+      .toMatchObject({ policy: "polymarket", alignmentStatus: "aligned", externalVenue: "polymarket" });
+
+    const fallback = row("SOL", "hourly", 1_800_000_000);
+    expect(parsePilotMarket({
+      ...fallback,
+      marketReference: {
+        ...fallback.marketReference,
+        policy: "stryke_fallback",
+        alignmentStatus: "degraded",
+        externalVenue: undefined,
+        externalMarketId: undefined,
+        externalSlug: undefined,
+        upTokenId: undefined,
+        downTokenId: undefined,
+        fallbackReason: "polymarket_unavailable_at_open",
+      },
+    }, false).reference).toMatchObject({
+      policy: "stryke_fallback",
+      alignmentStatus: "degraded",
+      fallbackReason: "polymarket_unavailable_at_open",
+    });
+  });
+
+  it("rejects_incomplete_or_inconsistent_reference_identity", () => {
+    const aligned = row("BTC", "five_minute", 1_800_000_000);
+    expect(() => parsePilotMarket({
+      ...aligned,
+      marketReference: { ...aligned.marketReference, upTokenId: undefined },
+    }, false)).toThrowError(expect.objectContaining({ code: "validation" }));
+    expect(() => parsePilotMarket({
+      ...aligned,
+      marketReference: { ...aligned.marketReference, targetValue: "70001" },
+    }, false)).toThrowError(expect.objectContaining({ code: "validation" }));
+    expect(() => parsePilotMarket({
+      ...aligned,
+      marketReference: { ...aligned.marketReference, status: "pending" },
+    }, false)).toThrowError(expect.objectContaining({ code: "validation" }));
+  });
+
+  it("supports_new_capability_assets_without_an_sdk_release_and_rejects_absent_assets", async () => {
+    let requests = 0;
+    const client = {
+      capabilities: {
+        assets: [
+          { symbol: "BTC", pythFeedId: "btc-feed" },
+          { symbol: "SOL", pythFeedId: "sol-feed" },
+          { symbol: "ETH", pythFeedId: "eth-feed" },
+        ],
+      },
+      requestJson: async () => {
+        requests += 1;
+        return {
+          markets: [row("ETH", "five_minute", 1_800_000_000)],
+          metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: "2026-07-22T00:00:00.000Z", stale: false },
+        };
+      },
+    };
+    await expect(new MarketsClient(client as never).current("ETH", "five_minute"))
+      .resolves.toMatchObject({ asset: "ETH", reference: { alignmentStatus: "aligned" } });
+    expect(requests).toBe(1);
+    await expect(new MarketsClient(client as never).current("DOGE", "five_minute"))
+      .rejects.toMatchObject({ code: "unsupported_asset" });
+    expect(requests).toBe(1);
   });
 });
