@@ -186,7 +186,7 @@ export const runMarketTick = async ({
     const fairProbability = model.fairProbability;
     const decision: PositionDecision = decidePositionExit({
       side: exposure.side, fairProbability, sellQuote: evaluation.sellQuote,
-      shares: exposure.shares,
+      shares: evaluation.sellQuote.amount,
       ...(exposure.costBasisCollateralUnits === undefined ? {} : { costBasisCollateralUnits: exposure.costBasisCollateralUnits }),
       ifWinPayout: evaluation.ifWinPayout, stopLossBps: config.stopLossBps,
       takeProfitBps: config.takeProfitBps,

@@ -268,6 +268,48 @@ export class QuotesClient {
     };
   }
 
+  async sellAvailable({
+    market,
+    side,
+    ownedShares,
+    maximumSlippageBps,
+  }: {
+    market: PilotMarket;
+    side: QuoteSide;
+    ownedShares: string;
+    maximumSlippageBps: number;
+  }): Promise<ExecutableQuote> {
+    const owned = BigInt(integerString(ownedShares, "ownedShares"));
+    if (owned <= 0n) {
+      throw new StrykeSdkError("validation", "Owned shares must be positive");
+    }
+    const portions = [10_000n, 9_900n, 9_500n, 9_000n, 8_000n, 5_000n];
+    let amountError: StrykeSdkError | undefined;
+    for (const portion of portions) {
+      const amount = (owned * portion) / 10_000n;
+      if (amount <= 0n) continue;
+      try {
+        return await this.sell({
+          market,
+          side,
+          amount: amount.toString(),
+          maximumSlippageBps,
+        });
+      } catch (error) {
+        if (
+          error instanceof StrykeSdkError &&
+          error.code === "quote_blocked" &&
+          error.message === "Quote is unavailable for this amount."
+        ) {
+          amountError = error;
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw amountError ?? new StrykeSdkError("quote_blocked", "No executable sell amount is available");
+  }
+
   buy(input: Omit<Parameters<QuotesClient["get"]>[0], "action">) {
     return this.get({ ...input, action: "buy" });
   }

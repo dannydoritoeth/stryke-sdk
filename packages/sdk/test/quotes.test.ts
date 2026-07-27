@@ -136,6 +136,52 @@ describe("executable quote client", () => {
     });
   });
 
+  it("sell_available_reduces_only_amount_unavailable_quotes", async () => {
+    const requested: string[] = [];
+    const client = {
+      requestJson: async (_path: string, init: { body: string }) => {
+        const amount = JSON.parse(init.body).amount as string;
+        requested.push(amount);
+        if (amount === "1000000000") {
+          return {
+            quote: {
+              amount,
+              stale: true,
+              unavailableReason: "Quote is unavailable for this amount.",
+              closingProtection: responseBody("sell").quote.closingProtection,
+            },
+            metadata: { stale: true },
+          };
+        }
+        return {
+          ...responseBody("sell"),
+          quote: { ...responseBody("sell").quote, amount },
+        };
+      },
+    };
+    const quotes = new QuotesClient(client as never, () => Date.parse("2026-07-22T00:00:01Z"));
+    await expect(quotes.sellAvailable({ market, side: "yes", ownedShares: "1000000000", maximumSlippageBps: 100 }))
+      .resolves.toMatchObject({ amount: "990000000", action: "sell" });
+    expect(requested).toEqual(["1000000000", "990000000"]);
+  });
+
+  it("sell_available_does_not_mask_non_amount_failures", async () => {
+    const client = {
+      requestJson: async () => ({
+        quote: {
+          amount: "1000000000",
+          stale: true,
+          unavailableReason: "Trading is locked before settlement.",
+          closingProtection: { ...responseBody("sell").quote.closingProtection, phase: "locked" },
+        },
+        metadata: { stale: true },
+      }),
+    };
+    const quotes = new QuotesClient(client as never);
+    await expect(quotes.sellAvailable({ market, side: "yes", ownedShares: "1000000000", maximumSlippageBps: 100 }))
+      .rejects.toMatchObject({ code: "quote_blocked", message: "Trading is locked before settlement." });
+  });
+
   it("expired_quote_is_blocked", async () => {
     const expired = new QuotesClient(
       { requestJson: async () => responseBody("buy") } as never,
