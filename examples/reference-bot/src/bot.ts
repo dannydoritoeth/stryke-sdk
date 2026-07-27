@@ -14,6 +14,8 @@ import type { ReferenceBotConfig } from "./config.js";
 import { decideBestEntry, type BestEntryDecision } from "./entry.js";
 import { decidePositionExit, type PositionDecision } from "./manage-position.js";
 import { estimateFairProbability, volatilityAdjustedProbabilities, type FairProbabilityInput } from "./strategy.js";
+import type { PolymarketExecutablePrice } from "./polymarket-client.js";
+import { convergenceReached, decidePolymarketRelativeEntry } from "./polymarket-relative-value.js";
 
 export type RuntimeAction = "buy" | "sell" | "claim" | "refund";
 
@@ -41,6 +43,8 @@ export type PositionEvaluation = {
   sellQuote: ExecutableQuote;
   ifWinPayout: string;
   dataFresh: boolean;
+  polymarketPrices?: Readonly<Record<"yes" | "no", PolymarketExecutablePrice>>;
+  polymarketUnavailable?: boolean;
 };
 
 export type EntryEvaluation = {
@@ -51,6 +55,7 @@ export type EntryEvaluation = {
   aggregateExposureLamports: bigint;
   openPositions: number;
   dataFresh: boolean;
+  polymarketPrices?: Readonly<Record<"yes" | "no", PolymarketExecutablePrice>>;
 };
 
 export type RuntimeExecution = { clientActionId?: string; signature?: string };
@@ -173,11 +178,10 @@ export const runMarketTick = async ({
       continue;
     }
     let model: ReturnType<typeof modelEvaluation>;
-    try { model = modelEvaluation(evaluation.estimatorInput, config); }
-    catch {
-      positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "model_inputs_unavailable" });
-      continue;
-    }
+    try { model = config.estimator === "polymarket_relative_value"
+      ? { fairProbability: 0.5, diagnostics: { estimator: config.estimator, yesModelProbability: 0.5, noModelProbability: 0.5, secondsRemaining: evaluation.estimatorInput.secondsRemaining } }
+      : modelEvaluation(evaluation.estimatorInput, config); }
+    catch { positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "model_inputs_unavailable" }); continue; }
     const fairProbability = model.fairProbability;
     const decision: PositionDecision = decidePositionExit({
       side: exposure.side, fairProbability, sellQuote: evaluation.sellQuote,
@@ -186,6 +190,13 @@ export const runMarketTick = async ({
       ifWinPayout: evaluation.ifWinPayout, stopLossBps: config.stopLossBps,
       takeProfitBps: config.takeProfitBps,
     });
+    if (config.estimator === "polymarket_relative_value" && decision.action === "hold" && evaluation.polymarketPrices) {
+      const convergence = convergenceReached({ side: exposure.side, strykeSellProbabilityBps: evaluation.sellQuote.executableProbabilityBps, prices: evaluation.polymarketPrices, exitEdgeBps: config.polymarketExitEdgeBps });
+      if (convergence.reached) Object.assign(decision, { action: "sell", reason: "polymarket_convergence" });
+      Object.assign(model.diagnostics, { remainingEdgeBps: convergence.remainingEdgeBps });
+    } else if (config.estimator === "polymarket_relative_value" && decision.action === "hold" && evaluation.polymarketUnavailable) {
+      Object.assign(model.diagnostics, { convergenceReferenceAvailable: false });
+    }
     const details = { ...model.diagnostics, fairProbability, ...(decision.pnlBps === undefined ? {} : { pnlBps: decision.pnlBps.toString() }), ...(decision.sellNowValue === undefined ? {} : { sellNowValue: decision.sellNowValue.toString() }), ...(decision.holdValue === undefined ? {} : { holdValue: decision.holdValue.toString() }) };
     positionDecisions.push({ positionId: position.positionId, action: decision.action, reason: decision.reason, details });
     if (decision.action === "sell") sellCandidates.push({ position, exposure, evaluation, decision, details });
@@ -232,6 +243,26 @@ export const runMarketTick = async ({
     if (isTradingLockedError(error)) return event(tick, "entry", "blocked", "trading_locked_until_settlement");
     if (isQuoteRevalidationError(error)) return event(tick, "entry", "blocked", "market_changed_during_quote");
     throw error;
+  }
+  if (config.estimator === "polymarket_relative_value") {
+    if (evaluation.market.reference.alignmentStatus !== "aligned" || !evaluation.polymarketPrices) {
+      return event(tick, "entry", "skip", "reference_not_aligned", { marketId: evaluation.market.marketId });
+    }
+    const relative = decidePolymarketRelativeEntry({ quotes: evaluation.buyQuotes, prices: evaluation.polymarketPrices, entryEdgeBps: config.polymarketEntryEdgeBps });
+    const details = {
+      estimator: config.estimator,
+      selectedSide: relative.side,
+      edgeBps: relative.edgeBps,
+      entryEdgeBps: config.polymarketEntryEdgeBps,
+      strykeProbabilityBps: relative.quote.executableProbabilityBps,
+      polymarketAskBps: evaluation.polymarketPrices[relative.side].askBps,
+    };
+    if (relative.action !== "buy") return event(tick, "entry", "skip", relative.reason, { marketId: evaluation.market.marketId, details });
+    const nativeSafety = decideBestEntry({ fairProbability: relative.side === "yes" ? 1 : 0, quotes: evaluation.buyQuotes, config: { ...config, minimumEntryEdgeBps: 0 }, secondsRemaining: evaluation.estimatorInput.secondsRemaining, tradeSizeLamports: evaluation.proposedSizeLamports, aggregateExposureLamports: evaluation.aggregateExposureLamports, openPositions: evaluation.openPositions, dataFresh: evaluation.dataFresh });
+    if (!Object.entries(nativeSafety.safetyChecks).filter(([key]) => key !== "edge").every(([, passed]) => passed)) return event(tick, "entry", "blocked", nativeSafety.reason, { marketId: evaluation.market.marketId, details });
+    if (config.readOnlyMode || !config.liveTradingEnabled) return event(tick, "entry", "dry_run", config.readOnlyMode ? "read_only" : "live_off", { marketId: evaluation.market.marketId, details });
+    const result = await adapter.executeBuy(evaluation, relative.quote);
+    return event(tick, "entry", "buy", relative.reason, { marketId: evaluation.market.marketId, details, ...result });
   }
   let model: ReturnType<typeof modelEvaluation>;
   try { model = modelEvaluation(evaluation.estimatorInput, config); }
@@ -309,6 +340,8 @@ export * from "./activation-policy.js";
 export * from "./entry.js";
 export * from "./logging.js";
 export * from "./manage-position.js";
+export * from "./polymarket-client.js";
+export * from "./polymarket-relative-value.js";
 export * from "./sdk-runtime.js";
 export * from "./sizing.js";
 export * from "./strategy.js";

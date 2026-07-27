@@ -49,6 +49,11 @@ wallet loading because this pilot is devnet-only and mainnet requires separate
 approval and compatible API/program deployment.
 
 Select `volatility_adjusted_probability` for the recommended generic baseline.
+Select `polymarket_relative_value` on aligned `5m`, `15m`, or `1h` rounds for
+the optional relative-value baseline. It compares executable Polymarket asks
+with executable Stryke buy pricing and uses executable bids as a convergence
+exit signal. It skips native or degraded references and never trades on
+Polymarket; this is not arbitrage.
 Replace only the exported estimator seam in `examples/reference-bot/src/strategy.ts`
 for your own signal. Every run prints
 effective non-secret config and each waiting, blocked, hold, entry, exit, claim,

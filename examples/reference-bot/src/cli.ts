@@ -25,6 +25,7 @@ import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, resolveRef
 import { emitPreflight, requireRootEnvFile, requiredDevnetBalance, runPreflightCheck } from "./preflight.js";
 import { createSdkRuntimeAdapter } from "./sdk-runtime.js";
 import { loadWalletForLiveTrading } from "./wallet.js";
+import { PolymarketClient } from "./polymarket-client.js";
 
 const compatibility = { sdkVersion: SDK_VERSION, apiVersion: SUPPORTED_API_VERSION, apiSchemaVersion: SUPPORTED_API_SCHEMA_VERSION, programId: SUPPORTED_PROGRAM_ID, programVersion: SUPPORTED_PROGRAM_VERSION };
 
@@ -194,7 +195,10 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
       const executionAdapter = new SolanaReviewedExecutionAdapter({ rpc, signer, refresh: async ({ clientActionId }) => ({ action: await transactions.reconcile(clientActionId), positions: await positions.list(signer.address) }) });
       executor = new ReviewedTransactionExecutor(transactions, checkpoint, executionAdapter);
     }
-    const adapter = createSdkRuntimeAdapter({ client, rpc, priceStore, checkpoint, config, ...(signer ? { owner: signer.address } : {}), ...(executor ? { executor } : {}) });
+    const polymarketClient = config.estimator === "polymarket_relative_value"
+      ? new PolymarketClient(config.polymarketClobUrl)
+      : undefined;
+    const adapter = createSdkRuntimeAdapter({ client, rpc, priceStore, checkpoint, config, ...(polymarketClient ? { polymarketClient } : {}), ...(signer ? { owner: signer.address } : {}), ...(executor ? { executor } : {}) });
     const controller = new AbortController();
     process.once("SIGINT", () => controller.abort());
     process.once("SIGTERM", () => controller.abort());

@@ -149,4 +149,28 @@ describe("reference bot config", () => {
   it("live_profile_fails_closed_until_mainnet_is_approved", () => {
     expect(() => parseReferenceBotEnv({}, "live")).toThrow(/Mainnet live trading is not approved/);
   });
+
+  it("wires_polymarket_controls_from_env_and_validates_hysteresis", () => {
+    expect(parseReferenceBotEnv({
+      STRYKE_ESTIMATOR: "polymarket_relative_value",
+      STRYKE_POLY_ENTRY_EDGE_BPS: "501",
+      STRYKE_POLY_EXIT_EDGE_BPS: "199",
+      STRYKE_POLY_MAX_SPREAD_BPS: "999",
+      STRYKE_POLY_MAX_PRICE_AGE_MS: "4999",
+      STRYKE_POLY_TIMEOUT_MS: "2999",
+      STRYKE_POLYMARKET_CLOB_URL: "https://clob.example",
+    })).toMatchObject({
+      estimator: "polymarket_relative_value",
+      polymarketEntryEdgeBps: 501,
+      polymarketExitEdgeBps: 199,
+      polymarketMaximumSpreadBps: 999,
+      polymarketMaximumPriceAgeMs: 4999,
+      polymarketTimeoutMs: 2999,
+      polymarketClobUrl: "https://clob.example",
+    });
+    expect(() => parseReferenceBotConfig({ polymarketEntryEdgeBps: 500, polymarketExitEdgeBps: 500 })).toThrow("polymarketExitEdgeBps");
+    expect(() => parseReferenceBotConfig({ polymarketEntryEdgeBps: 500, polymarketExitEdgeBps: 501 })).toThrow("polymarketExitEdgeBps");
+    expect(parseReferenceBotConfig({ polymarketEntryEdgeBps: 500, polymarketExitEdgeBps: 499 }))
+      .toMatchObject({ polymarketEntryEdgeBps: 500, polymarketExitEdgeBps: 499 });
+  });
 });

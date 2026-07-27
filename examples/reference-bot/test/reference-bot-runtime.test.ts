@@ -307,4 +307,47 @@ describe("reference bot composed runtime", () => {
     enough = true;
     await expect(runMarketTick({ tick: 2, config, adapter: runtime })).resolves.toMatchObject({ phase: "entry" });
   });
+
+  it("polymarket_relative_cli_loop_enters_holds_and_exits_on_convergence", async () => {
+    const config = parseReferenceBotConfig({ estimator: "polymarket_relative_value", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+    const alignedMarket = { ...market, reference: { alignmentStatus: "aligned" } } as never;
+    let tick = 0;
+    const actions: string[] = [];
+    const price = (bidBps: number, askBps: number) => ({ tokenId: "token", bidBps, askBps, spreadBps: askBps - bidBps, observedAtMs: Date.now() });
+    const runtime = adapter({
+      listPositions: async () => (++tick === 1 ? [] : [position()]),
+      evaluateEntry: async () => ({
+        ...(await adapter().evaluateEntry()), market: alignedMarket,
+        polymarketPrices: { yes: price(5700, 6000), no: price(3500, 3800) },
+      }),
+      evaluatePosition: async (value, exposure) => ({
+        ...(await adapter().evaluatePosition(value, exposure)), market: alignedMarket,
+        sellQuote: quote({ action: "sell", side: "yes", amount: "100", expectedShares: undefined, expectedNetProceeds: "95", executableProbabilityBps: 4000, expiresAt: new Date(Date.now() + 60_000).toISOString() }),
+        polymarketPrices: tick === 2
+          ? { yes: price(6000, 6200), no: price(3500, 3800) }
+          : { yes: price(4200, 4400), no: price(3500, 3800) },
+      }),
+      executeBuy: async () => { actions.push("buy"); return { clientActionId: "buy" }; },
+      executeSell: async () => { actions.push("sell"); return { clientActionId: "sell" }; },
+    });
+    const events = await runReferenceBot({ config, adapter: runtime, maximumTicks: 3, wait: async () => {} });
+    expect(events.map(({ action, reason }) => [action, reason])).toEqual([
+      ["buy", "polymarket_relative_edge"],
+      ["hold", "position_not_economically_complete"],
+      ["sell", "polymarket_convergence"],
+    ]);
+    expect(actions).toEqual(["buy", "sell"]);
+  });
+
+  it("polymarket_relative_strategy_skips_degraded_reference_without_external_prices", async () => {
+    const config = parseReferenceBotConfig({ estimator: "polymarket_relative_value", killSwitchEnabled: false });
+    const runtime = adapter({ evaluateEntry: async () => ({
+      ...(await adapter().evaluateEntry()),
+      market: { ...market, reference: { alignmentStatus: "degraded" } } as never,
+      polymarketPrices: undefined,
+    }) });
+    await expect(runMarketTick({ tick: 1, config, adapter: runtime }))
+      .resolves.toMatchObject({ action: "skip", reason: "reference_not_aligned" });
+    expect(runtime.executeBuy).not.toHaveBeenCalled();
+  });
 });

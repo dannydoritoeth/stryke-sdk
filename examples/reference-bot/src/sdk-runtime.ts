@@ -20,6 +20,7 @@ import {
 import type { ReferenceBotRuntimeAdapter, RuntimeExecution } from "./bot.js";
 import type { ReferenceBotConfig } from "./config.js";
 import { calculateBufferedEntrySize } from "./sizing.js";
+import type { PolymarketClient } from "./polymarket-client.js";
 
 export const positionCountsTowardEntryCapacity = (position: PilotPosition): boolean =>
   ["pending_confirmation", "open_position", "sellable", "awaiting_resolution"].includes(position.lifecycle.state);
@@ -55,6 +56,7 @@ export const createSdkRuntimeAdapter = ({
   owner,
   executor,
   now = Date.now,
+  polymarketClient,
 }: {
   client: StrykeClient;
   rpc: LatestBlockhashRpc;
@@ -64,6 +66,7 @@ export const createSdkRuntimeAdapter = ({
   owner?: string;
   executor?: ReviewedTransactionExecutor;
   now?: () => number;
+  polymarketClient?: PolymarketClient;
 }): ReferenceBotRuntimeAdapter => {
   const markets = new MarketsClient(client);
   const positions = new PositionsClient(client);
@@ -86,6 +89,18 @@ export const createSdkRuntimeAdapter = ({
       secondsRemaining: market.expiryTs - Math.floor(now() / 1_000),
       priceHistory: priceStore.history(config.asset).slice(-config.priceHistoryMaxPoints),
     };
+  };
+  const polymarketPrices = async (market: PilotMarket) => {
+    if (config.estimator !== "polymarket_relative_value" || market.reference.alignmentStatus !== "aligned") return undefined;
+    if (!polymarketClient || !market.reference.upTokenId || !market.reference.downTokenId) {
+      throw new StrykeSdkError("source_unavailable", "Aligned Polymarket pricing configuration is unavailable", true);
+    }
+    const options = { timeoutMs: config.polymarketTimeoutMs, maximumAgeMs: config.polymarketMaximumPriceAgeMs, maximumSpreadBps: config.polymarketMaximumSpreadBps };
+    const [yes, no] = await Promise.all([
+      polymarketClient.executablePrice(market.reference.upTokenId, options),
+      polymarketClient.executablePrice(market.reference.downTokenId, options),
+    ]);
+    return { yes, no } as const;
   };
   const saveMaterialization = async ({
     result,
@@ -177,7 +192,11 @@ export const createSdkRuntimeAdapter = ({
       const market = await marketFor(position);
       const ifWinPayout = positionIfWinPayout(position, exposure);
       if (!ifWinPayout) throw new StrykeSdkError("position_state", "API-authored payout inputs are unavailable");
-      return { market, estimatorInput: estimatorInput(market), sellQuote: await quotes.sell({ market, side: exposure.side, amount: exposure.shares, maximumSlippageBps: config.maximumPriceImpactBps }), ifWinPayout, dataFresh: !market.stale };
+      let externalPrices: Awaited<ReturnType<typeof polymarketPrices>>;
+      let polymarketUnavailable = false;
+      try { externalPrices = await polymarketPrices(market); }
+      catch { polymarketUnavailable = true; }
+      return { market, estimatorInput: estimatorInput(market), sellQuote: await quotes.sell({ market, side: exposure.side, amount: exposure.shares, maximumSlippageBps: config.maximumPriceImpactBps }), ifWinPayout, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}), ...(polymarketUnavailable ? { polymarketUnavailable: true } : {}) };
     },
     evaluateEntry: async () => {
       const market = await markets.current(
@@ -209,7 +228,8 @@ export const createSdkRuntimeAdapter = ({
         quotes.buy({ market, side: "yes", amount, maximumSlippageBps: config.maximumPriceImpactBps }),
         quotes.buy({ market, side: "no", amount, maximumSlippageBps: config.maximumPriceImpactBps }),
       ]);
-      return { market, estimatorInput: estimatorInput(market), buyQuotes: [yesQuote, noQuote], proposedSizeLamports, aggregateExposureLamports, openPositions, dataFresh: !market.stale };
+      const externalPrices = await polymarketPrices(market);
+      return { market, estimatorInput: estimatorInput(market), buyQuotes: [yesQuote, noQuote], proposedSizeLamports, aggregateExposureLamports, openPositions, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}) };
     },
     executeBuy: (evaluation, quote) => prepareAndExecute(evaluation.market, quote),
     executeSell: (position, exposure, evaluation) => prepareAndExecute(evaluation.market, evaluation.sellQuote, { positionId: position.positionId, sharesBefore: exposure.shares }),

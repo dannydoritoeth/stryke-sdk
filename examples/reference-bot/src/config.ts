@@ -13,6 +13,12 @@ export type ReferenceBotConfig = {
   minimumVolatilityBpsPerSqrtHour: number;
   maximumVolatilityBpsPerSqrtHour: number;
   maximumModelProbabilityBps: number;
+  polymarketEntryEdgeBps: number;
+  polymarketExitEdgeBps: number;
+  polymarketMaximumSpreadBps: number;
+  polymarketMaximumPriceAgeMs: number;
+  polymarketTimeoutMs: number;
+  polymarketClobUrl: string;
   tradeSizeLamports: bigint;
   maximumTradeSizeLamports: bigint;
   maximumAggregateExposureLamports: bigint;
@@ -61,6 +67,12 @@ export const referenceBotDefaults: ReferenceBotConfig = {
   minimumVolatilityBpsPerSqrtHour: 5,
   maximumVolatilityBpsPerSqrtHour: 2_000,
   maximumModelProbabilityBps: 9_500,
+  polymarketEntryEdgeBps: 500,
+  polymarketExitEdgeBps: 200,
+  polymarketMaximumSpreadBps: 1_000,
+  polymarketMaximumPriceAgeMs: 5_000,
+  polymarketTimeoutMs: 3_000,
+  polymarketClobUrl: "https://clob.polymarket.com",
   readOnlyMode: true,
   liveTradingEnabled: false,
   killSwitchEnabled: true,
@@ -119,7 +131,7 @@ export const parseReferenceBotConfig = (
   if (!["paper", "devnet", "live"].includes(config.profile)) configurationError("profile");
   if (!["BTC", "SOL"].includes(config.asset)) configurationError("asset");
   if (!["one_minute", "five_minute", "fifteen_minute", "hourly"].includes(config.expiryFamily)) configurationError("expiryFamily");
-  if (!["distance_to_strike", "distance_momentum", "volatility_adjusted_probability"].includes(config.estimator)) configurationError("estimator");
+  if (!["distance_to_strike", "distance_momentum", "volatility_adjusted_probability", "polymarket_relative_value"].includes(config.estimator)) configurationError("estimator");
   for (const key of ["readOnlyMode", "liveTradingEnabled", "killSwitchEnabled"] as const) {
     if (typeof config[key] !== "boolean") configurationError(key);
   }
@@ -145,10 +157,16 @@ export const parseReferenceBotConfig = (
   config.minimumVolatilityBpsPerSqrtHour = integer(config.minimumVolatilityBpsPerSqrtHour, "minimumVolatilityBpsPerSqrtHour", 1, 100_000);
   config.maximumVolatilityBpsPerSqrtHour = integer(config.maximumVolatilityBpsPerSqrtHour, "maximumVolatilityBpsPerSqrtHour", config.minimumVolatilityBpsPerSqrtHour, 100_000);
   config.maximumModelProbabilityBps = integer(config.maximumModelProbabilityBps, "maximumModelProbabilityBps", 5_001, 9_999);
+  config.polymarketEntryEdgeBps = integer(config.polymarketEntryEdgeBps, "polymarketEntryEdgeBps", 1, 10_000);
+  config.polymarketExitEdgeBps = integer(config.polymarketExitEdgeBps, "polymarketExitEdgeBps", 0, 9_999);
+  config.polymarketMaximumSpreadBps = integer(config.polymarketMaximumSpreadBps, "polymarketMaximumSpreadBps", 0, 10_000);
+  config.polymarketMaximumPriceAgeMs = integer(config.polymarketMaximumPriceAgeMs, "polymarketMaximumPriceAgeMs", 1, 60_000);
+  config.polymarketTimeoutMs = integer(config.polymarketTimeoutMs, "polymarketTimeoutMs", 1, 30_000);
+  if (config.polymarketExitEdgeBps >= config.polymarketEntryEdgeBps) configurationError("polymarketExitEdgeBps");
   if (config.tradeSizeLamports > config.maximumTradeSizeLamports) configurationError("tradeSizeLamports");
   if (config.maximumAggregateExposureLamports < config.maximumTradeSizeLamports) configurationError("maximumAggregateExposureLamports");
   if (config.feeFreeBufferLamports >= config.feeFreeActivationLimitLamports) configurationError("feeFreeBufferLamports");
-  for (const key of ["apiBaseUrl", "solanaRpcUrl", "pythHermesUrl", "walletAdapterPath"] as const) {
+  for (const key of ["apiBaseUrl", "solanaRpcUrl", "pythHermesUrl", "polymarketClobUrl", "walletAdapterPath"] as const) {
     if (config[key] !== undefined && (typeof config[key] !== "string" || !config[key])) configurationError(key);
   }
   if (typeof config.checkpointPath !== "string" || !config.checkpointPath) configurationError("checkpointPath");
@@ -213,6 +231,12 @@ export const parseReferenceBotEnv = (
     minimumVolatilityBpsPerSqrtHour: numeric("STRYKE_MINIMUM_VOLATILITY_BPS_PER_SQRT_HOUR", referenceBotDefaults.minimumVolatilityBpsPerSqrtHour),
     maximumVolatilityBpsPerSqrtHour: numeric("STRYKE_MAXIMUM_VOLATILITY_BPS_PER_SQRT_HOUR", referenceBotDefaults.maximumVolatilityBpsPerSqrtHour),
     maximumModelProbabilityBps: numeric("STRYKE_MAXIMUM_MODEL_PROBABILITY_BPS", referenceBotDefaults.maximumModelProbabilityBps),
+    polymarketEntryEdgeBps: numeric("STRYKE_POLY_ENTRY_EDGE_BPS", referenceBotDefaults.polymarketEntryEdgeBps),
+    polymarketExitEdgeBps: numeric("STRYKE_POLY_EXIT_EDGE_BPS", referenceBotDefaults.polymarketExitEdgeBps),
+    polymarketMaximumSpreadBps: numeric("STRYKE_POLY_MAX_SPREAD_BPS", referenceBotDefaults.polymarketMaximumSpreadBps),
+    polymarketMaximumPriceAgeMs: numeric("STRYKE_POLY_MAX_PRICE_AGE_MS", referenceBotDefaults.polymarketMaximumPriceAgeMs),
+    polymarketTimeoutMs: numeric("STRYKE_POLY_TIMEOUT_MS", referenceBotDefaults.polymarketTimeoutMs),
+    polymarketClobUrl: profiledEnv.STRYKE_POLYMARKET_CLOB_URL ?? referenceBotDefaults.polymarketClobUrl,
     readOnlyMode, liveTradingEnabled, killSwitchEnabled,
     checkpointPath: profiledEnv.STRYKE_CHECKPOINT_PATH ?? referenceBotDefaults.checkpointPath,
     pythHermesUrl: profiledEnv.STRYKE_PYTH_HERMES_URL ?? referenceBotDefaults.pythHermesUrl,
