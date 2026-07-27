@@ -204,7 +204,7 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
         `Connected to devnet RPC for wallet ${signer.address}.`,
         "Check STRYKE_SOLANA_RPC_URL and confirm the endpoint is reachable and set to devnet.",
         async () => (await rpc.getBalance(signer.address, { commitment: "confirmed" }).send()).value,
-        { attempts: 3, retryDelayMs: 250 }
+        { attempts: 3, retryDelayMs: 1_500 }
       );
       const minimumBalance = requiredDevnetBalance(config.maximumTradeSizeLamports);
       if (balance < minimumBalance) {
