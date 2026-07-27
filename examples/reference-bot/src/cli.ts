@@ -27,6 +27,7 @@ import { createSdkRuntimeAdapter } from "./sdk-runtime.js";
 import { loadWalletForLiveTrading } from "./wallet.js";
 import { PolymarketClient } from "./polymarket-client.js";
 import { FileRoundDecisionStore } from "./round-state.js";
+import { MemoryRoundDecisionStore } from "./round-state.js";
 
 const compatibility = { sdkVersion: SDK_VERSION, apiVersion: SUPPORTED_API_VERSION, apiSchemaVersion: SUPPORTED_API_SCHEMA_VERSION, programId: SUPPORTED_PROGRAM_ID, programVersion: SUPPORTED_PROGRAM_VERSION };
 
@@ -76,6 +77,34 @@ const runFixtureSmoke = async () => {
     },
   });
   console.log(JSON.stringify({ event: "stryke_compatibility", ...compatibility }));
+};
+
+const runPolymarketFixtureSmoke = async () => {
+  const config = parseReferenceBotConfig({ estimator: "polymarket_relative_value", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+  const rounds = new MemoryRoundDecisionStore();
+  let step = 0;
+  let marketId = "poly-round-1";
+  const price = (bidBps: number, askBps: number) => ({ tokenId: "token", bidBps, askBps, spreadBps: askBps - bidBps, observedAtMs: Date.now() });
+  const market = () => ({ marketId, expiryTs: marketId.endsWith("1") ? 100 : 200, strikePrice: "100", reference: { alignmentStatus: "aligned" }, pools: { yes: "1", no: "1", stale: false }, activation: { yes: { realPoolCollateralUnits: "1" }, no: { realPoolCollateralUnits: "1" } } }) as never;
+  const buyQuote = (side: "yes" | "no", executableProbabilityBps: number): ExecutableQuote => ({ ...sampleQuote, quoteId: `buy-${side}`, side, executableProbabilityBps });
+  const { expectedShares: _unusedExpectedShares, ...sampleWithoutBuyOutput } = sampleQuote;
+  const sellQuote: ExecutableQuote = { ...sampleWithoutBuyOutput, quoteId: "sell-yes", action: "sell", side: "yes", amount: "100", expectedNetProceeds: "95", executableProbabilityBps: 4000, expiresAt: new Date(Date.now() + 60_000).toISOString() };
+  const position = { positionId: "position-1", owner: "owner", market: {}, yesShares: "100", noShares: "0", yesCostBasisCollateralUnits: "100", lifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() }, raw: {} } as never;
+  const adapter = {
+    loadCheckpoint: async () => undefined,
+    reconcilePending: async () => ({ state: "confirmed", clientActionId: "none" }),
+    listPositions: async () => { step += 1; return step === 1 || step >= 4 ? [] : [position]; },
+    evaluatePosition: async () => ({ market: market(), estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 120, priceHistory: [] }, sellQuote, ifWinPayout: "200", dataFresh: true, polymarketPrices: step === 2 ? { yes: price(6000, 6200), no: price(3500, 3800) } : { yes: price(4200, 4400), no: price(3500, 3800) } }),
+    evaluateEntry: async () => ({ market: market(), estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 120, priceHistory: [] }, buyQuotes: [buyQuote("yes", 4000), buyQuote("no", 6000)] as const, proposedSizeLamports: config.tradeSizeLamports, aggregateExposureLamports: 0n, openPositions: 0, dataFresh: true, polymarketPrices: { yes: price(5700, 6000), no: price(3500, 3800) } }),
+    executeBuy: async () => ({ clientActionId: `buy-${marketId}` }),
+    executeSell: async () => { await rounds.recordConvergenceExit(market()); return { clientActionId: "sell-poly-round-1" }; },
+    executeTerminal: async () => ({ clientActionId: "none" }),
+    hasConvergenceExitedRound: (candidate: Parameters<MemoryRoundDecisionStore["hasConvergenceExit"]>[0]) => rounds.hasConvergenceExit(candidate),
+  };
+  const first = await runReferenceBot({ config, adapter: adapter as never, maximumTicks: 4, wait: async () => {} });
+  marketId = "poly-round-2";
+  const second = await runReferenceBot({ config, adapter: adapter as never, once: true, wait: async () => {} });
+  console.log(JSON.stringify({ event: "polymarket_fixture_complete", actions: [...first, ...second].map(({ action, reason }) => `${action}:${reason}`) }));
 };
 
 const loadSigner = async (config: ReturnType<typeof parseReferenceBotEnv>, walletAdapterPath?: string) => loadWalletForLiveTrading<TransactionSigner>(config, async (path) => {
@@ -210,7 +239,8 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
 };
 
 try {
-  if (process.argv.some((argument) => argument.startsWith("--profile="))) await runSdkBot(selectedProfile());
+  if (process.argv.includes("--fixture-polymarket")) await runPolymarketFixtureSmoke();
+  else if (process.argv.some((argument) => argument.startsWith("--profile="))) await runSdkBot(selectedProfile());
   else if (process.argv.includes("--live") || process.argv.includes("--live-data")) await runSdkBot(process.argv.includes("--live") ? "devnet" : "paper");
   else await runFixtureSmoke();
 } catch (error) {

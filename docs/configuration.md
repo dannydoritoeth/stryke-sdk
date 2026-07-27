@@ -8,7 +8,7 @@ profile; missing or invalid input fails before wallet or transaction work.
 | --- | --- |
 | `STRYKE_ASSET` | `BTC`, `SOL` |
 | `STRYKE_EXPIRY_FAMILY` | `one_minute`, `five_minute`, `fifteen_minute`, `hourly` |
-| `STRYKE_ESTIMATOR` | `volatility_adjusted_probability` (recommended), `distance_to_strike`, `distance_momentum` (educational) |
+| `STRYKE_ESTIMATOR` | `volatility_adjusted_probability` (recommended generic), `polymarket_relative_value` (optional aligned rounds), `distance_to_strike`, `distance_momentum` (educational) |
 | `STRYKE_TRADE_SIZE_SOL` | positive decimal, maximum 9 decimals |
 | `STRYKE_MAXIMUM_TRADE_SIZE_SOL` | positive decimal; ≥ trade size |
 | `STRYKE_MAXIMUM_AGGREGATE_EXPOSURE_SOL` | positive decimal; ≥ trade cap |
@@ -30,16 +30,30 @@ profile; missing or invalid input fails before wallet or transaction work.
 | `STRYKE_MAXIMUM_MODEL_PROBABILITY_BPS` | `5001..9999`; complementary lower clamp is `10000 - value` |
 | `STRYKE_FEE_FREE_ACTIVATION_LIMIT_SOL` | positive SOL amount; expected protocol region, default `10` |
 | `STRYKE_FEE_FREE_BUFFER_SOL` | non-negative SOL amount below the activation limit, default `0.5` |
+| `STRYKE_POLY_ENTRY_EDGE_BPS` | absolute probability difference `1..10000`, default `500` |
+| `STRYKE_POLY_EXIT_EDGE_BPS` | non-negative and lower than entry edge, default `200` |
+| `STRYKE_POLY_MAX_SPREAD_BPS` | maximum executable Polymarket spread, default `1000` |
+| `STRYKE_POLY_MAX_PRICE_AGE_MS` | positive book freshness limit, default `5000` |
+| `STRYKE_POLY_TIMEOUT_MS` | positive request timeout up to 30000, default `3000` |
 
 Connection controls are `STRYKE_API_BASE_URL`, `STRYKE_SOLANA_RPC_URL`,
-`STRYKE_WALLET_ADAPTER_PATH`, and `STRYKE_CHECKPOINT_PATH`. Booleans are exactly
+`STRYKE_WALLET_ADAPTER_PATH`, `STRYKE_CHECKPOINT_PATH`, and
+`STRYKE_ROUND_STATE_PATH`. Booleans are exactly
 `true` or `false` when used by custom integrations. The public commands force
 safe mode precedence: paper is read-only, devnet enables signed devnet actions,
 and live fails closed pending mainnet approval. The checkpoint defaults to
 `.stryke/reference-bot-action.json`.
+Confirmed convergence exits are stored separately in
+`.stryke/reference-bot-rounds.json` so restart cannot re-enter the same round.
 `STRYKE_PYTH_HERMES_URL` may select the supplied Hermes endpoint; otherwise the
 public endpoint is used. It is validated with the rest of the typed config and
 printed in the non-secret effective configuration.
+`STRYKE_POLYMARKET_CLOB_URL` selects the public read-only CLOB endpoint.
+
+The relative-value strategy is available only for an `aligned` market
+reference. It compares executable asks for entry and executable bids for
+convergence exit. Native one-minute and degraded fallback rounds are skipped.
+It never places Polymarket orders and is not an arbitrage guarantee.
 
 The bundled example wallet adapter reads `STRYKE_WALLET_KEYPAIR_PATH`. Point it
 to an absolute path outside the repository for a separately funded devnet

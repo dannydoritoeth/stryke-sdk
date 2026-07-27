@@ -60,4 +60,16 @@ describe("documented example contract", () => {
     expect(cli.indexOf('process.argv.includes("--preflight-only")')).toBeLessThan(cli.indexOf("new FileActionCheckpointStore"));
     expect(troubleshooting).toContain("npm run start:devnet -w @stryke/reference-bot -- --preflight-only");
   });
+
+  it("real_cli_composes_polymarket_entry_hold_exit_restart_block_and_next_round", () => {
+    const result = spawnSync("npm", ["run", "test:polymarket-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
+    expect(result.status, result.stderr).toBe(0);
+    for (const expected of [
+      "buy:polymarket_relative_edge",
+      "hold:position_not_economically_complete",
+      "sell:polymarket_convergence",
+      "skip:same_round_reentry_blocked",
+    ]) expect(result.stdout).toContain(expected);
+    expect(result.stdout.match(/buy:polymarket_relative_edge/g)).toHaveLength(2);
+  }, 30_000);
 });

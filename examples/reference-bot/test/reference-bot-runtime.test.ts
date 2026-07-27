@@ -371,4 +371,20 @@ describe("reference bot composed runtime", () => {
       .resolves.toMatchObject({ action: "buy", reason: "polymarket_relative_edge", marketId: "market-2" });
     exitedMarketId = "none";
   });
+
+  it("unavailable_polymarket_exit_keeps_native_stop_loss_and_safe_hold_active", async () => {
+    const config = parseReferenceBotConfig({ estimator: "polymarket_relative_value", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+    for (const [proceeds, action, reason] of [["90", "sell", "stop_loss"], ["95", "hold", "position_not_economically_complete"]] as const) {
+      const runtime = adapter({
+        listPositions: async () => [position()],
+        evaluatePosition: async () => ({
+          ...(await adapter().evaluatePosition(position(), { side: "yes", shares: "100", costBasisCollateralUnits: "100" })),
+          sellQuote: quote({ action: "sell", side: "yes", amount: "100", expectedShares: undefined, expectedNetProceeds: proceeds, expiresAt: new Date(Date.now() + 60_000).toISOString() }),
+          polymarketPrices: undefined,
+          polymarketUnavailable: true,
+        }),
+      });
+      await expect(runMarketTick({ tick: 1, config, adapter: runtime })).resolves.toMatchObject({ action, reason });
+    }
+  });
 });
