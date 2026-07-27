@@ -21,6 +21,7 @@ import type { ReferenceBotRuntimeAdapter, RuntimeExecution } from "./bot.js";
 import type { ReferenceBotConfig } from "./config.js";
 import { calculateBufferedEntrySize } from "./sizing.js";
 import type { PolymarketClient } from "./polymarket-client.js";
+import type { RoundDecisionStore } from "./round-state.js";
 
 export const positionCountsTowardEntryCapacity = (position: PilotPosition): boolean =>
   ["pending_confirmation", "open_position", "sellable", "awaiting_resolution"].includes(position.lifecycle.state);
@@ -57,6 +58,7 @@ export const createSdkRuntimeAdapter = ({
   executor,
   now = Date.now,
   polymarketClient,
+  roundDecisionStore,
 }: {
   client: StrykeClient;
   rpc: LatestBlockhashRpc;
@@ -67,6 +69,7 @@ export const createSdkRuntimeAdapter = ({
   executor?: ReviewedTransactionExecutor;
   now?: () => number;
   polymarketClient?: PolymarketClient;
+  roundDecisionStore?: RoundDecisionStore;
 }): ReferenceBotRuntimeAdapter => {
   const markets = new MarketsClient(client);
   const positions = new PositionsClient(client);
@@ -109,13 +112,15 @@ export const createSdkRuntimeAdapter = ({
     market,
     positionId,
     sharesBefore,
+    strategyReason,
   }: {
     result: Awaited<ReturnType<ReviewedTransactionExecutor["execute"]>>;
     intentHash: string;
     action: "buy" | "sell" | "claim" | "refund";
-    market: { expiryTs: number; targetValue: string };
+    market: { marketId?: string; expiryTs: number; targetValue: string };
     positionId?: string;
     sharesBefore?: string;
+    strategyReason?: string;
   }) => {
     if (result.state !== "confirmed") return;
     await checkpoint.save({
@@ -129,22 +134,24 @@ export const createSdkRuntimeAdapter = ({
         expiryFamily: config.expiryFamily,
         expiryTs: market.expiryTs,
         targetValue: market.targetValue,
+        ...(market.marketId ? { marketId: market.marketId } : {}),
         ...(positionId ? { positionId } : {}),
         ...(sharesBefore ? { sharesBefore } : {}),
+        ...(strategyReason ? { strategyReason } : {}),
       },
     });
   };
   const prepareAndExecute = async (
     market: PilotMarket,
     quote: Awaited<ReturnType<QuotesClient["get"]>>,
-    materialization?: { positionId?: string; sharesBefore?: string }
+    materialization?: { positionId?: string; sharesBefore?: string; strategyReason?: string }
   ) => {
     const live = requireLive();
     const clientActionId = `pilot-${crypto.randomUUID()}`;
     const marketIdentity = { tokenMint: market.tokenMint, source: market.source, collateral: market.raw.collateral, expiryFamily: market.expiryFamily, expiryTs: market.expiryTs, targetValue: market.strikePrice };
     const intentHash = await createPilotIntentHash({ clientActionId, owner: live.owner, market: marketIdentity, quote });
     const result = await live.executor.execute(await transactions.prepare({ owner: live.owner, market, quote, clientActionId, intentHash }));
-    await saveMaterialization({ result, intentHash, action: quote.action, market: { expiryTs: market.expiryTs, targetValue: market.strikePrice }, ...(materialization?.positionId ? { positionId: materialization.positionId } : {}), ...(materialization?.sharesBefore ? { sharesBefore: materialization.sharesBefore } : {}) });
+    await saveMaterialization({ result, intentHash, action: quote.action, market: { marketId: market.marketId, expiryTs: market.expiryTs, targetValue: market.strikePrice }, ...(materialization?.positionId ? { positionId: materialization.positionId } : {}), ...(materialization?.sharesBefore ? { sharesBefore: materialization.sharesBefore } : {}), ...(materialization?.strategyReason ? { strategyReason: materialization.strategyReason } : {}) });
     return executionResult(result);
   };
   return {
@@ -171,6 +178,9 @@ export const createSdkRuntimeAdapter = ({
                 ["claimed", "refunded", "expired_unclaimed", "lost"].includes(matching.lifecycle.state)
               );
         if (!observed) return { state: "materializing", clientActionId: pending.clientActionId, ...(pending.signature ? { signature: pending.signature } : {}) };
+        if (materialization.action === "sell" && materialization.strategyReason === "polymarket_convergence" && roundDecisionStore) {
+          await roundDecisionStore.recordConvergenceExit({ marketId: materialization.marketId ?? String(matching?.market.tokenMint ?? materialization.targetValue), expiryTs: materialization.expiryTs, strikePrice: materialization.targetValue });
+        }
         await checkpoint.clear(pending.clientActionId);
         return { state: "confirmed", clientActionId: pending.clientActionId, ...(pending.signature ? { signature: pending.signature } : {}) };
       }
@@ -232,7 +242,8 @@ export const createSdkRuntimeAdapter = ({
       return { market, estimatorInput: estimatorInput(market), buyQuotes: [yesQuote, noQuote], proposedSizeLamports, aggregateExposureLamports, openPositions, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}) };
     },
     executeBuy: (evaluation, quote) => prepareAndExecute(evaluation.market, quote),
-    executeSell: (position, exposure, evaluation) => prepareAndExecute(evaluation.market, evaluation.sellQuote, { positionId: position.positionId, sharesBefore: exposure.shares }),
+    executeSell: (position, exposure, evaluation, reason) => prepareAndExecute(evaluation.market, evaluation.sellQuote, { positionId: position.positionId, sharesBefore: exposure.shares, strategyReason: reason }),
+    hasConvergenceExitedRound: (market) => roundDecisionStore?.hasConvergenceExit({ marketId: market.marketId, expiryTs: market.expiryTs, strikePrice: market.strikePrice }) ?? Promise.resolve(false),
     executeTerminal: async (position, action) => {
       const live = requireLive();
       const clientActionId = `pilot-${crypto.randomUUID()}`;

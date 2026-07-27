@@ -130,4 +130,22 @@ describe("SDK runtime composition", () => {
     await expect(adapter.reconcilePending((await checkpoint.load())!)).resolves.toMatchObject({ state: "confirmed" });
     expect(await checkpoint.load()).toBeUndefined();
   });
+
+  it("confirmed_convergence_sell_records_round_before_checkpoint_clear", async () => {
+    const checkpoint = new MemoryActionCheckpointStore();
+    await checkpoint.save({
+      clientActionId: "sell-1", intentHash: "intent-1", state: "confirmed",
+      materialization: { action: "sell", asset: "BTC", expiryFamily: "five_minute", marketId: "market-1", expiryTs: 1_800_000_000, targetValue: "70000", sharesBefore: "10", strategyReason: "polymarket_convergence" },
+    });
+    const recorded: unknown[] = [];
+    const client = { requestJson: async () => ({ owner: "owner", positions: [], metadata: { stale: false, generatedAt: new Date().toISOString() } }) };
+    const config = parseReferenceBotConfig({ asset: "BTC", expiryFamily: "five_minute" });
+    const runtime = createSdkRuntimeAdapter({
+      client: client as never, rpc: {} as never, priceStore: new PriceStore(), checkpoint, config, owner: "owner",
+      roundDecisionStore: { hasConvergenceExit: async () => false, recordConvergenceExit: async (round) => { recorded.push(round); } },
+    });
+    await expect(runtime.reconcilePending((await checkpoint.load())!)).resolves.toMatchObject({ state: "confirmed" });
+    expect(recorded).toEqual([{ marketId: "market-1", expiryTs: 1_800_000_000, strikePrice: "70000" }]);
+    expect(await checkpoint.load()).toBeUndefined();
+  });
 });

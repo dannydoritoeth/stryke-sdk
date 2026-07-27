@@ -14,8 +14,10 @@ export type ActionCheckpoint = {
     expiryFamily: "one_minute" | "five_minute" | "fifteen_minute" | "hourly";
     expiryTs: number;
     targetValue: string;
+    marketId?: string;
     positionId?: string;
     sharesBefore?: string;
+    strategyReason?: string;
   };
 };
 

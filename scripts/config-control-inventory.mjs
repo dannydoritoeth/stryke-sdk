@@ -30,6 +30,7 @@ export const configControlInventory = {
   STRYKE_SOLANA_RPC_URL: { consumer: "Solana RPC client", evidence: configEvidence("projects_connection_and_file_controls_into_the_cli_runtime_consumers") },
   STRYKE_PYTH_HERMES_URL: { consumer: "Pyth Hermes subscription", evidence: configEvidence("projects_connection_and_file_controls_into_the_cli_runtime_consumers") },
   STRYKE_CHECKPOINT_PATH: { consumer: "FileActionCheckpointStore", evidence: configEvidence("projects_connection_and_file_controls_into_the_cli_runtime_consumers") },
+  STRYKE_ROUND_STATE_PATH: { consumer: "FileRoundDecisionStore", evidence: { file: "examples/reference-bot/test/round-state.test.ts", title: "persists_same_round_exit_and_allows_the_next_round_after_restart" } },
   STRYKE_WALLET_ADAPTER_PATH: { consumer: "devnet signer module loader", evidence: configEvidence("projects_connection_and_file_controls_into_the_cli_runtime_consumers") },
   STRYKE_WALLET_KEYPAIR_PATH: { consumer: "bundled wallet adapter keypair loader", evidence: { file: "test/wallet-adapter-errors.test.ts", title: "devnet_preflight_reports_unreadable_keypair_remediation" } },
   STRYKE_READ_ONLY_MODE: { consumer: "wallet and transaction safety precedence", evidence: configEvidence("paper_profile_overrides_unsafe_env_and_never_enables_transactions") },
@@ -45,4 +46,10 @@ export const configControlInventory = {
   STRYKE_MINIMUM_VOLATILITY_BPS_PER_SQRT_HOUR: { consumer: "volatility estimator lower clamp", evidence: configEvidence("validates_volatility_controls_and_preserves_expiry_family_lookbacks") },
   STRYKE_MAXIMUM_VOLATILITY_BPS_PER_SQRT_HOUR: { consumer: "volatility estimator upper clamp", evidence: configEvidence("validates_volatility_controls_and_preserves_expiry_family_lookbacks") },
   STRYKE_MAXIMUM_MODEL_PROBABILITY_BPS: { consumer: "volatility estimator probability clamp", evidence: configEvidence("validates_volatility_controls_and_preserves_expiry_family_lookbacks") },
+  STRYKE_POLY_ENTRY_EDGE_BPS: { consumer: "Polymarket both-side entry selector", evidence: { file: "examples/reference-bot/test/polymarket-relative-value.test.ts", title: "selects_either_side_at_the_exact_absolute_entry_boundary" } },
+  STRYKE_POLY_EXIT_EDGE_BPS: { consumer: "Polymarket convergence exit selector", evidence: { file: "examples/reference-bot/test/polymarket-relative-value.test.ts", title: "skips_below_entry_and_exits_at_the_exact_lower_boundary" } },
+  STRYKE_POLY_MAX_SPREAD_BPS: { consumer: "Polymarket executable book validator", evidence: { file: "examples/reference-bot/test/polymarket-client.test.ts", title: "maximum_spread_reaches_the_executable_book_consumer" } },
+  STRYKE_POLY_MAX_PRICE_AGE_MS: { consumer: "Polymarket executable book freshness validator", evidence: { file: "examples/reference-bot/test/polymarket-client.test.ts", title: "maximum_price_age_reaches_the_freshness_consumer" } },
+  STRYKE_POLY_TIMEOUT_MS: { consumer: "Polymarket executable book request timeout", evidence: { file: "examples/reference-bot/test/polymarket-client.test.ts", title: "timeout_reaches_the_request_abort_consumer" } },
+  STRYKE_POLYMARKET_CLOB_URL: { consumer: "Polymarket read-only CLOB client endpoint", evidence: configEvidence("wires_polymarket_controls_from_env_and_validates_hysteresis") },
 };

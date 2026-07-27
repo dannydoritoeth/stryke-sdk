@@ -125,7 +125,7 @@ describe("reference bot composed runtime", () => {
     for (const [proceeds, reason] of [["90", "stop_loss"], ["120", "take_profit"]] as const) {
       const runtime = adapter({ listPositions: async () => [position()], evaluatePosition: async (value, exposure) => ({ ...(await adapter().evaluatePosition(value, exposure)), sellQuote: quote({ action: "sell", side: "yes", amount: "100", expectedShares: undefined, expectedNetProceeds: proceeds, expiresAt: new Date(Date.now() + 60_000).toISOString() }) }) });
       await expect(runMarketTick({ tick: 1, config: live, adapter: runtime })).resolves.toMatchObject({ action: "sell", reason });
-      expect(runtime.executeSell).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ shares: "100" }), expect.objectContaining({ sellQuote: expect.objectContaining({ amount: "100" }) }));
+      expect(runtime.executeSell).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ shares: "100" }), expect.objectContaining({ sellQuote: expect.objectContaining({ amount: "100" }) }), reason);
     }
   });
 
@@ -349,5 +349,26 @@ describe("reference bot composed runtime", () => {
     await expect(runMarketTick({ tick: 1, config, adapter: runtime }))
       .resolves.toMatchObject({ action: "skip", reason: "reference_not_aligned" });
     expect(runtime.executeBuy).not.toHaveBeenCalled();
+  });
+
+  it("polymarket_relative_strategy_blocks_same_round_after_restart_but_allows_next_round", async () => {
+    const config = parseReferenceBotConfig({ estimator: "polymarket_relative_value", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+    let exitedMarketId = "market-1";
+    let currentMarketId = "market-1";
+    const price = (bidBps: number, askBps: number) => ({ tokenId: "token", bidBps, askBps, spreadBps: askBps - bidBps, observedAtMs: Date.now() });
+    const runtime = adapter({
+      evaluateEntry: async () => ({
+        ...(await adapter().evaluateEntry()),
+        market: { ...market, marketId: currentMarketId, reference: { alignmentStatus: "aligned" } } as never,
+        polymarketPrices: { yes: price(5700, 6000), no: price(3500, 3800) },
+      }),
+      hasConvergenceExitedRound: async (candidate) => candidate.marketId === exitedMarketId,
+    });
+    await expect(runMarketTick({ tick: 1, config, adapter: runtime }))
+      .resolves.toMatchObject({ action: "skip", reason: "same_round_reentry_blocked" });
+    currentMarketId = "market-2";
+    await expect(runMarketTick({ tick: 2, config, adapter: runtime }))
+      .resolves.toMatchObject({ action: "buy", reason: "polymarket_relative_edge", marketId: "market-2" });
+    exitedMarketId = "none";
   });
 });

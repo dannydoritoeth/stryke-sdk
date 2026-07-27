@@ -39,6 +39,7 @@ export type ReferenceBotConfig = {
   solanaRpcUrl?: string;
   pythHermesUrl: string;
   checkpointPath: string;
+  roundStatePath: string;
   walletAdapterPath?: string;
 };
 
@@ -78,6 +79,7 @@ export const referenceBotDefaults: ReferenceBotConfig = {
   killSwitchEnabled: true,
   pythHermesUrl: "https://hermes.pyth.network",
   checkpointPath: ".stryke/reference-bot-action.json",
+  roundStatePath: ".stryke/reference-bot-rounds.json",
 };
 
 const configurationError = (name: string): never => {
@@ -170,6 +172,7 @@ export const parseReferenceBotConfig = (
     if (config[key] !== undefined && (typeof config[key] !== "string" || !config[key])) configurationError(key);
   }
   if (typeof config.checkpointPath !== "string" || !config.checkpointPath) configurationError("checkpointPath");
+  if (typeof config.roundStatePath !== "string" || !config.roundStatePath) configurationError("roundStatePath");
   return config;
 };
 
@@ -239,6 +242,7 @@ export const parseReferenceBotEnv = (
     polymarketClobUrl: profiledEnv.STRYKE_POLYMARKET_CLOB_URL ?? referenceBotDefaults.polymarketClobUrl,
     readOnlyMode, liveTradingEnabled, killSwitchEnabled,
     checkpointPath: profiledEnv.STRYKE_CHECKPOINT_PATH ?? referenceBotDefaults.checkpointPath,
+    roundStatePath: profiledEnv.STRYKE_ROUND_STATE_PATH ?? referenceBotDefaults.roundStatePath,
     pythHermesUrl: profiledEnv.STRYKE_PYTH_HERMES_URL ?? referenceBotDefaults.pythHermesUrl,
     ...(profiledEnv.STRYKE_API_BASE_URL ? { apiBaseUrl: profiledEnv.STRYKE_API_BASE_URL } : {}),
     ...(profiledEnv.STRYKE_SOLANA_RPC_URL ? { solanaRpcUrl: profiledEnv.STRYKE_SOLANA_RPC_URL } : {}),
@@ -268,6 +272,7 @@ export const resolveReferenceBotRuntimeBindings = (
   solanaRpcUrl: config.solanaRpcUrl ?? "http://127.0.0.1:8899",
   pythHermesUrl: config.pythHermesUrl,
   checkpointPath: resolve(cwd, config.checkpointPath),
+  roundStatePath: resolve(cwd, config.roundStatePath),
   walletAdapterPath: config.walletAdapterPath
     ? resolve(cwd, config.walletAdapterPath)
     : undefined,

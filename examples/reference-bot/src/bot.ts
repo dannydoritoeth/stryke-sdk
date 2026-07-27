@@ -67,8 +67,9 @@ export interface ReferenceBotRuntimeAdapter {
   evaluatePosition(position: PilotPosition, exposure: PilotPositionSideExposure): Promise<PositionEvaluation>;
   evaluateEntry(): Promise<EntryEvaluation>;
   executeBuy(evaluation: EntryEvaluation, quote: ExecutableQuote): Promise<RuntimeExecution>;
-  executeSell(position: PilotPosition, exposure: PilotPositionSideExposure, evaluation: PositionEvaluation): Promise<RuntimeExecution>;
+  executeSell(position: PilotPosition, exposure: PilotPositionSideExposure, evaluation: PositionEvaluation, reason: string): Promise<RuntimeExecution>;
   executeTerminal(position: PilotPosition, action: PositionTerminalAction): Promise<RuntimeExecution>;
+  hasConvergenceExitedRound?(market: PilotMarket): Promise<boolean>;
 }
 
 const terminalStates = new Set(["claimable", "refundable"]);
@@ -221,7 +222,7 @@ export const runMarketTick = async ({
       return event(tick, "position", "sell", `${sell.decision.reason}_dry_run`, { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions });
     }
     let result: RuntimeExecution;
-    try { result = await adapter.executeSell(sell.position, sell.exposure, sell.evaluation); }
+    try { result = await adapter.executeSell(sell.position, sell.exposure, sell.evaluation, sell.decision.reason); }
     catch (error) {
       if (isTradingLockedError(error)) return event(tick, "position", "hold", "trading_locked_until_settlement", { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions });
       if (isQuoteRevalidationError(error)) return event(tick, "position", "hold", "quote_changed_before_submission", { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions });
@@ -247,6 +248,9 @@ export const runMarketTick = async ({
   if (config.estimator === "polymarket_relative_value") {
     if (evaluation.market.reference.alignmentStatus !== "aligned" || !evaluation.polymarketPrices) {
       return event(tick, "entry", "skip", "reference_not_aligned", { marketId: evaluation.market.marketId });
+    }
+    if (await adapter.hasConvergenceExitedRound?.(evaluation.market)) {
+      return event(tick, "entry", "skip", "same_round_reentry_blocked", { marketId: evaluation.market.marketId });
     }
     const relative = decidePolymarketRelativeEntry({ quotes: evaluation.buyQuotes, prices: evaluation.polymarketPrices, entryEdgeBps: config.polymarketEntryEdgeBps });
     const details = {
@@ -342,6 +346,7 @@ export * from "./logging.js";
 export * from "./manage-position.js";
 export * from "./polymarket-client.js";
 export * from "./polymarket-relative-value.js";
+export * from "./round-state.js";
 export * from "./sdk-runtime.js";
 export * from "./sizing.js";
 export * from "./strategy.js";

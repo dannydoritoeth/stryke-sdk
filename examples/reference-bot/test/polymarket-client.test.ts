@@ -24,4 +24,21 @@ describe("read-only Polymarket executable prices", () => {
     await expect(client.executablePrice("token", { timeoutMs: 100, maximumAgeMs: 1_000, maximumSpreadBps: 1_000 }))
       .rejects.toMatchObject({ code });
   });
+
+  it("maximum_price_age_reaches_the_freshness_consumer", async () => {
+    const client = new PolymarketClient("https://clob.example", async () => response({ asset_id: "token", timestamp: "1000", bids: [{ price: "0.5" }], asks: [{ price: "0.6" }] }), () => 2001);
+    await expect(client.executablePrice("token", { timeoutMs: 100, maximumAgeMs: 1_000, maximumSpreadBps: 1_000 })).rejects.toMatchObject({ code: "source_stale" });
+  });
+
+  it("maximum_spread_reaches_the_executable_book_consumer", async () => {
+    const client = new PolymarketClient("https://clob.example", async () => response({ asset_id: "token", timestamp: "2000", bids: [{ price: "0.5" }], asks: [{ price: "0.6001" }] }), () => 2000);
+    await expect(client.executablePrice("token", { timeoutMs: 100, maximumAgeMs: 1_000, maximumSpreadBps: 1_000 })).rejects.toMatchObject({ code: "quote_blocked" });
+  });
+
+  it("timeout_reaches_the_request_abort_consumer", async () => {
+    const client = new PolymarketClient("https://clob.example", async (_input, init) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    }));
+    await expect(client.executablePrice("token", { timeoutMs: 5, maximumAgeMs: 1_000, maximumSpreadBps: 1_000 })).rejects.toMatchObject({ code: "source_unavailable" });
+  });
 });

@@ -129,6 +129,7 @@ describe("reference bot config", () => {
       solanaRpcUrl: "https://rpc.example.com",
       pythHermesUrl: "https://hermes.example.com",
       checkpointPath: "/tmp/reference-bot/state/checkpoint.json",
+      roundStatePath: "/tmp/reference-bot/.stryke/reference-bot-rounds.json",
       walletAdapterPath: "/tmp/reference-bot/wallet/adapter.mjs",
     });
   });
