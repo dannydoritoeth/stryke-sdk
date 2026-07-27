@@ -57,7 +57,7 @@ const runPaperFollowUp = ({ cellId, cellEnv, lines }) => new Promise((complete) 
   });
 });
 
-const runCell = ({ asset, expiry }) => new Promise((complete) => {
+const runCell = ({ asset, expiry }, attempt = 1) => new Promise((complete) => {
   const cellId = `${asset.toLowerCase()}-${expiry}`;
   const checkpoint = resolve(directory, `${cellId}.checkpoint.json`);
   const lines = [];
@@ -109,19 +109,39 @@ const runCell = ({ asset, expiry }) => new Promise((complete) => {
     const buy = actions.find((event) => event.action === "buy" && event.signature);
     const completion = buy && actions.find((event) => event.tick > buy.tick && ["sell", "claim", "refund"].includes(event.action) && event.signature);
     const result = {
-      schemaVersion: "stryke.referenceBotDevnetMatrixCell.v1", runId, revision, asset, expiry,
+      schemaVersion: "stryke.referenceBotDevnetMatrixCell.v1", runId, revision, asset, expiry, attempt,
       startedAt, completedAt: new Date().toISOString(), exitCode: code, signal,
       timedOut, tickCount: runtimeEvents.length,
       actions, lifecycleCompleted: Boolean(completion) && cleanLifecycle, nextMarketEvaluated,
       checkpointPath: checkpoint, lines,
     };
-    await writeFile(resolve(directory, `${cellId}.json`), `${JSON.stringify(result, null, 2)}\n`);
+    await writeFile(resolve(directory, `${cellId}.attempt-${attempt}.json`), `${JSON.stringify(result, null, 2)}\n`);
     complete(result);
   });
 });
 
+const safePreflightFailure = (result) => result.tickCount === 0 &&
+  !result.actions.some((event) => event.signature) &&
+  result.lines.some(({ line }) => {
+    try {
+      const event = JSON.parse(line);
+      return event.event === "reference_bot_preflight" && event.status === "failed";
+    } catch {
+      return false;
+    }
+  });
+
 const results = [];
-for (const cell of cells) results.push(await runCell(cell));
+for (const cell of cells) {
+  let result = await runCell(cell);
+  if (safePreflightFailure(result)) {
+    console.log(JSON.stringify({ event: "devnet_bot_matrix_preflight_retry", asset: cell.asset, expiry: cell.expiry, delayMs: 5_000 }));
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 5_000));
+    result = await runCell(cell, 2);
+  }
+  await writeFile(resolve(directory, `${cell.asset.toLowerCase()}-${cell.expiry}.json`), `${JSON.stringify(result, null, 2)}\n`);
+  results.push(result);
+}
 const report = { schemaVersion: "stryke.referenceBotDevnetMatrix.v1", runId, revision, generatedAt: new Date().toISOString(), results };
 await writeFile(resolve(directory, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify({ event: "devnet_bot_matrix_complete", runId, directory, cells: results.length }));
