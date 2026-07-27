@@ -104,7 +104,7 @@ describe("SDK runtime composition", () => {
       positions: materialized ? [{
         owner: "owner", tokenSymbol: "BTC", tokenMint: "So11111111111111111111111111111111111111112",
         source: "pyth_oracle", collateral: { mint: "11111111111111111111111111111111" },
-        expiryFamily: "five_minute", expiryTs: 1_800_000_000, targetValue: "70000",
+        expiryFamily: "five_minute", expiryTs: 1_800_000_000, targetValue: "70000.00000000",
         yesShares: "10", noShares: "0", pilotLifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() },
       }] : [],
       metadata: { stale: false, generatedAt: new Date().toISOString() },

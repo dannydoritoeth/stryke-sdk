@@ -26,6 +26,19 @@ import type { RoundDecisionStore } from "./round-state.js";
 export const positionCountsTowardEntryCapacity = (position: PilotPosition): boolean =>
   ["pending_confirmation", "open_position", "sellable", "awaiting_resolution"].includes(position.lifecycle.state);
 
+const canonicalDecimalIdentity = (value: string): string => {
+  const match = /^([+-]?)(\d+)(?:\.(\d*))?$/.exec(value.trim());
+  if (!match) return value;
+  const integer = match[2]!.replace(/^0+(?=\d)/, "");
+  const fraction = (match[3] ?? "").replace(/0+$/, "");
+  const magnitude = fraction ? `${integer}.${fraction}` : integer;
+  return magnitude === "0" ? "0" : `${match[1] === "-" ? "-" : ""}${magnitude}`;
+};
+
+const sameTargetIdentity = (left: unknown, right: unknown): boolean =>
+  typeof left === "string" && typeof right === "string" &&
+  canonicalDecimalIdentity(left) === canonicalDecimalIdentity(right);
+
 export const authoritativeActivationFor = (market: PilotMarket, configuredLimit: bigint) => {
   if (!market.activation) {
     throw new StrykeSdkError("compatibility", "Authoritative market activation state is unavailable");
@@ -40,7 +53,7 @@ export const authoritativeActivationFor = (market: PilotMarket, configuredLimit:
 const marketMatchesPosition = (market: PilotMarket, position: PilotPosition): boolean => {
   const identity = position.market;
   return identity.tokenMint === market.tokenMint && identity.expiryFamily === market.expiryFamily &&
-    identity.expiryTs === market.expiryTs && identity.targetValue === market.strikePrice;
+    identity.expiryTs === market.expiryTs && sameTargetIdentity(identity.targetValue, market.strikePrice);
 };
 
 const executionResult = (value: unknown): RuntimeExecution => {
@@ -178,7 +191,7 @@ export const createSdkRuntimeAdapter = ({
           position.asset === materialization.asset &&
           position.market.expiryFamily === materialization.expiryFamily &&
           position.market.expiryTs === materialization.expiryTs &&
-          position.market.targetValue === materialization.targetValue
+          sameTargetIdentity(position.market.targetValue, materialization.targetValue)
         );
         const exposureShares = matching
           ? BigInt(matching.yesShares) + BigInt(matching.noShares)
