@@ -27,10 +27,11 @@ describe("reference-bot devnet matrix runner", () => {
     expect(source).toContain("paperTimeoutSeconds * 1_000");
   });
 
-  it("retries_only_a_zero-transaction_preflight_failure_once", () => {
-    expect(source).toContain("result.tickCount === 0");
+  it("retries_only_a_zero-transaction_transient_infrastructure_failure_once", () => {
+    expect(source).toContain("!result.timedOut");
     expect(source).toContain("!result.actions.some((event) => event.signature)");
     expect(source).toContain('event.event === "reference_bot_preflight" && event.status === "failed"');
+    expect(source).toContain('event.event === "reference_bot_error" && event.message === "fetch failed"');
     expect(source).toContain("result = await runCell(cell, 2)");
     expect(source).not.toContain("runCell(cell, 3)");
   });

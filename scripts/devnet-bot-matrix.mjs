@@ -120,12 +120,14 @@ const runCell = ({ asset, expiry }, attempt = 1) => new Promise((complete) => {
   });
 });
 
-const safePreflightFailure = (result) => result.tickCount === 0 &&
+const safeRetryableInfrastructureFailure = (result) =>
+  !result.timedOut &&
   !result.actions.some((event) => event.signature) &&
   result.lines.some(({ line }) => {
     try {
       const event = JSON.parse(line);
-      return event.event === "reference_bot_preflight" && event.status === "failed";
+      return (event.event === "reference_bot_preflight" && event.status === "failed") ||
+        (event.event === "reference_bot_error" && event.message === "fetch failed");
     } catch {
       return false;
     }
@@ -134,8 +136,8 @@ const safePreflightFailure = (result) => result.tickCount === 0 &&
 const results = [];
 for (const cell of cells) {
   let result = await runCell(cell);
-  if (safePreflightFailure(result)) {
-    console.log(JSON.stringify({ event: "devnet_bot_matrix_preflight_retry", asset: cell.asset, expiry: cell.expiry, delayMs: 5_000 }));
+  if (safeRetryableInfrastructureFailure(result)) {
+    console.log(JSON.stringify({ event: "devnet_bot_matrix_safe_retry", asset: cell.asset, expiry: cell.expiry, delayMs: 5_000 }));
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 5_000));
     result = await runCell(cell, 2);
   }
