@@ -8,6 +8,7 @@ import {
   emitPreflight,
   requiredDevnetBalance,
   requireRootEnvFile,
+  runPreflightCheck,
 } from "../src/preflight.js";
 
 describe("reference bot startup preflight", () => {
@@ -50,6 +51,32 @@ describe("reference bot startup preflight", () => {
 
   it("devnet_preflight_requires_trade_cap_plus_execution_buffer", () => {
     expect(requiredDevnetBalance(1_000_000n)).toBe(1_000_000n + DEVNET_EXECUTION_BUFFER_LAMPORTS);
+  });
+
+  it("devnet_rpc_preflight_retries_a_transient_fetch_failure", async () => {
+    const output: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((line) => output.push(String(line)));
+    const operation = vi
+      .fn<() => Promise<number>>()
+      .mockRejectedValueOnce(new Error("fetch failed"))
+      .mockRejectedValueOnce(new Error("fetch failed"))
+      .mockResolvedValue(123);
+
+    await expect(
+      runPreflightCheck(
+        "devnet",
+        "rpc",
+        "Connected.",
+        "Check RPC.",
+        operation,
+        { attempts: 3 }
+      )
+    ).resolves.toBe(123);
+    expect(operation).toHaveBeenCalledTimes(3);
+    expect(output.map((line) => JSON.parse(line).status)).toEqual([
+      "checking",
+      "passed",
+    ]);
   });
 
   it("preflight_output_never_exposes_key_material", () => {

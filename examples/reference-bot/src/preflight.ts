@@ -50,19 +50,28 @@ export const runPreflightCheck = async <T>(
   check: PreflightCheck,
   message: string,
   remediation: string,
-  operation: () => Promise<T>
+  operation: () => Promise<T>,
+  options: { attempts?: number; retryDelayMs?: number } = {}
 ): Promise<T> => {
   emitPreflight(profile, check, "checking", message);
-  try {
-    const value = await operation();
-    emitPreflight(profile, check, "passed", message);
-    return value;
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : "Unknown startup failure";
-    emitPreflight(profile, check, "failed", detail, remediation);
-    if (error instanceof StrykeSdkError) throw error;
-    throw new StrykeSdkError("configuration", `${detail} ${remediation}`);
+  const attempts = Math.max(1, options.attempts ?? 1);
+  let finalError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const value = await operation();
+      emitPreflight(profile, check, "passed", message);
+      return value;
+    } catch (error) {
+      finalError = error;
+      if (attempt < attempts && (options.retryDelayMs ?? 0) > 0) {
+        await new Promise((resolve) => setTimeout(resolve, options.retryDelayMs));
+      }
+    }
   }
+  const detail = finalError instanceof Error ? finalError.message : "Unknown startup failure";
+  emitPreflight(profile, check, "failed", detail, remediation);
+  if (finalError instanceof StrykeSdkError) throw finalError;
+  throw new StrykeSdkError("configuration", `${detail} ${remediation}`);
 };
 
 export const requiredDevnetBalance = (maximumTradeSizeLamports: bigint): bigint =>
