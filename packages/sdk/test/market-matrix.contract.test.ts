@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   MarketsClient,
   QuotesClient,
+  SUPPORTED_PROGRAM_ID,
+  SUPPORTED_QUOTE_MATH_VERSION,
   type PilotAsset,
   type PilotExpiryFamily,
 } from "../src/index.js";
@@ -118,8 +120,18 @@ const contractCase = (
           generatedAt: new Date(now).toISOString(),
           expiresAt: new Date(now + 5_000).toISOString(),
           marketStateVersion: `state-${asset}-${expiryFamily}`,
+          programId: SUPPORTED_PROGRAM_ID,
+          mathVersion: SUPPORTED_QUOTE_MATH_VERSION,
           amount: "1000000000",
           fee: "10000000",
+          grossAmount: "1000000000",
+          feeAmount: "10000000",
+          netAmount: "990000000",
+          sharesIn: "0",
+          sharesOut: "1250000000",
+          averageExecutionPriceBps: "8000",
+          postTradeSideReserve: "1000000000",
+          postTradeSideShares: "1250000000",
           feeBreakdown: {
             feeMode: "standard",
             normalTradingFeeWaivedCollateralUnits: "0",

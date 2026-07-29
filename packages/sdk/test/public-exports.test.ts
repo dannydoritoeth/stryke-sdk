@@ -23,6 +23,7 @@ describe("public SDK exports", () => {
       "SUPPORTED_API_VERSION",
       "SUPPORTED_PROGRAM_ID",
       "SUPPORTED_PROGRAM_VERSION",
+      "SUPPORTED_QUOTE_MATH_VERSION",
       "SolanaReviewedExecutionAdapter",
       "StrykeClient",
       "StrykeSdkError",
