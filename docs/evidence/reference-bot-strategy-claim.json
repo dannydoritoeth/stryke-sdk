@@ -1,16 +1,16 @@
 {
   "schemaVersion": "stryke.referenceBotStrategyClaim.v1",
   "status": "passed",
-  "implementationCommit": "e7e317c0b215cfe625654c28213dd2ea4f068de5",
-  "generatedAt": "2026-07-27T07:26:34.402Z",
-  "devnetRunId": "bot-matrix-20260727T070057585Z",
-  "supplementalDevnetRunIds": ["bot-matrix-20260727T072453951Z"],
+  "implementationCommit": "4cfd554",
+  "generatedAt": "2026-07-29T11:54:00.093Z",
+  "devnetRunId": "bot-matrix-20260729T114158942Z",
+  "supplementalDevnetRunIds": [],
   "devnet": {
     "BTC:one_minute": { "status": "passed", "signedActions": ["buy", "sell"], "lifecycleCompleted": true, "nextMarketEvaluated": true },
     "BTC:five_minute": { "status": "passed", "signedActions": ["buy", "sell"], "lifecycleCompleted": true, "nextMarketEvaluated": true },
-    "BTC:fifteen_minute": { "status": "passed", "signedActions": ["sell", "buy", "sell"], "lifecycleCompleted": true, "nextMarketEvaluated": true },
+    "BTC:fifteen_minute": { "status": "passed", "signedActions": ["buy", "sell"], "lifecycleCompleted": true, "nextMarketEvaluated": true },
     "BTC:hourly": { "status": "passed", "signedActions": ["buy", "sell"], "lifecycleCompleted": true, "nextMarketEvaluated": true },
-    "SOL:one_minute": { "status": "passed", "signedActions": ["buy", "sell", "claim"], "lifecycleCompleted": true, "nextMarketEvaluated": true },
+    "SOL:one_minute": { "status": "passed", "signedActions": ["buy", "sell"], "lifecycleCompleted": true, "nextMarketEvaluated": true },
     "SOL:five_minute": { "status": "passed", "signedActions": ["buy", "sell"], "lifecycleCompleted": true, "nextMarketEvaluated": true },
     "SOL:fifteen_minute": { "status": "passed", "signedActions": ["buy", "sell"], "lifecycleCompleted": true, "nextMarketEvaluated": true },
     "SOL:hourly": { "status": "passed", "signedActions": ["buy", "sell"], "lifecycleCompleted": true, "nextMarketEvaluated": true }
