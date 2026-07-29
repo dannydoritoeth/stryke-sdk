@@ -1,6 +1,6 @@
 # Issue 66 - Universal Full Exit SDK And Reference Bot
 
-Status: Phase 4 implementation complete; external devnet gate pending
+Status: Phase 4 implementation complete; devnet matrix blocked at hourly prep parity
 Last updated: 2026-07-29
 
 ## Objective
@@ -72,3 +72,40 @@ Phase 4 is done done only when:
    Phase 4 remains awaiting that external deployment gate; and
 6. the exact candidate commit, commands, results, and any external gate are
    recorded here before handoff.
+
+## Candidate evidence and current gate
+
+Candidate commits: `e10987b`, `7a9388b`, `9802160`, `4cfd554`.
+
+Local verification completed:
+
+- SDK quote/transaction tests: 32 passed before the expanded identity matrix;
+- SDK plus reference-bot focused matrix: 129 passed;
+- reference-bot suite: 110 passed;
+- build and workspace typecheck: passed;
+- external packed-consumer test: passed;
+- public repository boundary: 4 passed;
+- configuration register: 40 controls, 0 gaps; and
+- real paper entrypoint: two ticks against `independent_curve_v1`, passed.
+
+Signed devnet run `bot-matrix-20260729T111255637Z` proved confirmed buy,
+exact-position sell, reconciliation, and clean lifecycle completion for BTC 1m,
+5m, and 15m. The full run was stopped at BTC hourly after twelve consecutive
+safe `quote_changed_before_submission` outcomes; SOL cells were not run.
+
+### Hourly causal map
+
+| Cause class | Status | Evidence | Required next action |
+| --- | --- | --- | --- |
+| Trigger | Confirmed | Hourly entry reaches transaction preparation with a fresh canonical quote. | Retain the hourly candidate request as a regression case. |
+| Direct cause | Confirmed | `/v1/pilot/transaction-prep` returns HTTP 409 `pilot_quote_state_changed`: prepared minimum output does not match the bound quote. | Correct API quote/prep parity for the same hourly market identity, amount, side, slippage, program and math version. |
+| Quote instability | Ruled out for the observed case | Repeated hourly YES and NO quotes returned identical minimum output and shares; the failure persisted. | Do not weaken SDK binding or retry a smaller amount. |
+| SDK full-exit fallback | Ruled out | `sellAvailable` makes one exact-balance request and signed 1m/5m/15m exits completed. | Preserve exact-balance behavior. |
+| Detection gap | Confirmed and now contained | Unit/composed tests passed while live hourly preparation did not; the signed duration matrix caught it. | Add the corrected hourly quote→prep case to API integration tests. |
+| Containment | Confirmed | Bot reports `quote_changed_before_submission` and submits no mismatched transaction. | Keep fail-closed behavior; improve diagnostics only if bounded metadata can remain safe. |
+| Recovery | Partially confirmed | Later-tick retry recovers ordinary races, but twelve hourly retries did not recover this mismatch. | Treat repeated hourly parity mismatch as non-transient until the API is fixed. |
+
+Phase 4 is not done done until the API parity defect is fixed and the complete
+eight-cell signed matrix is rerun at the final candidate commit. Existing
+strategy-claim evidence remains intentionally stale; its freshness gate must
+not be advanced from this partial run.
