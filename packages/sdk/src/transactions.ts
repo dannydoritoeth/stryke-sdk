@@ -44,6 +44,9 @@ type PrepResponse = {
   intentHash: string;
   quoteBinding?: {
     quoteId: string;
+    programId: string;
+    mathVersion: string;
+    amount: string;
     generatedAt: string;
     expiresAt: string;
     marketStateVersion: string;
@@ -165,6 +168,9 @@ export const createPilotIntentHash = async ({
     amount: quote.amount,
     quoteBinding: {
       quoteId: quote.quoteId,
+      programId: quote.programId,
+      mathVersion: quote.mathVersion,
+      amount: quote.amount,
       generatedAt: quote.generatedAt,
       expiresAt: quote.expiresAt,
       marketStateVersion: quote.marketStateVersion,
@@ -285,6 +291,9 @@ export class TransactionsClient {
           intentHash,
           quoteBinding: {
             quoteId: quote.quoteId,
+            programId: quote.programId,
+            mathVersion: quote.mathVersion,
+            amount: quote.amount,
             generatedAt: quote.generatedAt,
             expiresAt: quote.expiresAt,
             marketStateVersion: quote.marketStateVersion,
@@ -301,8 +310,12 @@ export class TransactionsClient {
       ["action", response.action === quote.action],
       ["side", response.side === quote.side],
       ["quoteId", response.quoteBinding?.quoteId === quote.quoteId],
+      ["quoteProgramId", response.quoteBinding?.programId === quote.programId],
+      ["quoteMathVersion", response.quoteBinding?.mathVersion === quote.mathVersion],
+      ["quoteAmount", response.quoteBinding?.amount === quote.amount],
       ["marketStateVersion", response.quoteBinding?.marketStateVersion === quote.marketStateVersion],
       ["minimumOutput", response.quoteBinding?.minimumOutput === quote.minimumOutput],
+      ["maximumSlippageBpsApplied", response.quoteBinding?.maximumSlippageBpsApplied === quote.maximumSlippageBpsApplied],
       ["tokenMint", isAddress(market.tokenMint)
         ? response.market.tokenMint === market.tokenMint
         : typeof response.market.tokenMint === "string" && isAddress(response.market.tokenMint)],

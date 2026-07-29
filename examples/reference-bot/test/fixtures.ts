@@ -1,4 +1,4 @@
-import type { ExecutableQuote, PilotPosition } from "@stryke/sdk";
+import { SUPPORTED_PROGRAM_ID, SUPPORTED_QUOTE_MATH_VERSION, type ExecutableQuote, type PilotPosition } from "@stryke/sdk";
 
 export const quote = (overrides: Partial<ExecutableQuote> = {}): ExecutableQuote => ({
   quoteId: "quote-1",
@@ -8,7 +8,17 @@ export const quote = (overrides: Partial<ExecutableQuote> = {}): ExecutableQuote
   action: "buy",
   side: "yes",
   amount: "10000000",
+  programId: SUPPORTED_PROGRAM_ID,
+  mathVersion: SUPPORTED_QUOTE_MATH_VERSION,
   fee: "0",
+  grossAmount: "10000000",
+  feeAmount: "0",
+  netAmount: "10000000",
+  sharesIn: "0",
+  sharesOut: "20000000",
+  averageExecutionPriceBps: "5000",
+  postTradeSideReserve: "10000000",
+  postTradeSideShares: "20000000",
   feeBreakdown: {
     feeMode: "waived",
     normalTradingFeeWaivedCollateralUnits: "0",
@@ -29,6 +39,7 @@ export const quote = (overrides: Partial<ExecutableQuote> = {}): ExecutableQuote
   minimumOutput: "19800000",
   maximumSlippageBpsApplied: 100,
   executableProbabilityBps: 5000,
+  normalizedSideProbabilityBps: 5000,
   priceImpactBps: 50,
   raw: {},
   ...overrides,

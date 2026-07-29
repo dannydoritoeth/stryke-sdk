@@ -6,6 +6,7 @@ export const SUPPORTED_API_SCHEMA_VERSION = "1.0.0" as const;
 export const SUPPORTED_PROGRAM_ID =
   "GmXBVbwqBhjetu9VSbFoQQMHDi22WAMBn4oNwj9sjnSE" as const;
 export const SUPPORTED_PROGRAM_VERSION = "0.1.0" as const;
+export const SUPPORTED_QUOTE_MATH_VERSION = "independent_curve_v1" as const;
 
 export const PILOT_ASSETS = ["BTC", "SOL"] as const;
 export const PILOT_EXPIRY_FAMILIES = [

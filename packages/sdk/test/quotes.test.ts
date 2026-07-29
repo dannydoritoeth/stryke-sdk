@@ -5,6 +5,8 @@ import {
   StrykeSdkError,
   assertQuoteUsable,
   type PilotMarket,
+  SUPPORTED_PROGRAM_ID,
+  SUPPORTED_QUOTE_MATH_VERSION,
 } from "../src/index.js";
 
 const market = {
@@ -67,8 +69,19 @@ const responseBody = (action: "buy" | "sell") => ({
     generatedAt: "2026-07-22T00:00:00.000Z",
     expiresAt: "2026-07-22T00:00:05.000Z",
     marketStateVersion: "market_v1_123",
+    programId: SUPPORTED_PROGRAM_ID,
+    mathVersion: SUPPORTED_QUOTE_MATH_VERSION,
+    quoteSlot: "123456",
     amount: "1000000000",
     fee: "10000000",
+    grossAmount: action === "buy" ? "1000000000" : "471934000",
+    feeAmount: "10000000",
+    netAmount: action === "buy" ? "990000000" : "461934000",
+    sharesIn: action === "buy" ? "0" : "1000000000",
+    sharesOut: action === "buy" ? "1981585268214571657" : "0",
+    averageExecutionPriceBps: action === "buy" ? "5046" : "4719",
+    postTradeSideReserve: "1000000000",
+    postTradeSideShares: "1981585268214571657",
     feeBreakdown: {
       feeMode: "standard",
       normalTradingFeeWaivedCollateralUnits: "0",
@@ -119,6 +132,9 @@ describe("executable quote client", () => {
       expectedShares: "1981585268214571657",
       minimumOutput: "1961769415532425940",
       executableProbabilityBps: 4996,
+      normalizedSideProbabilityBps: 4996,
+      averageExecutionPriceBps: "5046",
+      mathVersion: SUPPORTED_QUOTE_MATH_VERSION,
       priceImpactBps: 330,
       feeBreakdown: { feeMode: "standard", feeBpsApplied: 100 },
     });
@@ -130,39 +146,59 @@ describe("executable quote client", () => {
       expectedNetProceeds: "461934000",
       minimumOutput: "457314660",
       executableProbabilityBps: 4996,
+      normalizedSideProbabilityBps: 4996,
+      averageExecutionPriceBps: "4719",
       priceImpactBps: 0,
       fee: "10000000",
       feeBreakdown: { feeMode: "standard", grossTradeFeeCollateralUnits: "10000000" },
     });
   });
 
-  it("sell_available_reduces_only_amount_unavailable_quotes", async () => {
+  it("sell_available_never_reduces_the_exact_owned_balance", async () => {
     const requested: string[] = [];
     const client = {
       requestJson: async (_path: string, init: { body: string }) => {
         const amount = JSON.parse(init.body).amount as string;
         requested.push(amount);
-        if (amount === "1000000000") {
-          return {
-            quote: {
-              amount,
-              stale: true,
-              unavailableReason: "Quote is unavailable for this amount.",
-              closingProtection: responseBody("sell").quote.closingProtection,
-            },
-            metadata: { stale: true },
-          };
-        }
         return {
-          ...responseBody("sell"),
-          quote: { ...responseBody("sell").quote, amount },
+          quote: {
+            amount,
+            stale: true,
+            unavailableReason: "Quote is unavailable for this amount.",
+            closingProtection: responseBody("sell").quote.closingProtection,
+          },
+          metadata: { stale: true },
         };
       },
     };
     const quotes = new QuotesClient(client as never, () => Date.parse("2026-07-22T00:00:01Z"));
     await expect(quotes.sellAvailable({ market, side: "yes", ownedShares: "1000000000", maximumSlippageBps: 100 }))
-      .resolves.toMatchObject({ amount: "990000000", action: "sell" });
-    expect(requested).toEqual(["1000000000", "990000000"]);
+      .rejects.toMatchObject({ code: "quote_blocked", message: "Quote is unavailable for this amount." });
+    expect(requested).toEqual(["1000000000"]);
+  });
+
+  it("sell_available_retries_the_same_exact_balance_on_a_later_call", async () => {
+    const requested: string[] = [];
+    let unavailable = true;
+    const client = {
+      requestJson: async (_path: string, init: { body: string }) => {
+        const amount = JSON.parse(init.body).amount as string;
+        requested.push(amount);
+        if (unavailable) {
+          unavailable = false;
+          return {
+            quote: { amount, stale: true, unavailableReason: "temporary", closingProtection: responseBody("sell").quote.closingProtection },
+            metadata: { stale: true },
+          };
+        }
+        return responseBody("sell");
+      },
+    };
+    const quotes = new QuotesClient(client as never, () => Date.parse("2026-07-22T00:00:01Z"));
+    const input = { market, side: "yes" as const, ownedShares: "1000000000", maximumSlippageBps: 100 };
+    await expect(quotes.sellAvailable(input)).rejects.toMatchObject({ code: "quote_blocked" });
+    await expect(quotes.sellAvailable(input)).resolves.toMatchObject({ amount: "1000000000" });
+    expect(requested).toEqual(["1000000000", "1000000000"]);
   });
 
   it("sell_available_does_not_mask_non_amount_failures", async () => {
@@ -216,6 +252,8 @@ describe("executable quote client", () => {
         quote: {
           ...responseBody("buy").quote,
           fee: "70000000",
+          feeAmount: "70000000",
+          netAmount: "930000000",
           feeBreakdown: {
             ...responseBody("buy").quote.feeBreakdown,
             feeMode: "closing",
@@ -312,7 +350,10 @@ describe("executable quote client", () => {
         quote: {
           ...responseBody("buy").quote,
           amount,
+          grossAmount: amount,
+          netAmount: "18446744073699551615",
           expectedShares,
+          sharesOut: expectedShares,
           minimumOutput: "182622766329724560988",
         },
       }),

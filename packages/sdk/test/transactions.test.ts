@@ -5,6 +5,7 @@ import {
   MemoryActionCheckpointStore,
   ReviewedTransactionExecutor,
   SUPPORTED_PROGRAM_ID,
+  SUPPORTED_QUOTE_MATH_VERSION,
   TransactionsClient,
   type ExecutableQuote,
   type PilotMarket,
@@ -81,7 +82,17 @@ const quote: ExecutableQuote = {
   action: "buy",
   side: "yes",
   amount: "1000000000",
+  programId: SUPPORTED_PROGRAM_ID,
+  mathVersion: SUPPORTED_QUOTE_MATH_VERSION,
   fee: "10000000",
+  grossAmount: "1000000000",
+  feeAmount: "10000000",
+  netAmount: "990000000",
+  sharesIn: "0",
+  sharesOut: "1250000000",
+  averageExecutionPriceBps: "8000",
+  postTradeSideReserve: "1000000000",
+  postTradeSideShares: "1250000000",
   feeBreakdown: {
     feeMode: "standard",
     normalTradingFeeWaivedCollateralUnits: "0",
@@ -93,6 +104,7 @@ const quote: ExecutableQuote = {
   minimumOutput: "1237500000",
   maximumSlippageBpsApplied: 100,
   executableProbabilityBps: 8000,
+  normalizedSideProbabilityBps: 8000,
   priceImpactBps: 25,
   raw: {},
 };
@@ -102,6 +114,9 @@ const prep = {
   intentHash: `intent_v1_${"a".repeat(64)}`,
   quoteBinding: {
     quoteId: quote.quoteId,
+    programId: quote.programId,
+    mathVersion: quote.mathVersion,
+    amount: quote.amount,
     generatedAt: quote.generatedAt,
     expiresAt: quote.expiresAt,
     marketStateVersion: quote.marketStateVersion,
@@ -275,7 +290,7 @@ describe("pilot transaction materialization", () => {
     ).rejects.toMatchObject({ code: "intent_mismatch" });
   });
 
-  it("prep_rejects_quote_id_state_version_or_minimum_output_mismatch", async () => {
+  it("prep_rejects_quote_identity_amount_state_or_slippage_output_mismatch", async () => {
     const intentHash = await createPilotIntentHash({
       clientActionId: prep.clientActionId,
       owner,
@@ -291,8 +306,12 @@ describe("pilot transaction materialization", () => {
     });
     for (const quoteBinding of [
       { ...prep.quoteBinding, quoteId: "changed" },
+      { ...prep.quoteBinding, programId: "11111111111111111111111111111111" },
+      { ...prep.quoteBinding, mathVersion: "legacy_curve" },
+      { ...prep.quoteBinding, amount: "2" },
       { ...prep.quoteBinding, marketStateVersion: "changed" },
       { ...prep.quoteBinding, minimumOutput: "1" },
+      { ...prep.quoteBinding, maximumSlippageBpsApplied: 999 },
     ]) {
       const client = {
         capabilities: { contract: { programId: SUPPORTED_PROGRAM_ID } },

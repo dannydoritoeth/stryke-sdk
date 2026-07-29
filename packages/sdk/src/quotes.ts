@@ -1,5 +1,9 @@
 import type { StrykeClient } from "./client.js";
 import { StrykeSdkError } from "./errors.js";
+import {
+  SUPPORTED_PROGRAM_ID,
+  SUPPORTED_QUOTE_MATH_VERSION,
+} from "./compatibility.js";
 import { assertMarketTradeable, type PilotMarket } from "./markets.js";
 
 export type QuoteAction = "buy" | "sell";
@@ -32,7 +36,18 @@ export type ExecutableQuote = {
   action: QuoteAction;
   side: QuoteSide;
   amount: string;
+  programId: typeof SUPPORTED_PROGRAM_ID;
+  mathVersion: typeof SUPPORTED_QUOTE_MATH_VERSION;
+  quoteSlot?: string;
   fee: string;
+  grossAmount: string;
+  feeAmount: string;
+  netAmount: string;
+  sharesIn: string;
+  sharesOut: string;
+  averageExecutionPriceBps: string;
+  postTradeSideReserve: string;
+  postTradeSideShares: string;
   feeBreakdown: QuoteFeeBreakdown;
   closingProtection: ClosingProtection;
   expectedShares?: string;
@@ -40,6 +55,8 @@ export type ExecutableQuote = {
   minimumOutput: string;
   maximumSlippageBpsApplied: number;
   executableProbabilityBps: number;
+  /** Normalized market probability for the quoted side; not the sized execution price. */
+  normalizedSideProbabilityBps: number;
   priceImpactBps: number;
   raw: Readonly<Record<string, unknown>>;
 };
@@ -222,6 +239,44 @@ export class QuotesClient {
       throw new StrykeSdkError("validation", "Quote output does not match its action");
     }
 
+    const programId = text(quote.programId, "programId");
+    const mathVersion = text(quote.mathVersion, "mathVersion");
+    if (programId !== SUPPORTED_PROGRAM_ID || mathVersion !== SUPPORTED_QUOTE_MATH_VERSION) {
+      throw new StrykeSdkError("compatibility", "Quote was produced by an unsupported contract or math version", false, {
+        programId,
+        mathVersion,
+      });
+    }
+
+    const grossAmount = integerString(quote.grossAmount, "grossAmount");
+    const feeAmount = integerString(quote.feeAmount, "feeAmount");
+    const netAmount = integerString(quote.netAmount, "netAmount");
+    const sharesIn = integerString(quote.sharesIn, "sharesIn");
+    const sharesOut = integerString(quote.sharesOut, "sharesOut");
+    const averageExecutionPriceBps = integerString(
+      quote.averageExecutionPriceBps,
+      "averageExecutionPriceBps"
+    );
+    const postTradeSideReserve = integerString(
+      quote.postTradeSideReserve,
+      "postTradeSideReserve"
+    );
+    const postTradeSideShares = integerString(
+      quote.postTradeSideShares,
+      "postTradeSideShares"
+    );
+    const quoteSlot = quote.quoteSlot === undefined
+      ? undefined
+      : integerString(quote.quoteSlot, "quoteSlot");
+    const parsedFee = integerString(quote.fee, "fee");
+    if (
+      feeAmount !== parsedFee ||
+      (action === "buy" && (grossAmount !== amount || sharesOut !== expectedShares)) ||
+      (action === "sell" && (sharesIn !== amount || netAmount !== expectedNetProceeds))
+    ) {
+      throw new StrykeSdkError("api_response", "Canonical quote economics are inconsistent");
+    }
+
     const responseAmount = integerString(quote.amount, "amount");
     if (responseAmount !== amount) {
       throw new StrykeSdkError("api_response", "Quote amount does not match request");
@@ -252,7 +307,18 @@ export class QuotesClient {
       action,
       side,
       amount: responseAmount,
-      fee: integerString(quote.fee, "fee"),
+      programId: SUPPORTED_PROGRAM_ID,
+      mathVersion: SUPPORTED_QUOTE_MATH_VERSION,
+      ...(quoteSlot === undefined ? {} : { quoteSlot }),
+      fee: parsedFee,
+      grossAmount,
+      feeAmount,
+      netAmount,
+      sharesIn,
+      sharesOut,
+      averageExecutionPriceBps,
+      postTradeSideReserve,
+      postTradeSideShares,
       feeBreakdown: feeBreakdown(quote.feeBreakdown),
       closingProtection: protection,
       ...(expectedShares === undefined ? {} : { expectedShares }),
@@ -260,6 +326,10 @@ export class QuotesClient {
       minimumOutput,
       maximumSlippageBpsApplied: appliedSlippage,
       executableProbabilityBps: integer(
+        quote.executionPriceBps,
+        "executionPriceBps"
+      ),
+      normalizedSideProbabilityBps: integer(
         quote.executionPriceBps,
         "executionPriceBps"
       ),
@@ -283,31 +353,12 @@ export class QuotesClient {
     if (owned <= 0n) {
       throw new StrykeSdkError("validation", "Owned shares must be positive");
     }
-    const portions = [10_000n, 9_900n, 9_500n, 9_000n, 8_000n, 5_000n];
-    let amountError: StrykeSdkError | undefined;
-    for (const portion of portions) {
-      const amount = (owned * portion) / 10_000n;
-      if (amount <= 0n) continue;
-      try {
-        return await this.sell({
-          market,
-          side,
-          amount: amount.toString(),
-          maximumSlippageBps,
-        });
-      } catch (error) {
-        if (
-          error instanceof StrykeSdkError &&
-          error.code === "quote_blocked" &&
-          error.message === "Quote is unavailable for this amount."
-        ) {
-          amountError = error;
-          continue;
-        }
-        throw error;
-      }
-    }
-    throw amountError ?? new StrykeSdkError("quote_blocked", "No executable sell amount is available");
+    return this.sell({
+      market,
+      side,
+      amount: owned.toString(),
+      maximumSlippageBps,
+    });
   }
 
   buy(input: Omit<Parameters<QuotesClient["get"]>[0], "action">) {
