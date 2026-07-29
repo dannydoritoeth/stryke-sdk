@@ -127,7 +127,6 @@ const contractCase = (
           grossAmount: "1000000000",
           feeAmount: "10000000",
           netAmount: "990000000",
-          sharesIn: "0",
           sharesOut: "1250000000",
           averageExecutionPriceBps: "8000",
           postTradeSideReserve: "1000000000",

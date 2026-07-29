@@ -43,8 +43,8 @@ export type ExecutableQuote = {
   grossAmount: string;
   feeAmount: string;
   netAmount: string;
-  sharesIn: string;
-  sharesOut: string;
+  sharesIn?: string;
+  sharesOut?: string;
   averageExecutionPriceBps: string;
   postTradeSideReserve: string;
   postTradeSideShares: string;
@@ -251,8 +251,12 @@ export class QuotesClient {
     const grossAmount = integerString(quote.grossAmount, "grossAmount");
     const feeAmount = integerString(quote.feeAmount, "feeAmount");
     const netAmount = integerString(quote.netAmount, "netAmount");
-    const sharesIn = integerString(quote.sharesIn, "sharesIn");
-    const sharesOut = integerString(quote.sharesOut, "sharesOut");
+    const sharesIn = quote.sharesIn === undefined
+      ? undefined
+      : integerString(quote.sharesIn, "sharesIn");
+    const sharesOut = quote.sharesOut === undefined
+      ? undefined
+      : integerString(quote.sharesOut, "sharesOut");
     const averageExecutionPriceBps = integerString(
       quote.averageExecutionPriceBps,
       "averageExecutionPriceBps"
@@ -271,8 +275,8 @@ export class QuotesClient {
     const parsedFee = integerString(quote.fee, "fee");
     if (
       feeAmount !== parsedFee ||
-      (action === "buy" && (grossAmount !== amount || sharesOut !== expectedShares)) ||
-      (action === "sell" && (sharesIn !== amount || netAmount !== expectedNetProceeds))
+      (action === "buy" && (grossAmount !== amount || sharesOut !== expectedShares || sharesIn !== undefined)) ||
+      (action === "sell" && (sharesIn !== amount || netAmount !== expectedNetProceeds || sharesOut !== undefined))
     ) {
       throw new StrykeSdkError("api_response", "Canonical quote economics are inconsistent");
     }
@@ -314,8 +318,8 @@ export class QuotesClient {
       grossAmount,
       feeAmount,
       netAmount,
-      sharesIn,
-      sharesOut,
+      ...(sharesIn === undefined ? {} : { sharesIn }),
+      ...(sharesOut === undefined ? {} : { sharesOut }),
       averageExecutionPriceBps,
       postTradeSideReserve,
       postTradeSideShares,
