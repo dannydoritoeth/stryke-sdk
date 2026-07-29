@@ -2,9 +2,9 @@
   "schemaVersion": "stryke.referenceBotStrategyClaim.v1",
   "status": "passed",
   "implementationCommit": "4cfd554",
-  "generatedAt": "2026-07-29T11:54:00.093Z",
-  "devnetRunId": "bot-matrix-20260729T114158942Z",
-  "supplementalDevnetRunIds": [],
+  "generatedAt": "2026-07-29T18:58:53.916Z",
+  "devnetRunId": "bot-matrix-20260729T184523635Z",
+  "supplementalDevnetRunIds": ["bot-matrix-20260729T114158942Z"],
   "devnet": {
     "BTC:one_minute": { "status": "passed", "signedActions": ["buy", "sell"], "lifecycleCompleted": true, "nextMarketEvaluated": true },
     "BTC:five_minute": { "status": "passed", "signedActions": ["buy", "sell"], "lifecycleCompleted": true, "nextMarketEvaluated": true },

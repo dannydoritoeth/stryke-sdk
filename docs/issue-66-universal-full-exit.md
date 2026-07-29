@@ -94,6 +94,14 @@ a confirmed signed buy, reconciliation, an exact full-balance signed sell,
 reconciliation, lifecycle completion, evaluation of the next market, and a
 paper-mode no-submit run. The run recorded no timeout or failed cell.
 
+Post-upgrade signed devnet run `bot-matrix-20260729T184523635Z` repeated the
+same eight-cell matrix against the audited Minimal-Pyth candidate after its
+devnet upgrade. Every cell exited with code 0, completed the lifecycle,
+evaluated the next market, and recorded confirmed signed `buy` and `sell`
+actions without a timeout. The candidate was then rollback-rehearsed and
+reapplied at finalized devnet slot `479801416` by transaction
+`5fxmLGEHUW9WSjYupbA3p5YGQ67La8jFZz2wkyJTHEr31GmVGvmHKSovzEiADbo9LekGqZE3YyUFQW6aYDUgrhgQ`.
+
 ### Hourly causal map
 
 | Cause class | Status | Evidence | Required next action |
@@ -108,6 +116,6 @@ paper-mode no-submit run. The run recorded no timeout or failed cell.
 
 Phase 4 is done done. Repository-local deterministic, composition, packaging,
 boundary, configuration, and onboarding gates pass, and the full signed matrix
-is recorded in `docs/evidence/reference-bot-strategy-claim.json`. The matrix
-ran from repository HEAD `6992cc3`; strategy/SDK source identity remains
-`4cfd554`, after which no strategy or SDK source changed.
+is recorded in `docs/evidence/reference-bot-strategy-claim.json`. The
+post-upgrade matrix ran from repository HEAD `aae2079`. Strategy/SDK source
+identity remains `4cfd554`, after which no strategy or SDK source changed.
