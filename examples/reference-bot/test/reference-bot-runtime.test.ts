@@ -122,10 +122,15 @@ describe("reference bot composed runtime", () => {
   });
 
   it("runtime_stop_loss_and_take_profit_execute_full_position_sell", async () => {
-    for (const [proceeds, reason] of [["90", "stop_loss"], ["120", "take_profit"]] as const) {
-      const runtime = adapter({ listPositions: async () => [position()], evaluatePosition: async (value, exposure) => ({ ...(await adapter().evaluatePosition(value, exposure)), sellQuote: quote({ action: "sell", side: "yes", amount: "100", expectedShares: undefined, expectedNetProceeds: proceeds, expiresAt: new Date(Date.now() + 60_000).toISOString() }) }) });
-      await expect(runMarketTick({ tick: 1, config: live, adapter: runtime })).resolves.toMatchObject({ action: "sell", reason });
-      expect(runtime.executeSell).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ shares: "100" }), expect.objectContaining({ sellQuote: expect.objectContaining({ amount: "100" }) }), reason);
+    for (const side of ["yes", "no"] as const) {
+      for (const [proceeds, reason] of [["90", "stop_loss"], ["120", "take_profit"]] as const) {
+        const owned = side === "yes"
+          ? position()
+          : position("sellable", { yesShares: "0", noShares: "100", yesCostBasisCollateralUnits: undefined, noCostBasisCollateralUnits: "100" });
+        const runtime = adapter({ listPositions: async () => [owned], evaluatePosition: async (value, exposure) => ({ ...(await adapter().evaluatePosition(value, exposure)), sellQuote: quote({ action: "sell", side, amount: "100", expectedShares: undefined, expectedNetProceeds: proceeds, expiresAt: new Date(Date.now() + 60_000).toISOString() }) }) });
+        await expect(runMarketTick({ tick: 1, config: live, adapter: runtime })).resolves.toMatchObject({ action: "sell", reason });
+        expect(runtime.executeSell).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ side, shares: "100" }), expect.objectContaining({ sellQuote: expect.objectContaining({ side, amount: "100" }) }), reason);
+      }
     }
   });
 
@@ -286,7 +291,7 @@ describe("reference bot composed runtime", () => {
     const result = await runMarketTick({ tick: 1, config: live, adapter: adapter() });
     expect(result.details).toMatchObject({
       estimator: "distance_to_strike", yesModelProbability: expect.any(Number), noModelProbability: expect.any(Number),
-      yesExecutableProbabilityBps: 4000, noExecutableProbabilityBps: 6000,
+      yesNormalizedProbabilityBps: 4000, noNormalizedProbabilityBps: 6000,
       yesEdgeBps: expect.any(Number), noEdgeBps: expect.any(Number), feeMode: "waived", closingPhase: "open",
       selectedSide: "yes", proposedSize: live.tradeSizeLamports.toString(),
     });

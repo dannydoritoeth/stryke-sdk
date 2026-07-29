@@ -192,7 +192,7 @@ export const runMarketTick = async ({
       takeProfitBps: config.takeProfitBps,
     });
     if (config.estimator === "polymarket_relative_value" && decision.action === "hold" && evaluation.polymarketPrices) {
-      const convergence = convergenceReached({ side: exposure.side, strykeSellProbabilityBps: evaluation.sellQuote.executableProbabilityBps, prices: evaluation.polymarketPrices, exitEdgeBps: config.polymarketExitEdgeBps });
+      const convergence = convergenceReached({ side: exposure.side, strykeSellProbabilityBps: evaluation.sellQuote.normalizedSideProbabilityBps, prices: evaluation.polymarketPrices, exitEdgeBps: config.polymarketExitEdgeBps });
       if (convergence.reached) Object.assign(decision, { action: "sell", reason: "polymarket_convergence" });
       Object.assign(model.diagnostics, { remainingEdgeBps: convergence.remainingEdgeBps });
     } else if (config.estimator === "polymarket_relative_value" && decision.action === "hold" && evaluation.polymarketUnavailable) {
@@ -258,7 +258,7 @@ export const runMarketTick = async ({
       selectedSide: relative.side,
       edgeBps: relative.edgeBps,
       entryEdgeBps: config.polymarketEntryEdgeBps,
-      strykeProbabilityBps: relative.quote.executableProbabilityBps,
+      strykeProbabilityBps: relative.quote.normalizedSideProbabilityBps,
       polymarketAskBps: evaluation.polymarketPrices[relative.side].askBps,
     };
     if (relative.action !== "buy") return event(tick, "entry", "skip", relative.reason, { marketId: evaluation.market.marketId, details });
@@ -285,9 +285,9 @@ export const runMarketTick = async ({
   const details = {
     ...model.diagnostics, fairProbability: decision.fairProbability, sideFairProbability: decision.sideFairProbability,
     quoteProbability: decision.quoteProbability, edgeBps: decision.edgeBps,
-    yesExecutableProbabilityBps: yesQuote.executableProbabilityBps, noExecutableProbabilityBps: noQuote.executableProbabilityBps,
-    yesEdgeBps: Math.round((fairProbability - yesQuote.executableProbabilityBps / 10_000) * 10_000),
-    noEdgeBps: Math.round(((1 - fairProbability) - noQuote.executableProbabilityBps / 10_000) * 10_000),
+    yesNormalizedProbabilityBps: yesQuote.normalizedSideProbabilityBps, noNormalizedProbabilityBps: noQuote.normalizedSideProbabilityBps,
+    yesEdgeBps: Math.round((fairProbability - yesQuote.normalizedSideProbabilityBps / 10_000) * 10_000),
+    noEdgeBps: Math.round(((1 - fairProbability) - noQuote.normalizedSideProbabilityBps / 10_000) * 10_000),
     effectiveFeeBps: decision.quote.closingProtection.effectiveFeeBps, feeMode: decision.quote.feeBreakdown.feeMode,
     closingPhase: decision.quote.closingProtection.phase, selectedSide: decision.quote.side,
     proposedSize: evaluation.proposedSizeLamports.toString(),

@@ -8,6 +8,7 @@ import {
   SUPPORTED_API_VERSION,
   SUPPORTED_PROGRAM_ID,
   SUPPORTED_PROGRAM_VERSION,
+  SUPPORTED_QUOTE_MATH_VERSION,
   SolanaReviewedExecutionAdapter,
   StrykeClient,
   StrykeSdkError,
@@ -34,10 +35,13 @@ const compatibility = { sdkVersion: SDK_VERSION, apiVersion: SUPPORTED_API_VERSI
 const sampleQuote: ExecutableQuote = {
   quoteId: "read-only-smoke", generatedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString(),
   marketStateVersion: "documentation-smoke", action: "buy", side: "yes", amount: "10000000", fee: "0",
+  programId: SUPPORTED_PROGRAM_ID, mathVersion: SUPPORTED_QUOTE_MATH_VERSION,
+  grossAmount: "10000000", feeAmount: "0", netAmount: "10000000", sharesIn: "0", sharesOut: "20000000",
+  averageExecutionPriceBps: "5000", postTradeSideReserve: "10000000", postTradeSideShares: "20000000",
   feeBreakdown: { feeMode: "activation_waived", normalTradingFeeWaivedCollateralUnits: "0", grossTradeFeeCollateralUnits: "0", normalTradingFeeBps: 0, feeBpsApplied: 0 },
   closingProtection: { policyVersion: 1, phase: "open", baseFeeBps: 0, closingFeeBps: 0, effectiveFeeBps: 0, hardLockTs: 1_800_000_000, secondsUntilLock: 60 },
   expectedShares: "20000000", minimumOutput: "19800000", maximumSlippageBpsApplied: 100,
-  executableProbabilityBps: 4800, priceImpactBps: 25, raw: {},
+  executableProbabilityBps: 4800, normalizedSideProbabilityBps: 4800, priceImpactBps: 25, raw: {},
 };
 
 const runFixtureSmoke = async () => {
@@ -64,7 +68,7 @@ const runFixtureSmoke = async () => {
             activation: { yes: { realPoolCollateralUnits: "0" }, no: { realPoolCollateralUnits: "0" } },
           } as never,
           estimatorInput: input,
-          buyQuotes: [sampleQuote, { ...sampleQuote, quoteId: "read-only-smoke-no", side: "no", executableProbabilityBps: 6000 }],
+          buyQuotes: [sampleQuote, { ...sampleQuote, quoteId: "read-only-smoke-no", side: "no", executableProbabilityBps: 6000, normalizedSideProbabilityBps: 6000 }],
           proposedSizeLamports: config.tradeSizeLamports,
           aggregateExposureLamports: 0n,
           openPositions: 0,
@@ -86,9 +90,9 @@ const runPolymarketFixtureSmoke = async () => {
   let marketId = "poly-round-1";
   const price = (bidBps: number, askBps: number) => ({ tokenId: "token", bidBps, askBps, spreadBps: askBps - bidBps, observedAtMs: Date.now() });
   const market = () => ({ marketId, expiryTs: marketId.endsWith("1") ? 100 : 200, strikePrice: "100", reference: { alignmentStatus: "aligned" }, pools: { yes: "1", no: "1", stale: false }, activation: { yes: { realPoolCollateralUnits: "1" }, no: { realPoolCollateralUnits: "1" } } }) as never;
-  const buyQuote = (side: "yes" | "no", executableProbabilityBps: number): ExecutableQuote => ({ ...sampleQuote, quoteId: `buy-${side}`, side, executableProbabilityBps });
+  const buyQuote = (side: "yes" | "no", normalizedSideProbabilityBps: number): ExecutableQuote => ({ ...sampleQuote, quoteId: `buy-${side}`, side, executableProbabilityBps: normalizedSideProbabilityBps, normalizedSideProbabilityBps });
   const { expectedShares: _unusedExpectedShares, ...sampleWithoutBuyOutput } = sampleQuote;
-  const sellQuote: ExecutableQuote = { ...sampleWithoutBuyOutput, quoteId: "sell-yes", action: "sell", side: "yes", amount: "100", expectedNetProceeds: "95", executableProbabilityBps: 4000, expiresAt: new Date(Date.now() + 60_000).toISOString() };
+  const sellQuote: ExecutableQuote = { ...sampleWithoutBuyOutput, quoteId: "sell-yes", action: "sell", side: "yes", amount: "100", grossAmount: "100", feeAmount: "5", fee: "5", netAmount: "95", sharesIn: "100", sharesOut: "0", expectedNetProceeds: "95", executableProbabilityBps: 4000, normalizedSideProbabilityBps: 4000, expiresAt: new Date(Date.now() + 60_000).toISOString() };
   const position = { positionId: "position-1", owner: "owner", market: {}, yesShares: "100", noShares: "0", yesCostBasisCollateralUnits: "100", lifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() }, raw: {} } as never;
   const adapter = {
     loadCheckpoint: async () => undefined,

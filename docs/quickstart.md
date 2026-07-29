@@ -88,8 +88,9 @@ accuracy or profitability claim.
 Every tick reconciles a saved action before doing anything else. A submitted or
 unknown action blocks duplicates. The bot then handles one stable position:
 
-- sellable: request a fresh full-position quote, calculate integer PnL from the
-  API-authored side cost basis, apply stop loss/take profit, then EV fallback;
+- sellable: request a fresh quote for the exact raw side balance, calculate
+  integer PnL from API-authored side cost basis, apply stop loss/take profit,
+  then EV fallback. The SDK never substitutes a smaller exit;
 - awaiting resolution: wait; or
 - claimable/refundable: use only the API-authoritative terminal action.
 

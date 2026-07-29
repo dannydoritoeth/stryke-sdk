@@ -154,6 +154,19 @@ describe("executable quote client", () => {
     });
   });
 
+  it.each([
+    ["missing program", { programId: undefined }, "validation"],
+    ["wrong program", { programId: "11111111111111111111111111111111" }, "compatibility"],
+    ["missing math", { mathVersion: undefined }, "validation"],
+    ["wrong math", { mathVersion: "legacy_curve" }, "compatibility"],
+  ] as const)("fails closed for %s quote identity", async (_name, identity, code) => {
+    const body = responseBody("sell");
+    const client = { requestJson: async () => ({ ...body, quote: { ...body.quote, ...identity } }) };
+    await expect(new QuotesClient(client as never, () => Date.parse("2026-07-22T00:00:01Z")).sell({
+      market, side: "yes", amount: "1000000000", maximumSlippageBps: 100,
+    })).rejects.toMatchObject({ code });
+  });
+
   it("sell_available_never_reduces_the_exact_owned_balance", async () => {
     const requested: string[] = [];
     const client = {

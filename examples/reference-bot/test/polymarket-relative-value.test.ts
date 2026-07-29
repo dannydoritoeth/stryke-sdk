@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ExecutableQuote } from "@stryke/sdk";
 import { convergenceReached, decidePolymarketRelativeEntry } from "../src/polymarket-relative-value.js";
 
-const quote = (side: "yes" | "no", probability: number) => ({ side, executableProbabilityBps: probability } as ExecutableQuote);
+const quote = (side: "yes" | "no", probability: number) => ({ side, normalizedSideProbabilityBps: probability } as ExecutableQuote);
 const price = (bidBps: number, askBps: number) => ({ tokenId: "token", bidBps, askBps, spreadBps: askBps - bidBps, observedAtMs: 1 });
 
 describe("Polymarket relative-value decisions", () => {

@@ -1,6 +1,6 @@
 # Issue 66 - Universal Full Exit SDK And Reference Bot
 
-Status: Phase 4 in progress
+Status: Phase 4 implementation complete; external devnet gate pending
 Last updated: 2026-07-29
 
 ## Objective
@@ -72,4 +72,3 @@ Phase 4 is done done only when:
    Phase 4 remains awaiting that external deployment gate; and
 6. the exact candidate commit, commands, results, and any external gate are
    recorded here before handoff.
-

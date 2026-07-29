@@ -55,6 +55,17 @@ remain executable at the returned fee. `locked` and `expired` are returned as
 non-retryable `quote_blocked` errors; missing or unknown policy fields fail
 closed as incompatible API data.
 
+Successful quotes are accepted only for the SDK's supported `programId` and
+`mathVersion`. Use `normalizedSideProbabilityBps` for market/strategy
+comparisons and `averageExecutionPriceBps` for the sized trade. Canonical
+`grossAmount`, `feeAmount`, `netAmount`, `sharesIn`, `sharesOut`, and post-trade
+side state remain integer strings so no precision is lost.
+
+To exit a position, pass the exact raw side balance to `sellAvailable`. It
+either returns a quote for that entire balance or throws a typed error; it never
+silently reduces the sell and leaves residual shares. A retryable failure may
+be retried on a later loop tick with a freshly read balance and market.
+
 Use the returned `market` and `quote` unchanged with `TransactionsClient`.
 Simulate before wallet approval, then submit, confirm, and reconcile the same
 stable action ID. Use `PositionsClient` and its API-authoritative terminal

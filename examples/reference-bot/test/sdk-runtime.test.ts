@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MemoryActionCheckpointStore, PYTH_FEED_IDS, PriceStore } from "@stryke/sdk";
+import { MemoryActionCheckpointStore, PYTH_FEED_IDS, PriceStore, SUPPORTED_PROGRAM_ID, SUPPORTED_QUOTE_MATH_VERSION } from "@stryke/sdk";
 
 import { runMarketTick } from "../src/bot.js";
 import { parseReferenceBotConfig } from "../src/config.js";
@@ -64,7 +64,7 @@ describe("SDK runtime composition", () => {
           metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: new Date(now).toISOString(), stale: false },
         };
         return {
-          quote: { quoteId: "quote-1", generatedAt: new Date(now).toISOString(), expiresAt: new Date(now + 30_000).toISOString(), marketStateVersion: "state-1", amount: "1234567", fee: "0", feeBreakdown: { feeMode: "waived", normalTradingFeeWaivedCollateralUnits: "0", grossTradeFeeCollateralUnits: "0", normalTradingFeeBps: 0, feeBpsApplied: 0 }, closingProtection: { policyVersion: 1, phase: "open", baseFeeBps: 0, closingFeeBps: 0, effectiveFeeBps: 0, hardLockTs: Math.floor(now / 1_000) + 55, secondsUntilLock: 55 }, expectedShares: "1234567", minimumOutput: "1225060", maximumSlippageBpsApplied: 77, executionPriceBps: 5000, priceImpactBps: 1 },
+          quote: { quoteId: "quote-1", generatedAt: new Date(now).toISOString(), expiresAt: new Date(now + 30_000).toISOString(), marketStateVersion: "state-1", programId: SUPPORTED_PROGRAM_ID, mathVersion: SUPPORTED_QUOTE_MATH_VERSION, amount: "1234567", fee: "0", grossAmount: "1234567", feeAmount: "0", netAmount: "1234567", sharesIn: "0", sharesOut: "1234567", averageExecutionPriceBps: "5000", postTradeSideReserve: "1234567", postTradeSideShares: "1234567", feeBreakdown: { feeMode: "waived", normalTradingFeeWaivedCollateralUnits: "0", grossTradeFeeCollateralUnits: "0", normalTradingFeeBps: 0, feeBpsApplied: 0 }, closingProtection: { policyVersion: 1, phase: "open", baseFeeBps: 0, closingFeeBps: 0, effectiveFeeBps: 0, hardLockTs: Math.floor(now / 1_000) + 55, secondsUntilLock: 55 }, expectedShares: "1234567", minimumOutput: "1225060", maximumSlippageBpsApplied: 77, executionPriceBps: 5000, priceImpactBps: 1 },
           metadata: { stale: false },
         };
       },

@@ -75,7 +75,7 @@ export const decideEntry = ({
 }): EntryDecision => {
   assertFairProbability(fairProbability);
   const sideFairProbability = quote.side === "yes" ? fairProbability : 1 - fairProbability;
-  const quoteProbability = quote.executableProbabilityBps / 10_000;
+  const quoteProbability = quote.normalizedSideProbabilityBps / 10_000;
   const edgeBps = Math.round((sideFairProbability - quoteProbability) * 10_000);
   const safetyChecks = {
     edge: edgeBps >= config.minimumEntryEdgeBps,

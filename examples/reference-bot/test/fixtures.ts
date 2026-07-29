@@ -1,6 +1,7 @@
 import { SUPPORTED_PROGRAM_ID, SUPPORTED_QUOTE_MATH_VERSION, type ExecutableQuote, type PilotPosition } from "@stryke/sdk";
 
-export const quote = (overrides: Partial<ExecutableQuote> = {}): ExecutableQuote => ({
+export const quote = (overrides: Partial<ExecutableQuote> = {}): ExecutableQuote => {
+  const value: ExecutableQuote = ({
   quoteId: "quote-1",
   generatedAt: "2026-07-22T00:00:00.000Z",
   expiresAt: "2026-07-22T00:01:00.000Z",
@@ -43,7 +44,12 @@ export const quote = (overrides: Partial<ExecutableQuote> = {}): ExecutableQuote
   priceImpactBps: 50,
   raw: {},
   ...overrides,
-});
+  });
+  if (overrides.executableProbabilityBps !== undefined && overrides.normalizedSideProbabilityBps === undefined) {
+    value.normalizedSideProbabilityBps = overrides.executableProbabilityBps;
+  }
+  return value;
+};
 
 export const position = (overrides: Partial<PilotPosition> = {}): PilotPosition => ({
   positionId: "position-1",
