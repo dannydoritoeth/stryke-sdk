@@ -28,6 +28,19 @@ const row = (
   noShares: "0",
   yesCostBasisCollateralUnits: "7",
   noCostBasisCollateralUnits: "0",
+  economicVersion: 2,
+  valuation: {
+    costBasisCollateralUnits: "7",
+    currentValueCollateralUnits: "8",
+    currentPnlCollateralUnits: "1",
+    currentPnlBps: 1428,
+    winningPayoutCollateralUnits: "22",
+    profitIfWinsCollateralUnits: "15",
+    profitIfWinsBps: 21428,
+    marketStateVersion: "70:30:20:10:7",
+    generatedAt: "2026-07-22T00:00:00.000Z",
+    stale: false,
+  },
   poolState: { realYesPoolCollateralUnits: "70", realNoPoolCollateralUnits: "30", totalYesShares: "20", totalNoShares: "10" },
   forceClose: { expiryAt: deadline },
   pilotLifecycle: {
@@ -107,7 +120,33 @@ describe("pilot positions", () => {
       asset: "BTC",
       yesCostBasisCollateralUnits: "7",
       noCostBasisCollateralUnits: "0",
+      economicVersion: 2,
+      valuation: {
+        currentValueCollateralUnits: "8",
+        winningPayoutCollateralUnits: "22",
+      },
     });
+  });
+
+  it("sdk_positions_use_authoritative_v2_valuations", () => {
+    const position = parsePilotPosition(row("sellable"));
+    expect(position.valuation).toMatchObject({
+      costBasisCollateralUnits: "7",
+      currentValueCollateralUnits: "8",
+      winningPayoutCollateralUnits: "22",
+      profitIfWinsCollateralUnits: "15",
+      stale: false,
+    });
+  });
+
+  it.each([
+    ["V1", { economicVersion: 1 }],
+    ["missing", { economicVersion: undefined, valuation: undefined }],
+    ["stale", { valuation: { ...row("sellable").valuation as object, stale: true } }],
+  ])("sdk_and_bot_fail_closed_on_unverifiable_economics: %s", (_name, overrides) => {
+    expect(() => parsePilotPosition(row("sellable", overrides))).toThrowError(
+      expect.objectContaining({ code: expect.stringMatching(/compatibility|source_stale/) })
+    );
   });
 
   it("claim_refund_deadline_is_preserved_and_enforced", () => {

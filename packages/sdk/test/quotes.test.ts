@@ -105,6 +105,32 @@ const responseBody = (action: "buy" | "sell") => ({
     maximumSlippageBpsApplied: 100,
     executionPriceBps: 4996,
     priceImpactBps: action === "buy" ? 330 : 0,
+    economics: {
+      economicVersion: 2,
+      grossAmount: action === "buy" ? "1000000000" : "471934000",
+      tradeFee: "10000000",
+      netPrincipalDelta: action === "buy" ? "990000000" : "-500000000",
+      participationUnitsDelta:
+        action === "buy" ? "1981585268214571657" : "-1000000000",
+      remainingPrincipal: action === "buy" ? "990000000" : "0",
+      desiredCurveValue: action === "buy" ? "990000000" : "471934000",
+      backedPremium: "0",
+      surplusDelta: "0",
+      executableCurrentValue: action === "buy" ? "990000000" : "461934000",
+      projectedWinningPayout: action === "buy" ? "1200000000" : "500000000",
+      currentPnl: action === "buy" ? "0" : "-38066000",
+      profitIfWins: action === "buy" ? "210000000" : "0",
+    },
+    quotedTradeValuation: {
+      costBasisCollateralUnits: action === "buy" ? "990000000" : "500000000",
+      currentValueCollateralUnits: action === "buy" ? "990000000" : "461934000",
+      currentPnlCollateralUnits: action === "buy" ? "0" : "-38066000",
+      winningPayoutCollateralUnits: action === "buy" ? "1200000000" : "500000000",
+      profitIfWinsCollateralUnits: action === "buy" ? "210000000" : "0",
+      marketStateVersion: "market_v1_123",
+      generatedAt: "2026-07-22T00:00:00.000Z",
+      stale: false,
+    },
     stale: false,
   },
   metadata: { stale: false },
@@ -137,6 +163,7 @@ describe("executable quote client", () => {
       mathVersion: SUPPORTED_QUOTE_MATH_VERSION,
       priceImpactBps: 330,
       feeBreakdown: { feeMode: "standard", feeBpsApplied: 100 },
+      economics: { economicVersion: 2, netPrincipalDelta: "990000000" },
     });
   });
 
@@ -151,7 +178,45 @@ describe("executable quote client", () => {
       priceImpactBps: 0,
       fee: "10000000",
       feeBreakdown: { feeMode: "standard", grossTradeFeeCollateralUnits: "10000000" },
+      economics: { economicVersion: 2, executableCurrentValue: "461934000" },
     });
+  });
+
+  it("sdk_decodes_dual_entitlement_quote_exactly", async () => {
+    await expect(getQuote("buy")).resolves.toMatchObject({
+      economics: {
+        economicVersion: 2,
+        netPrincipalDelta: "990000000",
+        participationUnitsDelta: "1981585268214571657",
+        projectedWinningPayout: "1200000000",
+        profitIfWins: "210000000",
+      },
+      quotedTradeValuation: {
+        winningPayoutCollateralUnits: "1200000000",
+      },
+    });
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["V1", { ...responseBody("buy").quote.economics, economicVersion: 1 }],
+    ["mismatch", { ...responseBody("buy").quote.economics, projectedWinningPayout: "1" }],
+  ])("fails closed for %s principal-backed economics", async (_name, economics) => {
+    const body = responseBody("buy");
+    const client = {
+      requestJson: async () => ({
+        ...body,
+        quote: { ...body.quote, economics },
+      }),
+    };
+    await expect(
+      new QuotesClient(client as never, () => Date.parse("2026-07-22T00:00:01Z")).buy({
+        market,
+        side: "yes",
+        amount: "1000000000",
+        maximumSlippageBps: 100,
+      })
+    ).rejects.toMatchObject({ code: expect.stringMatching(/compatibility|api_response/) });
   });
 
   it.each([
@@ -280,6 +345,11 @@ describe("executable quote client", () => {
             effectiveFeeBps: 700,
             secondsUntilLock: 8,
           },
+          economics: {
+            ...responseBody("buy").quote.economics,
+            tradeFee: "70000000",
+            netPrincipalDelta: "930000000",
+          },
         },
       }),
     };
@@ -368,6 +438,12 @@ describe("executable quote client", () => {
           expectedShares,
           sharesOut: expectedShares,
           minimumOutput: "182622766329724560988",
+          economics: {
+            ...responseBody("buy").quote.economics,
+            grossAmount: amount,
+            netPrincipalDelta: "18446744073699551615",
+            participationUnitsDelta: expectedShares,
+          },
         },
       }),
     };
