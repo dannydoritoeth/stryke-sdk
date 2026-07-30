@@ -199,8 +199,9 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
     (economicVersion !== 2 || parsedValuation === undefined)
   ) {
     throw new StrykeSdkError(
-      "compatibility",
-      "Active position lacks authoritative V2 valuation"
+      "source_stale",
+      "Active position is awaiting authoritative V2 valuation",
+      true
     );
   }
   const tokenSymbol = typeof row.tokenSymbol === "string" ? row.tokenSymbol.toUpperCase() : undefined;

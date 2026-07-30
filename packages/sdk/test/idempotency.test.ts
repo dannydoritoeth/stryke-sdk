@@ -8,6 +8,7 @@ import {
   FileActionCheckpointStore,
   MemoryActionCheckpointStore,
   ReviewedTransactionExecutor,
+  StrykeSdkError,
   parsePilotPosition,
   terminalActionFor,
   type PilotActionReconciliation,
@@ -94,6 +95,32 @@ describe("restart-safe action checkpoints", () => {
     await expect(executor.resume()).resolves.toMatchObject({ state: "confirmed" });
     await expect(store.load()).resolves.toBeUndefined();
     expect(refreshed).toHaveLength(1);
+  });
+
+  it("confirmed_action_retries_transient_v2_materialization_before_clearing_checkpoint", async () => {
+    const store = new MemoryActionCheckpointStore();
+    let attempts = 0;
+    const executor = new ReviewedTransactionExecutor(
+      { reconcile: async () => action("confirmed") } as never,
+      store,
+      {
+        refresh: async () => {
+          attempts += 1;
+          if (attempts < 3) {
+            throw new StrykeSdkError(
+              "source_stale",
+              "Active position is awaiting authoritative V2 valuation",
+              true
+            );
+          }
+          return { valuation: "ready" };
+        },
+      } as never
+    );
+    await store.save({ clientActionId, intentHash, signature, state: "submitted" });
+    await expect(executor.resume()).resolves.toMatchObject({ state: "confirmed" });
+    expect(attempts).toBe(3);
+    await expect(store.load()).resolves.toBeUndefined();
   });
 
   it("already_confirmed_claim_cannot_be_prepared_again", () => {

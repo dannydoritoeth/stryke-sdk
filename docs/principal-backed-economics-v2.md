@@ -21,6 +21,10 @@ evidence.
   API request.
 - Missing, stale, malformed, V1 or internally inconsistent economics fail
   before signing.
+- A confirmed transaction may briefly precede its indexed V2 valuation.
+  Explicit wrong versions remain permanent failures; missing post-confirmation
+  valuation is retryable stale data. The reviewed executor retries that refresh
+  for a bounded window and retains its checkpoint until refresh succeeds.
 - A complete economics block remains authoritative when a valid valuation
   intentionally omits an unavailable optional metric (for example Current
   Value and Current P&L before a position has executable sell value). Compare
@@ -103,6 +107,7 @@ program and API candidate.
 - `sdk_decodes_dual_entitlement_quote_exactly`
 - `sdk_accepts_authoritative_economics_with_unavailable_optional_current_value`
 - `sdk_requires_and_forwards_owner_for_principal_backed_sell_quotes`
+- `confirmed_action_retries_transient_v2_materialization_before_clearing_checkpoint`
 - `sdk_positions_use_authoritative_v2_valuations`
 - `sdk_and_bot_fail_closed_on_unverifiable_economics`
 - `bot_exit_uses_executable_not_desired_curve_value`
