@@ -64,7 +64,7 @@ describe("SDK runtime composition", () => {
           metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: new Date(now).toISOString(), stale: false },
         };
         return {
-          quote: { quoteId: "quote-1", generatedAt: new Date(now).toISOString(), expiresAt: new Date(now + 30_000).toISOString(), marketStateVersion: "state-1", programId: SUPPORTED_PROGRAM_ID, mathVersion: SUPPORTED_QUOTE_MATH_VERSION, amount: "1234567", fee: "0", grossAmount: "1234567", feeAmount: "0", netAmount: "1234567", sharesOut: "1234567", averageExecutionPriceBps: "5000", postTradeSideReserve: "1234567", postTradeSideShares: "1234567", feeBreakdown: { feeMode: "waived", normalTradingFeeWaivedCollateralUnits: "0", grossTradeFeeCollateralUnits: "0", normalTradingFeeBps: 0, feeBpsApplied: 0 }, closingProtection: { policyVersion: 1, phase: "open", baseFeeBps: 0, closingFeeBps: 0, effectiveFeeBps: 0, hardLockTs: Math.floor(now / 1_000) + 55, secondsUntilLock: 55 }, expectedShares: "1234567", minimumOutput: "1225060", maximumSlippageBpsApplied: 77, executionPriceBps: 5000, priceImpactBps: 1 },
+          quote: { quoteId: "quote-1", generatedAt: new Date(now).toISOString(), expiresAt: new Date(now + 30_000).toISOString(), marketStateVersion: "state-1", programId: SUPPORTED_PROGRAM_ID, mathVersion: SUPPORTED_QUOTE_MATH_VERSION, amount: "1234567", fee: "0", grossAmount: "1234567", feeAmount: "0", netAmount: "1234567", sharesOut: "1234567", averageExecutionPriceBps: "5000", postTradeSideReserve: "1234567", postTradeSideShares: "1234567", feeBreakdown: { feeMode: "waived", normalTradingFeeWaivedCollateralUnits: "0", grossTradeFeeCollateralUnits: "0", normalTradingFeeBps: 0, feeBpsApplied: 0 }, closingProtection: { policyVersion: 1, phase: "open", baseFeeBps: 0, closingFeeBps: 0, effectiveFeeBps: 0, hardLockTs: Math.floor(now / 1_000) + 55, secondsUntilLock: 55 }, expectedShares: "1234567", minimumOutput: "1225060", maximumSlippageBpsApplied: 77, executionPriceBps: 5000, priceImpactBps: 1, economics: { economicVersion: 2, grossAmount: "1234567", tradeFee: "0", netPrincipalDelta: "1234567", participationUnitsDelta: "1234567", remainingPrincipal: "1234567", desiredCurveValue: "1234567", backedPremium: "0", surplusDelta: "0", executableCurrentValue: "1234567", projectedWinningPayout: "1234567", currentPnl: "0", profitIfWins: "0" } },
           metadata: { stale: false },
         };
       },
@@ -105,7 +105,9 @@ describe("SDK runtime composition", () => {
         owner: "owner", tokenSymbol: "BTC", tokenMint: "So11111111111111111111111111111111111111112",
         source: "pyth_oracle", collateral: { mint: "11111111111111111111111111111111" },
         expiryFamily: "five_minute", expiryTs: 1_800_000_000, targetValue: "70000.00000000",
-        yesShares: "10", noShares: "0", pilotLifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() },
+        yesShares: "10", noShares: "0", yesCostBasisCollateralUnits: "7", economicVersion: 2,
+        valuation: { costBasisCollateralUnits: "7", currentValueCollateralUnits: "8", currentPnlCollateralUnits: "1", winningPayoutCollateralUnits: "12", profitIfWinsCollateralUnits: "5", marketStateVersion: "state-1", generatedAt: new Date().toISOString(), stale: false },
+        pilotLifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() },
       }] : [],
       metadata: { stale: false, generatedAt: new Date().toISOString() },
     }) };

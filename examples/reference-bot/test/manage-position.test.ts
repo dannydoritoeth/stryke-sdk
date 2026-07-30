@@ -4,11 +4,11 @@ import { decideOpenPosition, manageTerminalPosition } from "../src/manage-positi
 import { position, quote } from "./fixtures.js";
 
 describe("position management", () => {
-  it("sell_when_executable_net_proceeds_exceed_probability_weighted_hold_value", () => {
+  it("bot_exit_uses_executable_not_desired_curve_value", () => {
     expect(decideOpenPosition({ side: "yes", fairProbability: 0.5, sellQuote: quote({ action: "sell", expectedShares: undefined, expectedNetProceeds: "60" }), ifWinPayout: "100" })).toMatchObject({ action: "sell", sellNowValue: 60n, holdValue: 50n });
   });
 
-  it("hold_when_hold_value_is_greater_or_equal", () => {
+  it("bot_hold_path_uses_terminal_principal_and_upside", () => {
     expect(decideOpenPosition({ side: "no", fairProbability: 0.4, sellQuote: quote({ action: "sell", expectedShares: undefined, expectedNetProceeds: "60" }), ifWinPayout: "100" }).action).toBe("hold");
   });
 
