@@ -58,7 +58,39 @@ export type ExecutableQuote = {
   /** Normalized market probability for the quoted side; not the sized execution price. */
   normalizedSideProbabilityBps: number;
   priceImpactBps: number;
+  economics: PrincipalBackedQuoteEconomics;
+  quotedTradeValuation?: PositionValuation;
+  resultingPositionValuation?: PositionValuation;
   raw: Readonly<Record<string, unknown>>;
+};
+
+export type PositionValuation = {
+  costBasisCollateralUnits: string;
+  currentValueCollateralUnits?: string;
+  currentPnlCollateralUnits?: string;
+  currentPnlBps?: number;
+  winningPayoutCollateralUnits?: string;
+  profitIfWinsCollateralUnits?: string;
+  profitIfWinsBps?: number;
+  marketStateVersion: string;
+  generatedAt: string;
+  stale: boolean;
+};
+
+export type PrincipalBackedQuoteEconomics = {
+  economicVersion: 2;
+  grossAmount: string;
+  tradeFee: string;
+  netPrincipalDelta: string;
+  participationUnitsDelta: string;
+  remainingPrincipal: string;
+  desiredCurveValue: string;
+  backedPremium: string;
+  surplusDelta: string;
+  executableCurrentValue: string;
+  projectedWinningPayout: string;
+  currentPnl: string;
+  profitIfWins: string;
 };
 
 const integerString = (value: unknown, field: string): string => {
@@ -66,6 +98,100 @@ const integerString = (value: unknown, field: string): string => {
     throw new StrykeSdkError("validation", `Invalid quote field: ${field}`);
   }
   return value;
+};
+
+const signedIntegerString = (value: unknown, field: string): string => {
+  if (typeof value !== "string" || !/^-?\d+$/.test(value)) {
+    throw new StrykeSdkError("validation", `Invalid quote field: ${field}`);
+  }
+  return value;
+};
+
+const positionValuation = (
+  value: unknown,
+  field: string
+): PositionValuation | undefined => {
+  if (value === undefined) return undefined;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new StrykeSdkError("api_response", `Invalid quote field: ${field}`);
+  }
+  const row = value as Record<string, unknown>;
+  const generatedAt = text(row.generatedAt, `${field}.generatedAt`);
+  if (!Number.isFinite(Date.parse(generatedAt)) || row.stale !== false) {
+    throw new StrykeSdkError("quote_blocked", `${field} is stale or invalid`);
+  }
+  return {
+    costBasisCollateralUnits: integerString(
+      row.costBasisCollateralUnits,
+      `${field}.costBasisCollateralUnits`
+    ),
+    ...(row.currentValueCollateralUnits === undefined
+      ? {}
+      : {
+          currentValueCollateralUnits: integerString(
+            row.currentValueCollateralUnits,
+            `${field}.currentValueCollateralUnits`
+          ),
+        }),
+    ...(row.currentPnlCollateralUnits === undefined
+      ? {}
+      : {
+          currentPnlCollateralUnits: signedIntegerString(
+            row.currentPnlCollateralUnits,
+            `${field}.currentPnlCollateralUnits`
+          ),
+        }),
+    ...(row.currentPnlBps === undefined
+      ? {}
+      : { currentPnlBps: integer(row.currentPnlBps, `${field}.currentPnlBps`) }),
+    ...(row.winningPayoutCollateralUnits === undefined
+      ? {}
+      : {
+          winningPayoutCollateralUnits: integerString(
+            row.winningPayoutCollateralUnits,
+            `${field}.winningPayoutCollateralUnits`
+          ),
+        }),
+    ...(row.profitIfWinsCollateralUnits === undefined
+      ? {}
+      : {
+          profitIfWinsCollateralUnits: signedIntegerString(
+            row.profitIfWinsCollateralUnits,
+            `${field}.profitIfWinsCollateralUnits`
+          ),
+        }),
+    ...(row.profitIfWinsBps === undefined
+      ? {}
+      : { profitIfWinsBps: integer(row.profitIfWinsBps, `${field}.profitIfWinsBps`) }),
+    marketStateVersion: text(row.marketStateVersion, `${field}.marketStateVersion`),
+    generatedAt,
+    stale: false,
+  };
+};
+
+const principalBackedEconomics = (value: unknown): PrincipalBackedQuoteEconomics => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new StrykeSdkError("compatibility", "Principal-backed V2 economics are unavailable");
+  }
+  const row = value as Record<string, unknown>;
+  if (row.economicVersion !== 2) {
+    throw new StrykeSdkError("compatibility", "Quote economic version is unsupported");
+  }
+  return {
+    economicVersion: 2,
+    grossAmount: integerString(row.grossAmount, "economics.grossAmount"),
+    tradeFee: integerString(row.tradeFee, "economics.tradeFee"),
+    netPrincipalDelta: signedIntegerString(row.netPrincipalDelta, "economics.netPrincipalDelta"),
+    participationUnitsDelta: signedIntegerString(row.participationUnitsDelta, "economics.participationUnitsDelta"),
+    remainingPrincipal: integerString(row.remainingPrincipal, "economics.remainingPrincipal"),
+    desiredCurveValue: integerString(row.desiredCurveValue, "economics.desiredCurveValue"),
+    backedPremium: integerString(row.backedPremium, "economics.backedPremium"),
+    surplusDelta: signedIntegerString(row.surplusDelta, "economics.surplusDelta"),
+    executableCurrentValue: integerString(row.executableCurrentValue, "economics.executableCurrentValue"),
+    projectedWinningPayout: integerString(row.projectedWinningPayout, "economics.projectedWinningPayout"),
+    currentPnl: signedIntegerString(row.currentPnl, "economics.currentPnl"),
+    profitIfWins: signedIntegerString(row.profitIfWins, "economics.profitIfWins"),
+  };
 };
 
 const text = (value: unknown, field: string): string => {
@@ -301,6 +427,38 @@ export class QuotesClient {
       quote.marketStateSlot === undefined
         ? undefined
         : integer(quote.marketStateSlot, "marketStateSlot");
+    const economics = principalBackedEconomics(quote.economics);
+    const quotedTradeValuation = positionValuation(
+      quote.quotedTradeValuation,
+      "quotedTradeValuation"
+    );
+    const resultingPositionValuation = positionValuation(
+      quote.resultingPositionValuation,
+      "resultingPositionValuation"
+    );
+    const authoritativeValuation =
+      quotedTradeValuation ?? resultingPositionValuation;
+    if (
+      economics.grossAmount !== grossAmount ||
+      economics.tradeFee !== feeAmount ||
+      (action === "buy" &&
+        (economics.netPrincipalDelta !== (BigInt(amount) - BigInt(feeAmount)).toString() ||
+          economics.participationUnitsDelta !== expectedShares)) ||
+      (action === "sell" &&
+        (economics.participationUnitsDelta !== `-${amount}` ||
+          economics.executableCurrentValue !== expectedNetProceeds)) ||
+      (authoritativeValuation !== undefined &&
+        (economics.projectedWinningPayout !==
+          authoritativeValuation.winningPayoutCollateralUnits ||
+          economics.currentPnl !== authoritativeValuation.currentPnlCollateralUnits ||
+          economics.profitIfWins !==
+            authoritativeValuation.profitIfWinsCollateralUnits))
+    ) {
+      throw new StrykeSdkError(
+        "api_response",
+        "Principal-backed quote economics are inconsistent"
+      );
+    }
 
     return {
       quoteId: text(quote.quoteId, "quoteId"),
@@ -338,6 +496,11 @@ export class QuotesClient {
         "executionPriceBps"
       ),
       priceImpactBps: integer(quote.priceImpactBps, "priceImpactBps"),
+      economics,
+      ...(quotedTradeValuation === undefined ? {} : { quotedTradeValuation }),
+      ...(resultingPositionValuation === undefined
+        ? {}
+        : { resultingPositionValuation }),
       raw: quote,
     };
   }

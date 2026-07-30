@@ -7,6 +7,7 @@ import {
 } from "./lifecycle.js";
 import type { PilotMarket } from "./markets.js";
 import { PILOT_ASSETS, type PilotAsset } from "./compatibility.js";
+import type { PositionValuation } from "./quotes.js";
 
 export type PositionTerminalAction = "claim" | "refund";
 
@@ -21,6 +22,8 @@ export type PilotPosition = {
   noShares: string;
   yesCostBasisCollateralUnits?: string;
   noCostBasisCollateralUnits?: string;
+  economicVersion?: number;
+  valuation?: PositionValuation;
   poolState?: PilotPositionPoolState;
   claimableAmount?: string;
   refundableAmount?: string;
@@ -66,6 +69,57 @@ const amount = (value: unknown, field: string): string => {
 
 const optionalAmount = (value: unknown, field: string): string | undefined =>
   value === undefined ? undefined : amount(value, field);
+
+const signedAmount = (value: unknown, field: string): string => {
+  const parsed = text(value, field);
+  if (!/^-?\d+$/.test(parsed)) {
+    throw new StrykeSdkError("api_response", `Invalid position amount: ${field}`);
+  }
+  return parsed;
+};
+
+const valuation = (value: unknown): PositionValuation | undefined => {
+  if (value === undefined) return undefined;
+  const row = record(value, "valuation");
+  if (row.stale !== false) {
+    throw new StrykeSdkError("source_stale", "Position valuation is stale or unavailable");
+  }
+  const generatedAt = text(row.generatedAt, "valuation.generatedAt");
+  if (!Number.isFinite(Date.parse(generatedAt))) {
+    throw new StrykeSdkError("api_response", "Position valuation timestamp is invalid");
+  }
+  return {
+    costBasisCollateralUnits: amount(
+      row.costBasisCollateralUnits,
+      "valuation.costBasisCollateralUnits"
+    ),
+    currentValueCollateralUnits: amount(
+      row.currentValueCollateralUnits,
+      "valuation.currentValueCollateralUnits"
+    ),
+    currentPnlCollateralUnits: signedAmount(
+      row.currentPnlCollateralUnits,
+      "valuation.currentPnlCollateralUnits"
+    ),
+    ...(row.currentPnlBps === undefined
+      ? {}
+      : { currentPnlBps: Number(row.currentPnlBps) }),
+    winningPayoutCollateralUnits: amount(
+      row.winningPayoutCollateralUnits,
+      "valuation.winningPayoutCollateralUnits"
+    ),
+    profitIfWinsCollateralUnits: signedAmount(
+      row.profitIfWinsCollateralUnits,
+      "valuation.profitIfWinsCollateralUnits"
+    ),
+    ...(row.profitIfWinsBps === undefined
+      ? {}
+      : { profitIfWinsBps: Number(row.profitIfWinsBps) }),
+    marketStateVersion: text(row.marketStateVersion, "valuation.marketStateVersion"),
+    generatedAt,
+    stale: false,
+  };
+};
 
 const poolState = (value: unknown): PilotPositionPoolState | undefined => {
   if (value === undefined) return undefined;
@@ -116,6 +170,24 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
     "noCostBasisCollateralUnits"
   );
   const parsedPoolState = poolState(row.poolState);
+  const economicVersion =
+    row.economicVersion === undefined ? undefined : Number(row.economicVersion);
+  if (
+    economicVersion !== undefined &&
+    (!Number.isInteger(economicVersion) || economicVersion !== 2)
+  ) {
+    throw new StrykeSdkError("compatibility", "Position economic version is unsupported");
+  }
+  const parsedValuation = valuation(row.valuation);
+  if (
+    (lifecycle.state === "open_position" || lifecycle.state === "sellable") &&
+    (economicVersion !== 2 || parsedValuation === undefined)
+  ) {
+    throw new StrykeSdkError(
+      "compatibility",
+      "Active position lacks authoritative V2 valuation"
+    );
+  }
   const tokenSymbol = typeof row.tokenSymbol === "string" ? row.tokenSymbol.toUpperCase() : undefined;
   if (tokenSymbol !== undefined && !(PILOT_ASSETS as readonly string[]).includes(tokenSymbol)) {
     throw new StrykeSdkError("unsupported_asset", `Unsupported position asset: ${tokenSymbol}`);
@@ -138,6 +210,8 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
     noShares: amount(row.noShares, "noShares"),
     ...(yesCostBasisCollateralUnits === undefined ? {} : { yesCostBasisCollateralUnits }),
     ...(noCostBasisCollateralUnits === undefined ? {} : { noCostBasisCollateralUnits }),
+    ...(economicVersion === undefined ? {} : { economicVersion }),
+    ...(parsedValuation === undefined ? {} : { valuation: parsedValuation }),
     ...(parsedPoolState === undefined ? {} : { poolState: parsedPoolState }),
     ...(claimableAmount === undefined ? {} : { claimableAmount }),
     ...(refundableAmount === undefined ? {} : { refundableAmount }),
@@ -151,18 +225,16 @@ export const positionIfWinPayout = (
   position: PilotPosition,
   exposure: PilotPositionSideExposure
 ): string | undefined => {
-  const pool = position.poolState;
-  if (!pool) return undefined;
-  const totalShares = BigInt(exposure.side === "yes" ? pool.totalYesShares : pool.totalNoShares);
-  if (totalShares <= 0n) return undefined;
-  const totalPool = BigInt(pool.realYesPoolCollateralUnits) + BigInt(pool.realNoPoolCollateralUnits);
-  return ((totalPool * BigInt(exposure.shares)) / totalShares).toString();
+  void exposure;
+  return position.valuation?.winningPayoutCollateralUnits;
 };
 
 export type PilotPositionSideExposure = {
   side: "yes" | "no";
   shares: string;
   costBasisCollateralUnits?: string;
+  currentValueCollateralUnits?: string;
+  winningPayoutCollateralUnits?: string;
 };
 
 export const positionSideExposures = (
@@ -176,6 +248,12 @@ export const positionSideExposures = (
       ...(position.yesCostBasisCollateralUnits === undefined
         ? {}
         : { costBasisCollateralUnits: position.yesCostBasisCollateralUnits }),
+      ...(position.valuation?.currentValueCollateralUnits === undefined
+        ? {}
+        : { currentValueCollateralUnits: position.valuation.currentValueCollateralUnits }),
+      ...(position.valuation?.winningPayoutCollateralUnits === undefined
+        ? {}
+        : { winningPayoutCollateralUnits: position.valuation.winningPayoutCollateralUnits }),
     });
   }
   if (BigInt(position.noShares) > 0n) {
@@ -185,6 +263,12 @@ export const positionSideExposures = (
       ...(position.noCostBasisCollateralUnits === undefined
         ? {}
         : { costBasisCollateralUnits: position.noCostBasisCollateralUnits }),
+      ...(position.valuation?.currentValueCollateralUnits === undefined
+        ? {}
+        : { currentValueCollateralUnits: position.valuation.currentValueCollateralUnits }),
+      ...(position.valuation?.winningPayoutCollateralUnits === undefined
+        ? {}
+        : { winningPayoutCollateralUnits: position.valuation.winningPayoutCollateralUnits }),
     });
   }
   return exposures;
