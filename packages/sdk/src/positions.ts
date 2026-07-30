@@ -78,6 +78,17 @@ const signedAmount = (value: unknown, field: string): string => {
   return parsed;
 };
 
+const optionalSafeInteger = (
+  value: unknown,
+  field: string
+): number | undefined => {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) {
+    throw new StrykeSdkError("api_response", `Invalid position field: ${field}`);
+  }
+  return value;
+};
+
 const valuation = (value: unknown): PositionValuation | undefined => {
   if (value === undefined) return undefined;
   const row = record(value, "valuation");
@@ -88,6 +99,14 @@ const valuation = (value: unknown): PositionValuation | undefined => {
   if (!Number.isFinite(Date.parse(generatedAt))) {
     throw new StrykeSdkError("api_response", "Position valuation timestamp is invalid");
   }
+  const currentPnlBps = optionalSafeInteger(
+    row.currentPnlBps,
+    "valuation.currentPnlBps"
+  );
+  const profitIfWinsBps = optionalSafeInteger(
+    row.profitIfWinsBps,
+    "valuation.profitIfWinsBps"
+  );
   return {
     costBasisCollateralUnits: amount(
       row.costBasisCollateralUnits,
@@ -101,9 +120,7 @@ const valuation = (value: unknown): PositionValuation | undefined => {
       row.currentPnlCollateralUnits,
       "valuation.currentPnlCollateralUnits"
     ),
-    ...(row.currentPnlBps === undefined
-      ? {}
-      : { currentPnlBps: Number(row.currentPnlBps) }),
+    ...(currentPnlBps === undefined ? {} : { currentPnlBps }),
     winningPayoutCollateralUnits: amount(
       row.winningPayoutCollateralUnits,
       "valuation.winningPayoutCollateralUnits"
@@ -112,9 +129,7 @@ const valuation = (value: unknown): PositionValuation | undefined => {
       row.profitIfWinsCollateralUnits,
       "valuation.profitIfWinsCollateralUnits"
     ),
-    ...(row.profitIfWinsBps === undefined
-      ? {}
-      : { profitIfWinsBps: Number(row.profitIfWinsBps) }),
+    ...(profitIfWinsBps === undefined ? {} : { profitIfWinsBps }),
     marketStateVersion: text(row.marketStateVersion, "valuation.marketStateVersion"),
     generatedAt,
     stale: false,

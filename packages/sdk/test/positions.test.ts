@@ -143,9 +143,10 @@ describe("pilot positions", () => {
     ["V1", { economicVersion: 1 }],
     ["missing", { economicVersion: undefined, valuation: undefined }],
     ["stale", { valuation: { ...row("sellable").valuation as object, stale: true } }],
+    ["malformed", { valuation: { ...row("sellable").valuation as object, currentPnlBps: "NaN" } }],
   ])("sdk_and_bot_fail_closed_on_unverifiable_economics: %s", (_name, overrides) => {
     expect(() => parsePilotPosition(row("sellable", overrides))).toThrowError(
-      expect.objectContaining({ code: expect.stringMatching(/compatibility|source_stale/) })
+      expect.objectContaining({ code: expect.stringMatching(/compatibility|source_stale|api_response/) })
     );
   });
 
