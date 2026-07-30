@@ -9,13 +9,22 @@ transactions, restart-safe reconciliation, positions, sells, claims, and
 refunds. The reference bot continuously reconciles → evaluates every open
 position → manages/exits → settles → evaluates the next market.
 
+The SDK requires principal-backed economics V2. Quotes expose exact principal,
+participation, executable Current Value and Winning Payout fields. Active
+positions consume the API-authored side valuation; neither the SDK nor the bot
+recomputes payout from aggregate pools. Missing, stale, V1 or inconsistent
+economics stop before signing.
+
 The recommended baseline uses realised volatility, exact time remaining and
 strike distance. It quotes YES and NO at the same executable size, chooses the
 stronger qualifying edge, and opens only inside buffered fee-free activation
 capacity before closing protection begins. The two earlier distance estimators
 remain as transparent educational integration examples.
 
-The reference bot includes a volatility- and time-adjusted baseline that evaluates both sides against executable Stryke pricing and understands the fee-free activation region. It is intended as a credible starting point, not a guaranteed profitable strategy.
+The included volatility- and time-adjusted estimator is an inspectable baseline,
+not a guaranteed profitable strategy. Its release-evidence claim will be
+restored only after the principal-backed V2 candidate passes the signed devnet
+matrix.
 
 ## Three-step confidence ladder
 

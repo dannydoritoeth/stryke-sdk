@@ -1,6 +1,6 @@
 # Principal-Backed Economics V2 Delivery
 
-Status: Approved for implementation; SDK phase in progress
+Status: Code complete through runtime composition; deployed V2 candidate evidence open
 
 This repository must consume Stryke's authoritative V2 economics without
 recomputing payouts from pool totals or relying on V1 curve fields. Delivery is
@@ -59,6 +59,18 @@ bot_cycle():
    and 1m/5m/15m/1h matrix. Until then, the repository may be code-complete but
    is not release-evidence complete.
 
+## Repository-local implementation evidence
+
+- SDK V2 parsing and compatibility: `cc6e3fb`, tests `f7af57e`.
+- Reference-bot authoritative position economics: `d2c8eb4`, tests `1d9bcf0`.
+- The actual `test:polymarket-fixture` CLI is exercised by
+  `reference_bot_completes_two_dual_entitlement_market_cycles`: it enters,
+  holds, exits, blocks same-round re-entry across a restarted loop, then enters
+  the next round.
+- `check:config-controls` remains the exhaustive env/file-to-runtime consumer
+  gate. Candidate signed devnet evidence cannot close until the V2 program/API
+  deployment exists.
+
 ## Named tests
 
 - `sdk_decodes_dual_entitlement_quote_exactly`
@@ -70,4 +82,3 @@ bot_cycle():
 - `reference_bot_restart_reconciles_dual_entitlement_action_once`
 - `reference_bot_config_controls_reach_execution_and_lifecycle`
 - `reference_bot_completes_two_dual_entitlement_market_cycles`
-

@@ -90,7 +90,9 @@ unknown action blocks duplicates. The bot then handles one stable position:
 
 - sellable: request a fresh quote for the exact raw side balance, calculate
   integer PnL from API-authored side cost basis, apply stop loss/take profit,
-  then EV fallback. The SDK never substitutes a smaller exit;
+  then compare executable net proceeds with the API-authored principal-backed
+  Winning Payout. The SDK never substitutes a smaller exit or recomputes payout
+  from pool totals;
 - awaiting resolution: wait; or
 - claimable/refundable: use only the API-authoritative terminal action.
 
