@@ -292,15 +292,23 @@ export class QuotesClient {
     side,
     amount,
     maximumSlippageBps,
+    owner,
   }: {
     market: PilotMarket;
     action: QuoteAction;
     side: QuoteSide;
     amount: string;
     maximumSlippageBps: number;
+    owner?: string;
   }): Promise<ExecutableQuote> {
     assertMarketTradeable(market, "quote");
     integerString(amount, "amount");
+    if (action === "sell" && (typeof owner !== "string" || owner.length === 0)) {
+      throw new StrykeSdkError(
+        "validation",
+        "Owner is required for principal-backed sell quotes"
+      );
+    }
     const collateral = market.raw.collateral;
     if (typeof collateral !== "object" || collateral === null) {
       throw new StrykeSdkError("validation", "Market collateral metadata is unavailable");
@@ -323,6 +331,7 @@ export class QuotesClient {
         action,
         side,
         amount,
+        ...(owner === undefined ? {} : { owner }),
         maxSlippageBps: maximumSlippageBps,
       }),
     });
@@ -513,11 +522,13 @@ export class QuotesClient {
     side,
     ownedShares,
     maximumSlippageBps,
+    owner,
   }: {
     market: PilotMarket;
     side: QuoteSide;
     ownedShares: string;
     maximumSlippageBps: number;
+    owner: string;
   }): Promise<ExecutableQuote> {
     const owned = BigInt(integerString(ownedShares, "ownedShares"));
     if (owned <= 0n) {
@@ -528,6 +539,7 @@ export class QuotesClient {
       side,
       amount: owned.toString(),
       maximumSlippageBps,
+      owner,
     });
   }
 

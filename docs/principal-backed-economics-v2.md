@@ -15,6 +15,10 @@ evidence.
 - Positions consume API-authored side valuations. The SDK must not derive a
   winning payout from aggregate pool shares.
 - Transaction preparation remains bound to the complete quote identity.
+- Principal-backed sell quotes require the owner identity because executable
+  proceeds depend on that owner's remaining protected principal. The reference
+  bot always supplies its signer address; a missing sell owner fails before an
+  API request.
 - Missing, stale, malformed, V1 or internally inconsistent economics fail
   before signing.
 - A complete economics block remains authoritative when a valid valuation
@@ -98,6 +102,7 @@ program and API candidate.
 
 - `sdk_decodes_dual_entitlement_quote_exactly`
 - `sdk_accepts_authoritative_economics_with_unavailable_optional_current_value`
+- `sdk_requires_and_forwards_owner_for_principal_backed_sell_quotes`
 - `sdk_positions_use_authoritative_v2_valuations`
 - `sdk_and_bot_fail_closed_on_unverifiable_economics`
 - `bot_exit_uses_executable_not_desired_curve_value`

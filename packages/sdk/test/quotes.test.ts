@@ -148,6 +148,7 @@ describe("executable quote client", () => {
       side: "yes",
       amount: "1000000000",
       maximumSlippageBps: 100,
+      ...(action === "sell" ? { owner: "owner-1" } : {}),
     });
   };
 
@@ -263,7 +264,7 @@ describe("executable quote client", () => {
     const body = responseBody("sell");
     const client = { requestJson: async () => ({ ...body, quote: { ...body.quote, ...identity } }) };
     await expect(new QuotesClient(client as never, () => Date.parse("2026-07-22T00:00:01Z")).sell({
-      market, side: "yes", amount: "1000000000", maximumSlippageBps: 100,
+      market, side: "yes", amount: "1000000000", maximumSlippageBps: 100, owner: "owner-1",
     })).rejects.toMatchObject({ code });
   });
 
@@ -285,7 +286,7 @@ describe("executable quote client", () => {
       },
     };
     const quotes = new QuotesClient(client as never, () => Date.parse("2026-07-22T00:00:01Z"));
-    await expect(quotes.sellAvailable({ market, side: "yes", ownedShares: "1000000000", maximumSlippageBps: 100 }))
+    await expect(quotes.sellAvailable({ market, side: "yes", ownedShares: "1000000000", maximumSlippageBps: 100, owner: "owner-1" }))
       .rejects.toMatchObject({ code: "quote_blocked", message: "Quote is unavailable for this amount." });
     expect(requested).toEqual(["1000000000"]);
   });
@@ -308,7 +309,7 @@ describe("executable quote client", () => {
       },
     };
     const quotes = new QuotesClient(client as never, () => Date.parse("2026-07-22T00:00:01Z"));
-    const input = { market, side: "yes" as const, ownedShares: "1000000000", maximumSlippageBps: 100 };
+    const input = { market, side: "yes" as const, ownedShares: "1000000000", maximumSlippageBps: 100, owner: "owner-1" };
     await expect(quotes.sellAvailable(input)).rejects.toMatchObject({ code: "quote_blocked" });
     await expect(quotes.sellAvailable(input)).resolves.toMatchObject({ amount: "1000000000" });
     expect(requested).toEqual(["1000000000", "1000000000"]);
@@ -327,8 +328,26 @@ describe("executable quote client", () => {
       }),
     };
     const quotes = new QuotesClient(client as never);
-    await expect(quotes.sellAvailable({ market, side: "yes", ownedShares: "1000000000", maximumSlippageBps: 100 }))
+    await expect(quotes.sellAvailable({ market, side: "yes", ownedShares: "1000000000", maximumSlippageBps: 100, owner: "owner-1" }))
       .rejects.toMatchObject({ code: "quote_blocked", message: "Trading is locked before settlement." });
+  });
+
+  it("sdk_requires_and_forwards_owner_for_principal_backed_sell_quotes", async () => {
+    let requestedBody: Record<string, unknown> | undefined;
+    const quotes = new QuotesClient({
+      requestJson: async (_path: string, init: { body: string }) => {
+        requestedBody = JSON.parse(init.body) as Record<string, unknown>;
+        return responseBody("sell");
+      },
+    } as never, () => Date.parse("2026-07-22T00:00:01Z"));
+    await expect(quotes.sell({
+      market, side: "yes", amount: "1000000000", maximumSlippageBps: 100,
+    })).rejects.toMatchObject({ code: "validation" });
+    await quotes.sell({
+      market, side: "yes", amount: "1000000000", maximumSlippageBps: 100,
+      owner: "owner-1",
+    });
+    expect(requestedBody).toMatchObject({ owner: "owner-1", action: "sell" });
   });
 
   it("expired_quote_is_blocked", async () => {

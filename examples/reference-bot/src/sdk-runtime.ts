@@ -232,7 +232,8 @@ export const createSdkRuntimeAdapter = ({
       let polymarketUnavailable = false;
       try { externalPrices = await polymarketPrices(market); }
       catch { polymarketUnavailable = true; }
-      return { market, estimatorInput: estimatorInput(market), sellQuote: await quotes.sellAvailable({ market, side: exposure.side, ownedShares: exposure.shares, maximumSlippageBps: config.maximumPriceImpactBps }), ifWinPayout, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}), ...(polymarketUnavailable ? { polymarketUnavailable: true } : {}) };
+      if (!owner) throw new StrykeSdkError("position_state", "Position owner is unavailable");
+      return { market, estimatorInput: estimatorInput(market), sellQuote: await quotes.sellAvailable({ market, side: exposure.side, ownedShares: exposure.shares, maximumSlippageBps: config.maximumPriceImpactBps, owner }), ifWinPayout, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}), ...(polymarketUnavailable ? { polymarketUnavailable: true } : {}) };
     },
     evaluateEntry: async () => {
       const market = await markets.current(
