@@ -71,6 +71,24 @@ bot_cycle():
   gate. Candidate signed devnet evidence cannot close until the V2 program/API
   deployment exists.
 
+Verified on 2026-07-30 against `dda6a98` plus the implementation commits listed
+above:
+
+- `npm test`: 39 files, 258 tests passed.
+- `npm run build` and `npm run typecheck`: SDK and reference bot passed.
+- `npm run test:consumer`: the packed SDK consumer contract passed.
+- `npm run check:public-boundary`: passed.
+- `npm run check:config-controls`: passed.
+- `npm run check:strategy-claim`: passed; the stronger strategy claim remains
+  intentionally unpublished until fresh deployed-candidate evidence exists.
+- `npm run test:polymarket-fixture -w @stryke/reference-bot`: the actual CLI
+  emitted `buy -> hold -> sell -> same-round skip -> next-round buy`, proving
+  two ordered market cycles through the composition entrypoint.
+
+These results close phases 1-3. Phase 4 is deliberately open: repository-local
+fixtures cannot substitute for signed transactions against a deployed V2
+program and API candidate.
+
 ## Named tests
 
 - `sdk_decodes_dual_entitlement_quote_exactly`
