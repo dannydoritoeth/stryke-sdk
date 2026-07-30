@@ -61,7 +61,7 @@ describe("documented example contract", () => {
     expect(troubleshooting).toContain("npm run start:devnet -w @stryke/reference-bot -- --preflight-only");
   });
 
-  it("real_cli_composes_polymarket_entry_hold_exit_restart_block_and_next_round", () => {
+  it("reference_bot_completes_two_dual_entitlement_market_cycles", () => {
     const result = spawnSync("npm", ["run", "test:polymarket-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
     expect(result.status, result.stderr).toBe(0);
     for (const expected of [
