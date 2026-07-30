@@ -6,7 +6,6 @@ import {
   TransactionsClient,
   createPilotIntentHash,
   createTerminalIntentHash,
-  positionIfWinPayout,
   type ActionCheckpointStore,
   type LatestBlockhashRpc,
   type PilotMarket,
@@ -227,7 +226,7 @@ export const createSdkRuntimeAdapter = ({
       : [],
     evaluatePosition: async (position, exposure) => {
       const market = await marketFor(position);
-      const ifWinPayout = positionIfWinPayout(position, exposure);
+      const ifWinPayout = exposure.winningPayoutCollateralUnits;
       if (!ifWinPayout) throw new StrykeSdkError("position_state", "API-authored payout inputs are unavailable");
       let externalPrices: Awaited<ReturnType<typeof polymarketPrices>>;
       let polymarketUnavailable = false;
