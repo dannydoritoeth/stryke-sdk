@@ -1,6 +1,6 @@
 # Principal-Backed Economics V2 Delivery
 
-Status: Code complete through runtime composition; deployed V2 candidate evidence open
+Status: Done Done on devnet; independent audit and mainnet approval remain external release gates
 
 This repository must consume Stryke's authoritative V2 economics without
 recomputing payouts from pool totals or relying on V1 curve fields. Delivery is
@@ -98,9 +98,30 @@ above:
   emitted `buy -> hold -> sell -> same-round skip -> next-round buy`, proving
   two ordered market cycles through the composition entrypoint.
 
-These results close phases 1-3. Phase 4 is deliberately open: repository-local
-fixtures cannot substitute for signed transactions against a deployed V2
-program and API candidate.
+These results closed phases 1-3. Phase 4 subsequently passed against the
+deployed V2 program and API candidate. Signed run
+`bot-matrix-20260730T210454747Z`, recorded in
+`docs/evidence/principal-backed-v2-devnet-matrix-20260731.json`, exercised the
+actual reference-bot CLI for BTC and SOL across 1m, 5m, 15m and 1h. All eight
+cells exited successfully, completed a confirmed lifecycle, evaluated the next
+market, and passed the paper-mode safety check. Every cell performed confirmed
+buy and sell actions; SOL 1m completed two buy/sell cycles.
+
+The deployed-candidate run found and closed three integration gaps before this
+claim was made:
+
+- optional unavailable Current Value was incorrectly compared with economic
+  zero even though the complete economics block was authoritative;
+- owner identity was not forwarded for principal-backed sell quotes; and
+- transaction confirmation could precede indexed V2 valuation materialization.
+
+The SDK now compares only present optional valuation fields, requires and
+forwards the owner for sells, and retries the bounded post-confirmation refresh
+without clearing its restart checkpoint early. Final verification against
+`274f427` passed `npm test` (39 files, 261 tests), build, typecheck, packed
+consumer installation, public-boundary checks and the 40-control runtime
+register. Independent contract audit and mainnet authorization are not claims
+made by this repository evidence.
 
 ## Named tests
 
