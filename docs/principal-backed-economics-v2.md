@@ -17,6 +17,11 @@ evidence.
 - Transaction preparation remains bound to the complete quote identity.
 - Missing, stale, malformed, V1 or internally inconsistent economics fail
   before signing.
+- A complete economics block remains authoritative when a valid valuation
+  intentionally omits an unavailable optional metric (for example Current
+  Value and Current P&L before a position has executable sell value). Compare
+  every valuation metric that is present; do not treat an absent optional
+  metric as an economics mismatch.
 - The bot uses executable Current Value for exits and authoritative Winning
   Payout for hold decisions and accounting. Unfunded desired curve value is
   never treated as realizable.
@@ -92,6 +97,7 @@ program and API candidate.
 ## Named tests
 
 - `sdk_decodes_dual_entitlement_quote_exactly`
+- `sdk_accepts_authoritative_economics_with_unavailable_optional_current_value`
 - `sdk_positions_use_authoritative_v2_valuations`
 - `sdk_and_bot_fail_closed_on_unverifiable_economics`
 - `bot_exit_uses_executable_not_desired_curve_value`

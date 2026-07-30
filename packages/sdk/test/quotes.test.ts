@@ -197,6 +197,41 @@ describe("executable quote client", () => {
     });
   });
 
+  it("sdk_accepts_authoritative_economics_with_unavailable_optional_current_value", async () => {
+    const body = responseBody("buy");
+    const valuation = body.quote.quotedTradeValuation;
+    const client = {
+      requestJson: async () => ({
+        ...body,
+        quote: {
+          ...body.quote,
+          quotedTradeValuation: {
+            costBasisCollateralUnits: valuation.costBasisCollateralUnits,
+            winningPayoutCollateralUnits: valuation.winningPayoutCollateralUnits,
+            profitIfWinsCollateralUnits: valuation.profitIfWinsCollateralUnits,
+            marketStateVersion: valuation.marketStateVersion,
+            generatedAt: valuation.generatedAt,
+            stale: false,
+          },
+        },
+      }),
+    };
+
+    const quote = await new QuotesClient(
+      client as never,
+      () => Date.parse("2026-07-22T00:00:01Z")
+    ).buy({
+        market,
+        side: "yes",
+        amount: "1000000000",
+        maximumSlippageBps: 100,
+      });
+    expect(quote).toMatchObject({
+      economics: { currentPnl: "0" },
+    });
+    expect(quote.quotedTradeValuation).not.toHaveProperty("currentPnlCollateralUnits");
+  });
+
   it.each([
     ["missing", undefined],
     ["V1", { ...responseBody("buy").quote.economics, economicVersion: 1 }],

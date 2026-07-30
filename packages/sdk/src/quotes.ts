@@ -448,11 +448,14 @@ export class QuotesClient {
         (economics.participationUnitsDelta !== `-${amount}` ||
           economics.executableCurrentValue !== expectedNetProceeds)) ||
       (authoritativeValuation !== undefined &&
-        (economics.projectedWinningPayout !==
-          authoritativeValuation.winningPayoutCollateralUnits ||
-          economics.currentPnl !== authoritativeValuation.currentPnlCollateralUnits ||
-          economics.profitIfWins !==
-            authoritativeValuation.profitIfWinsCollateralUnits))
+        ((authoritativeValuation.winningPayoutCollateralUnits !== undefined &&
+          economics.projectedWinningPayout !==
+            authoritativeValuation.winningPayoutCollateralUnits) ||
+          (authoritativeValuation.currentPnlCollateralUnits !== undefined &&
+            economics.currentPnl !== authoritativeValuation.currentPnlCollateralUnits) ||
+          (authoritativeValuation.profitIfWinsCollateralUnits !== undefined &&
+            economics.profitIfWins !==
+              authoritativeValuation.profitIfWinsCollateralUnits)))
     ) {
       throw new StrykeSdkError(
         "api_response",
