@@ -23,6 +23,7 @@ export type ClosingProtection = {
   baseFeeBps: number;
   closingFeeBps: number;
   effectiveFeeBps: number;
+  closingStartsAt: number;
   hardLockTs: number;
   secondsUntilLock: number;
 };
@@ -247,12 +248,14 @@ const closingProtection = (value: unknown): ClosingProtection => {
     baseFeeBps: integer(row.baseFeeBps, "closingProtection.baseFeeBps"),
     closingFeeBps: integer(row.closingFeeBps, "closingProtection.closingFeeBps"),
     effectiveFeeBps: integer(row.effectiveFeeBps, "closingProtection.effectiveFeeBps"),
+    closingStartsAt: integer(row.closingStartsAt, "closingProtection.closingStartsAt"),
     hardLockTs: integer(row.hardLockTs, "closingProtection.hardLockTs"),
     secondsUntilLock: integer(row.secondsUntilLock, "closingProtection.secondsUntilLock"),
   };
   if (
     parsed.baseFeeBps < 0 || parsed.closingFeeBps < 0 ||
     parsed.effectiveFeeBps !== Math.max(parsed.baseFeeBps, parsed.closingFeeBps) ||
+    parsed.closingStartsAt <= 0 || parsed.closingStartsAt >= parsed.hardLockTs ||
     parsed.hardLockTs <= 0 || parsed.secondsUntilLock < 0
   ) {
     throw new StrykeSdkError("api_response", "Closing protection fields are inconsistent");
@@ -337,6 +340,9 @@ export class QuotesClient {
     });
     const quote = response.quote;
     const protection = closingProtection(quote.closingProtection);
+    if (protection.closingStartsAt <= market.intervalStartTs || protection.hardLockTs > market.expiryTs) {
+      throw new StrykeSdkError("api_response", "Closing protection timing does not match the market");
+    }
     if (response.metadata.stale || quote.stale === true || quote.unavailableReason) {
       throw new StrykeSdkError(
         quote.unavailableReason === "stale" ? "source_stale" : "quote_blocked",

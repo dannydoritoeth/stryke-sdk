@@ -179,6 +179,7 @@ describe("reference bot composed runtime", () => {
             baseFeeBps: 100,
             closingFeeBps: 700,
             effectiveFeeBps: 700,
+            closingStartsAt: 1_799_999_970,
             hardLockTs: 1_800_000_000,
             secondsUntilLock: 8,
           },

@@ -144,6 +144,7 @@ const contractCase = (
             baseFeeBps: 100,
             closingFeeBps: 0,
             effectiveFeeBps: 100,
+            closingStartsAt: expiryTs - 30,
             hardLockTs: expiryTs - 5,
             secondsUntilLock: EXPIRY_SECONDS[expiryFamily] - 5,
           },

@@ -95,6 +95,7 @@ const responseBody = (action: "buy" | "sell") => ({
       baseFeeBps: 100,
       closingFeeBps: 0,
       effectiveFeeBps: 100,
+      closingStartsAt: 1_799_999_970,
       hardLockTs: 1_799_999_995,
       secondsUntilLock: 295,
     },

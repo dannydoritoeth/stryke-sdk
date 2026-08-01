@@ -1,6 +1,7 @@
 # PRD 01 Implementation Plan: Polymarket Early And Late Relative Value
 
-Status: Planned; no implementation started
+Status: In progress — phases 1 and 2 implemented and locally verified; deployed
+API evidence and phases 3–5 remain
 
 Linked PRD: [01-polymarket-early-late-relative-value.md](01-polymarket-early-late-relative-value.md)
 
@@ -142,6 +143,8 @@ late_cycle():
 
 ### Phase 1: Upstream timing contract
 
+Status: code complete on the service feature branch; deployment/readback pending.
+
 - Add and deploy authoritative `closingStartsAt` with policy identity in the
   service repository.
 - Add service success, boundary, malformed-policy and clock-transition tests.
@@ -151,6 +154,8 @@ late_cycle():
 Gate: late strategy remains blocked until deployed API evidence exists.
 
 ### Phase 2: SDK contract and executable economics
+
+Status: complete and verified locally.
 
 - Parse the timing field fail-closed.
 - Add pure integer entry-economics helper and public diagnostic type.

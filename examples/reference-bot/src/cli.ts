@@ -39,7 +39,7 @@ const sampleQuote: ExecutableQuote = {
   grossAmount: "10000000", feeAmount: "0", netAmount: "10000000", sharesIn: "0", sharesOut: "20000000",
   averageExecutionPriceBps: "5000", postTradeSideReserve: "10000000", postTradeSideShares: "20000000",
   feeBreakdown: { feeMode: "activation_waived", normalTradingFeeWaivedCollateralUnits: "0", grossTradeFeeCollateralUnits: "0", normalTradingFeeBps: 0, feeBpsApplied: 0 },
-  closingProtection: { policyVersion: 1, phase: "open", baseFeeBps: 0, closingFeeBps: 0, effectiveFeeBps: 0, hardLockTs: 1_800_000_000, secondsUntilLock: 60 },
+  closingProtection: { policyVersion: 1, phase: "open", baseFeeBps: 0, closingFeeBps: 0, effectiveFeeBps: 0, closingStartsAt: 1_799_999_970, hardLockTs: 1_800_000_000, secondsUntilLock: 60 },
   expectedShares: "20000000", minimumOutput: "19800000", maximumSlippageBpsApplied: 100,
   executableProbabilityBps: 4800, normalizedSideProbabilityBps: 4800, priceImpactBps: 25,
   economics: { economicVersion: 2, grossAmount: "10000000", tradeFee: "0", netPrincipalDelta: "10000000", participationUnitsDelta: "20000000", remainingPrincipal: "10000000", desiredCurveValue: "10000000", backedPremium: "0", surplusDelta: "0", executableCurrentValue: "10000000", projectedWinningPayout: "10000000", currentPnl: "0", profitIfWins: "0" }, raw: {},

@@ -33,6 +33,7 @@ export const quote = (overrides: Partial<ExecutableQuote> = {}): ExecutableQuote
     baseFeeBps: 0,
     closingFeeBps: 0,
     effectiveFeeBps: 0,
+    closingStartsAt: 1_799_999_970,
     hardLockTs: 1_800_000_000,
     secondsUntilLock: 60,
   },
