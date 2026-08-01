@@ -174,4 +174,25 @@ describe("reference bot config", () => {
     expect(parseReferenceBotConfig({ polymarketEntryEdgeBps: 500, polymarketExitEdgeBps: 499 }))
       .toMatchObject({ polymarketEntryEdgeBps: 500, polymarketExitEdgeBps: 499 });
   });
+
+  it("wires_and_validates_early_and_late_strategy_controls", () => {
+    expect(parseReferenceBotEnv({
+      STRYKE_ESTIMATOR: "polymarket_late",
+      STRYKE_EXPIRY_FAMILY: "five_minute",
+      STRYKE_POLY_EARLY_WINDOW_SECONDS: "45",
+      STRYKE_POLY_LATE_WINDOW_SECONDS: "18",
+      STRYKE_POLY_SUBMISSION_BUFFER_SECONDS: "4",
+      STRYKE_POLY_MIN_HOLD_RETURN_BPS: "250",
+      STRYKE_POLY_MIN_WIN_PROFIT_BPS: "300",
+      STRYKE_POLY_EARLY_EXIT_POLICY: "hold_to_expiry",
+    })).toMatchObject({
+      estimator: "polymarket_late", polymarketEarlyWindowSeconds: 45,
+      polymarketLateWindowSeconds: 18, polymarketSubmissionBufferSeconds: 4,
+      polymarketMinimumHoldReturnBps: 250, polymarketMinimumWinProfitBps: 300,
+      polymarketEarlyExitPolicy: "hold_to_expiry",
+    });
+    expect(() => parseReferenceBotConfig({ estimator: "polymarket_early", expiryFamily: "one_minute" })).toThrow(/Polymarket strategies/);
+    expect(() => parseReferenceBotConfig({ polymarketLateWindowSeconds: 10, polymarketSubmissionBufferSeconds: 10 })).toThrow(/polymarketSubmissionBufferSeconds/);
+    expect(() => parseReferenceBotConfig({ polymarketEarlyExitPolicy: "guess" as never })).toThrow(/polymarketEarlyExitPolicy/);
+  });
 });

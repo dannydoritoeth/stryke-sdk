@@ -315,8 +315,8 @@ describe("reference bot composed runtime", () => {
   });
 
   it("polymarket_relative_cli_loop_enters_holds_and_exits_on_convergence", async () => {
-    const config = parseReferenceBotConfig({ estimator: "polymarket_relative_value", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
-    const alignedMarket = { ...market, reference: { alignmentStatus: "aligned" } } as never;
+    const config = parseReferenceBotConfig({ estimator: "polymarket_early", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+    const alignedMarket = { ...market, intervalStartTs: Math.floor(Date.now() / 1_000) - 10, reference: { alignmentStatus: "aligned" } } as never;
     let tick = 0;
     const actions: string[] = [];
     const price = (bidBps: number, askBps: number) => ({ tokenId: "token", bidBps, askBps, spreadBps: askBps - bidBps, observedAtMs: Date.now() });
@@ -324,6 +324,7 @@ describe("reference bot composed runtime", () => {
       listPositions: async () => (++tick === 1 ? [] : [position()]),
       evaluateEntry: async () => ({
         ...(await adapter().evaluateEntry()), market: alignedMarket,
+        buyQuotes: [quote({ side: "yes", grossAmount: "1000000", economics: { ...quote().economics, grossAmount: "1000000", projectedWinningPayout: "2000000" } }), quote({ side: "no", grossAmount: "1000000", economics: { ...quote().economics, grossAmount: "1000000", projectedWinningPayout: "2000000" } })],
         polymarketPrices: { yes: price(5700, 6000), no: price(3500, 3800) },
       }),
       evaluatePosition: async (value, exposure) => ({
@@ -338,7 +339,7 @@ describe("reference bot composed runtime", () => {
     });
     const events = await runReferenceBot({ config, adapter: runtime, maximumTicks: 3, wait: async () => {} });
     expect(events.map(({ action, reason }) => [action, reason])).toEqual([
-      ["buy", "polymarket_relative_edge"],
+      ["buy", "polymarket_executable_edge"],
       ["hold", "position_not_economically_complete"],
       ["sell", "polymarket_convergence"],
     ]);
@@ -358,14 +359,15 @@ describe("reference bot composed runtime", () => {
   });
 
   it("polymarket_relative_strategy_blocks_same_round_after_restart_but_allows_next_round", async () => {
-    const config = parseReferenceBotConfig({ estimator: "polymarket_relative_value", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+    const config = parseReferenceBotConfig({ estimator: "polymarket_early", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
     let exitedMarketId = "market-1";
     let currentMarketId = "market-1";
     const price = (bidBps: number, askBps: number) => ({ tokenId: "token", bidBps, askBps, spreadBps: askBps - bidBps, observedAtMs: Date.now() });
     const runtime = adapter({
       evaluateEntry: async () => ({
         ...(await adapter().evaluateEntry()),
-        market: { ...market, marketId: currentMarketId, reference: { alignmentStatus: "aligned" } } as never,
+        market: { ...market, marketId: currentMarketId, intervalStartTs: Math.floor(Date.now() / 1_000) - 10, reference: { alignmentStatus: "aligned" } } as never,
+        buyQuotes: [quote({ side: "yes", grossAmount: "1000000", economics: { ...quote().economics, grossAmount: "1000000", projectedWinningPayout: "2000000" } }), quote({ side: "no", grossAmount: "1000000", economics: { ...quote().economics, grossAmount: "1000000", projectedWinningPayout: "2000000" } })],
         polymarketPrices: { yes: price(5700, 6000), no: price(3500, 3800) },
       }),
       hasConvergenceExitedRound: async (candidate) => candidate.marketId === exitedMarketId,
@@ -374,7 +376,7 @@ describe("reference bot composed runtime", () => {
       .resolves.toMatchObject({ action: "skip", reason: "same_round_reentry_blocked" });
     currentMarketId = "market-2";
     await expect(runMarketTick({ tick: 2, config, adapter: runtime }))
-      .resolves.toMatchObject({ action: "buy", reason: "polymarket_relative_edge", marketId: "market-2" });
+      .resolves.toMatchObject({ action: "buy", reason: "polymarket_executable_edge", marketId: "market-2" });
     exitedMarketId = "none";
   });
 
@@ -392,5 +394,27 @@ describe("reference bot composed runtime", () => {
       });
       await expect(runMarketTick({ tick: 1, config, adapter: runtime })).resolves.toMatchObject({ action, reason });
     }
+  });
+
+  it("late_strategy_enters_only_inside_the_pre_fee_window_and_holds_to_expiry", async () => {
+    const config = parseReferenceBotConfig({ estimator: "polymarket_late", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false, polymarketLateWindowSeconds: 20, polymarketSubmissionBufferSeconds: 3 });
+    const closingStartsAt = 1_000;
+    const buyQuotes = (["yes", "no"] as const).map((side) => quote({
+      side, grossAmount: "1000000",
+      closingProtection: { ...quote().closingProtection, closingStartsAt, hardLockTs: 1_005 },
+      economics: { ...quote().economics, grossAmount: "1000000", projectedWinningPayout: "2000000" },
+    })) as [ReturnType<typeof quote>, ReturnType<typeof quote>];
+    const price = (askBps: number) => ({ tokenId: "token", bidBps: askBps - 100, askBps, spreadBps: 100, observedAtMs: 1 });
+    const runtime = adapter({ evaluateEntry: async () => ({
+      ...(await adapter().evaluateEntry()), market: { ...market, intervalStartTs: 700, reference: { alignmentStatus: "aligned" } } as never,
+      buyQuotes, polymarketPrices: { yes: price(6000), no: price(3800) },
+    }) });
+    await expect(runMarketTick({ tick: 1, config, adapter: runtime, nowSeconds: 979 })).resolves.toMatchObject({ action: "skip", reason: "entry_window_not_open" });
+    await expect(runMarketTick({ tick: 2, config, adapter: runtime, nowSeconds: 980 })).resolves.toMatchObject({ action: "buy", reason: "polymarket_executable_edge" });
+    await expect(runMarketTick({ tick: 3, config, adapter: runtime, nowSeconds: 997 })).resolves.toMatchObject({ action: "skip", reason: "entry_window_closed" });
+
+    const holding = adapter({ listPositions: async () => [position()], evaluatePosition: runtime.evaluatePosition });
+    await expect(runMarketTick({ tick: 4, config, adapter: holding, nowSeconds: 990 })).resolves.toMatchObject({ action: "hold", reason: "position_not_economically_complete", positionDecisions: [{ reason: "strategy_holds_to_expiry" }] });
+    expect(holding.executeSell).not.toHaveBeenCalled();
   });
 });

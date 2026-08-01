@@ -120,7 +120,7 @@ export const createSdkRuntimeAdapter = ({
     };
   };
   const polymarketPrices = async (market: PilotMarket) => {
-    if (config.estimator !== "polymarket_relative_value" || market.reference.alignmentStatus !== "aligned") return undefined;
+    if (!config.estimator.startsWith("polymarket_") || market.reference.alignmentStatus !== "aligned") return undefined;
     if (!polymarketClient || !market.reference.upTokenId || !market.reference.downTokenId) {
       throw new StrykeSdkError("source_unavailable", "Aligned Polymarket pricing configuration is unavailable", true);
     }

@@ -231,7 +231,7 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
       const executionAdapter = new SolanaReviewedExecutionAdapter({ rpc, signer, refresh: async ({ clientActionId }) => ({ action: await transactions.reconcile(clientActionId), positions: await positions.list(signer.address) }) });
       executor = new ReviewedTransactionExecutor(transactions, checkpoint, executionAdapter);
     }
-    const polymarketClient = config.estimator === "polymarket_relative_value"
+    const polymarketClient = config.estimator.startsWith("polymarket_")
       ? new PolymarketClient(config.polymarketClobUrl)
       : undefined;
     const roundDecisionStore = new FileRoundDecisionStore(bindings.roundStatePath);

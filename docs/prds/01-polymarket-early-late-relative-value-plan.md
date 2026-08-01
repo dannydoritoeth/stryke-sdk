@@ -1,7 +1,7 @@
 # PRD 01 Implementation Plan: Polymarket Early And Late Relative Value
 
-Status: In progress — phases 1 and 2 implemented and locally verified; deployed
-API evidence and phases 3–5 remain
+Status: In progress — phases 1–3 implemented and locally verified; deployed
+API evidence and phases 4–5 remain
 
 Linked PRD: [01-polymarket-early-late-relative-value.md](01-polymarket-early-late-relative-value.md)
 
@@ -166,6 +166,8 @@ Status: complete and verified locally.
 Gate: SDK, compatibility, consumer and public-boundary tests pass.
 
 ### Phase 3: Reference-bot strategy policies
+
+Status: complete and verified locally.
 
 - Add early/late configuration and validation.
 - Implement entry windows, both-side ranking and explicit exit policies.

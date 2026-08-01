@@ -6,7 +6,7 @@ export type FairProbabilityInput = {
 };
 
 export type BaselineEstimator = "distance_to_strike" | "distance_momentum";
-export type ReferenceEstimator = BaselineEstimator | "volatility_adjusted_probability" | "polymarket_relative_value";
+export type ReferenceEstimator = BaselineEstimator | "volatility_adjusted_probability" | "polymarket_early" | "polymarket_late" | "polymarket_relative_value";
 
 export type EstimatorSettings = import("./strategy/history.js").VolatilitySettings;
 
