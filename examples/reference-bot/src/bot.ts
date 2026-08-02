@@ -15,7 +15,7 @@ import { decideBestEntry, type BestEntryDecision } from "./entry.js";
 import { decidePositionExit, type PositionDecision } from "./manage-position.js";
 import { estimateFairProbability, volatilityAdjustedProbabilities, type FairProbabilityInput } from "./strategy.js";
 import type { PolymarketExecutablePrice } from "./polymarket-client.js";
-import { selectExecutablePolymarketEntry } from "./strategy/polymarket-entry.js";
+import { selectEmptyMarketBootstrapEntry, selectExecutablePolymarketEntry } from "./strategy/polymarket-entry.js";
 import { polymarketEntryWindow, type PolymarketTimingMode } from "./strategy/entry-window.js";
 import { decidePolymarketEarlyExit } from "./strategy/polymarket-exit.js";
 
@@ -284,6 +284,34 @@ export const runMarketTick = async ({
       submissionBufferSeconds: config.polymarketSubmissionBufferSeconds,
     });
     if (!window.eligible) return event(tick, "entry", "skip", window.reason, { marketId: evaluation.market.marketId, details: { mode, opensAt: window.opensAt, closesAt: window.closesAt, now: nowSeconds } });
+    const exactEmptyMarket = evaluation.market.activation?.yes.realPoolCollateralUnits === "0"
+      && evaluation.market.activation?.no.realPoolCollateralUnits === "0";
+    const bootstrap = config.polymarketBootstrapEmptyMarket && exactEmptyMarket
+      ? selectEmptyMarketBootstrapEntry({
+          quotes: evaluation.buyQuotes,
+          prices: evaluation.polymarketPrices,
+          entryEdgeBps: config.polymarketEntryEdgeBps,
+        })
+      : undefined;
+    if (bootstrap) {
+      const details = {
+        estimator: config.estimator, mode,
+        selectedSide: bootstrap.side,
+        entryEdgeBps: config.polymarketEntryEdgeBps,
+        polymarketAskBps: bootstrap.referenceProbabilityBps,
+        bootstrapReferenceEdgeBps: bootstrap.referenceEdgeBps,
+        yesRealPool: "0", noRealPool: "0",
+        entryWindowOpensAt: window.opensAt, entryWindowClosesAt: window.closesAt,
+      };
+      if (!bootstrap.passes) return event(tick, "entry", "skip", bootstrap.reason, { marketId: evaluation.market.marketId, details });
+      const nativeSafety = decideBestEntry({ fairProbability: bootstrap.side === "yes" ? 1 : 0, quotes: evaluation.buyQuotes, config: { ...config, minimumEntryEdgeBps: 0 }, secondsRemaining: evaluation.estimatorInput.secondsRemaining, tradeSizeLamports: evaluation.proposedSizeLamports, aggregateExposureLamports: evaluation.aggregateExposureLamports, openPositions: evaluation.openPositions, dataFresh: evaluation.dataFresh });
+      const failedSafety = Object.entries(nativeSafety.safetyChecks).find(([key, passed]) => !passed && !["edge", "time", "feeFreeOpen"].includes(key));
+      if (failedSafety) return event(tick, "entry", "blocked", failedSafety[0], { marketId: evaluation.market.marketId, details });
+      if (config.readOnlyMode || !config.liveTradingEnabled) return event(tick, "entry", "dry_run", config.readOnlyMode ? "read_only" : "live_off", { marketId: evaluation.market.marketId, details });
+      const result = await adapter.executeBuy(evaluation, bootstrap.quote);
+      await adapter.recordEnteredRound?.(evaluation.market);
+      return event(tick, "entry", "buy", bootstrap.reason, { marketId: evaluation.market.marketId, details, ...result });
+    }
     const relative = selectExecutablePolymarketEntry({
       quotes: evaluation.buyQuotes, prices: evaluation.polymarketPrices,
       entryEdgeBps: config.polymarketEntryEdgeBps,

@@ -41,6 +41,7 @@ profile; missing or invalid input fails before wallet or transaction work.
 | `STRYKE_POLY_SUBMISSION_BUFFER_SECONDS` | no-entry buffer before closing-fee onset, default `3`; lower than late window |
 | `STRYKE_POLY_MIN_HOLD_RETURN_BPS` | minimum Polymarket-weighted expected hold return, default `100` |
 | `STRYKE_POLY_MIN_WIN_PROFIT_BPS` | minimum profit if the selected side wins, default `100` |
+| `STRYKE_POLY_BOOTSTRAP_EMPTY_MARKET` | allow a minimum-size first trade when both real pools are exactly empty and the Polymarket edge passes; default `true` |
 | `STRYKE_POLY_EXIT_POLICY` | `hold_to_expiry`, `exit_on_convergence` (default), or `risk_managed`; late always holds |
 
 Connection controls are `STRYKE_API_BASE_URL`, `STRYKE_SOLANA_RPC_URL`,

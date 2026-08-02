@@ -358,6 +358,52 @@ describe("reference bot composed runtime", () => {
     expect(runtime.executeBuy).not.toHaveBeenCalled();
   });
 
+  it("exact_empty_market_bootstrap_executes_the_first_trade_through_the_runtime", async () => {
+    const start = 1_000;
+    const config = parseReferenceBotConfig({ strategy: "polymarket_early", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+    const prices = {
+      yes: { tokenId: "yes", bidBps: 5_900, askBps: 6_000, spreadBps: 100, observedAtMs: Date.now() },
+      no: { tokenId: "no", bidBps: 3_700, askBps: 3_800, spreadBps: 100, observedAtMs: Date.now() },
+    };
+    const firstTradeQuotes = (["yes", "no"] as const).map((side) => quote({
+      side, grossAmount: "1000000",
+      economics: { ...quote().economics, grossAmount: "1000000", projectedWinningPayout: "1000000" },
+    })) as [ReturnType<typeof quote>, ReturnType<typeof quote>];
+    const runtime = adapter({ evaluateEntry: async () => ({
+      ...(await adapter().evaluateEntry()),
+      market: { ...market, intervalStartTs: start, reference: { alignmentStatus: "aligned" }, activation: { yes: { realPoolCollateralUnits: "0" }, no: { realPoolCollateralUnits: "0" } } } as never,
+      buyQuotes: firstTradeQuotes, polymarketPrices: prices,
+    }) });
+    await expect(runMarketTick({ tick: 1, config, adapter: runtime, nowSeconds: start + 1 }))
+      .resolves.toMatchObject({ action: "buy", reason: "polymarket_empty_market_bootstrap", details: { selectedSide: "yes", yesRealPool: "0", noRealPool: "0" } });
+    expect(runtime.executeBuy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ side: "yes" }));
+  });
+
+  it("bootstrap_is_configurable_and_never_applies_after_either_real_pool_is_funded", async () => {
+    const start = 1_000;
+    const prices = {
+      yes: { tokenId: "yes", bidBps: 5_900, askBps: 6_000, spreadBps: 100, observedAtMs: Date.now() },
+      no: { tokenId: "no", bidBps: 3_700, askBps: 3_800, spreadBps: 100, observedAtMs: Date.now() },
+    };
+    const firstTradeQuotes = (["yes", "no"] as const).map((side) => quote({
+      side, grossAmount: "1000000",
+      economics: { ...quote().economics, grossAmount: "1000000", projectedWinningPayout: "1000000" },
+    })) as [ReturnType<typeof quote>, ReturnType<typeof quote>];
+    const evaluation = async (yesPool: string) => ({
+      ...(await adapter().evaluateEntry()),
+      market: { ...market, intervalStartTs: start, reference: { alignmentStatus: "aligned" }, activation: { yes: { realPoolCollateralUnits: yesPool }, no: { realPoolCollateralUnits: "0" } } } as never,
+      buyQuotes: firstTradeQuotes, polymarketPrices: prices,
+    });
+    const disabled = adapter({ evaluateEntry: () => evaluation("0") });
+    await expect(runMarketTick({ tick: 1, config: parseReferenceBotConfig({ strategy: "polymarket_early", polymarketBootstrapEmptyMarket: false, killSwitchEnabled: false }), adapter: disabled, nowSeconds: start + 1 }))
+      .resolves.toMatchObject({ action: "skip", reason: "insufficient_polymarket_edge" });
+    const oneSided = adapter({ evaluateEntry: () => evaluation("1") });
+    await expect(runMarketTick({ tick: 2, config: parseReferenceBotConfig({ strategy: "polymarket_early", killSwitchEnabled: false }), adapter: oneSided, nowSeconds: start + 1 }))
+      .resolves.toMatchObject({ action: "skip", reason: "insufficient_polymarket_edge" });
+    expect(disabled.executeBuy).not.toHaveBeenCalled();
+    expect(oneSided.executeBuy).not.toHaveBeenCalled();
+  });
+
   it("polymarket_relative_strategy_blocks_same_round_after_restart_but_allows_next_round", async () => {
     const config = parseReferenceBotConfig({ strategy: "polymarket_early", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
     let exitedMarketId = "market-1";

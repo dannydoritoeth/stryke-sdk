@@ -27,6 +27,7 @@ export type ReferenceBotConfig = {
   polymarketSubmissionBufferSeconds: number;
   polymarketMinimumHoldReturnBps: number;
   polymarketMinimumWinProfitBps: number;
+  polymarketBootstrapEmptyMarket: boolean;
   polymarketEarlyExitPolicy: "hold_to_expiry" | "exit_on_convergence" | "risk_managed";
   tradeSizeLamports: bigint;
   maximumTradeSizeLamports: bigint;
@@ -89,6 +90,7 @@ export const referenceBotDefaults: ReferenceBotConfig = {
   polymarketSubmissionBufferSeconds: 3,
   polymarketMinimumHoldReturnBps: 100,
   polymarketMinimumWinProfitBps: 100,
+  polymarketBootstrapEmptyMarket: true,
   polymarketEarlyExitPolicy: "exit_on_convergence",
   readOnlyMode: true,
   liveTradingEnabled: false,
@@ -154,7 +156,7 @@ export const parseReferenceBotConfig = (
   if (config.strategy.startsWith("polymarket_") && config.expiryFamily === "one_minute") configurationError("expiryFamily: Polymarket strategies require 5m, 15m, or 1h aligned markets");
   if (!["hold_to_expiry", "exit_on_convergence", "risk_managed"].includes(config.polymarketEarlyExitPolicy)) configurationError("polymarketEarlyExitPolicy");
   if (config.strategy === "polymarket_late" && config.polymarketEarlyExitPolicy !== "hold_to_expiry") configurationError("polymarketEarlyExitPolicy: late strategy must hold_to_expiry");
-  for (const key of ["readOnlyMode", "liveTradingEnabled", "killSwitchEnabled"] as const) {
+  for (const key of ["readOnlyMode", "liveTradingEnabled", "killSwitchEnabled", "polymarketBootstrapEmptyMarket"] as const) {
     if (typeof config[key] !== "boolean") configurationError(key);
   }
   for (const key of ["tradeSizeLamports", "maximumTradeSizeLamports", "maximumAggregateExposureLamports", "feeFreeActivationLimitLamports"] as const) {
@@ -272,6 +274,7 @@ export const parseReferenceBotEnv = (
     polymarketSubmissionBufferSeconds: numeric("STRYKE_POLY_SUBMISSION_BUFFER_SECONDS", referenceBotDefaults.polymarketSubmissionBufferSeconds),
     polymarketMinimumHoldReturnBps: numeric("STRYKE_POLY_MIN_HOLD_RETURN_BPS", referenceBotDefaults.polymarketMinimumHoldReturnBps),
     polymarketMinimumWinProfitBps: numeric("STRYKE_POLY_MIN_WIN_PROFIT_BPS", referenceBotDefaults.polymarketMinimumWinProfitBps),
+    polymarketBootstrapEmptyMarket: booleanEnv(profiledEnv, "STRYKE_POLY_BOOTSTRAP_EMPTY_MARKET", referenceBotDefaults.polymarketBootstrapEmptyMarket),
     polymarketEarlyExitPolicy: (profiledEnv.STRYKE_POLY_EXIT_POLICY ?? referenceBotDefaults.polymarketEarlyExitPolicy) as ReferenceBotConfig["polymarketEarlyExitPolicy"],
     readOnlyMode, liveTradingEnabled, killSwitchEnabled,
     checkpointPath: profiledEnv.STRYKE_CHECKPOINT_PATH ?? referenceBotDefaults.checkpointPath,

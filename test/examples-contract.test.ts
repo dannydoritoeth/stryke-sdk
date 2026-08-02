@@ -79,4 +79,11 @@ describe("documented example contract", () => {
     for (const expected of ["buy:polymarket_executable_edge", "hold:position_not_economically_complete", "claim:terminal_confirmed", "skip:same_round_reentry_blocked"]) expect(result.stdout).toContain(expected);
     expect(result.stdout.match(/buy:polymarket_executable_edge/g)).toHaveLength(2);
   }, 30_000);
+
+  it("reference_bot_bootstraps_an_exact_empty_market_through_two_cli_iterations", () => {
+    const result = spawnSync("npm", ["run", "test:polymarket-bootstrap-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain("buy:polymarket_empty_market_bootstrap");
+    expect(result.stdout).toContain("skip:same_round_reentry_blocked");
+  }, 30_000);
 });

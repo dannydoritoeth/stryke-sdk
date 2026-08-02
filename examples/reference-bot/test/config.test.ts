@@ -184,16 +184,19 @@ describe("reference bot config", () => {
       STRYKE_POLY_SUBMISSION_BUFFER_SECONDS: "4",
       STRYKE_POLY_MIN_HOLD_RETURN_BPS: "250",
       STRYKE_POLY_MIN_WIN_PROFIT_BPS: "300",
+      STRYKE_POLY_BOOTSTRAP_EMPTY_MARKET: "false",
       STRYKE_POLY_EXIT_POLICY: "hold_to_expiry",
     })).toMatchObject({
       strategy: "polymarket_late", polymarketEarlyWindowSeconds: 45,
       polymarketLateWindowSeconds: 18, polymarketSubmissionBufferSeconds: 4,
       polymarketMinimumHoldReturnBps: 250, polymarketMinimumWinProfitBps: 300,
+      polymarketBootstrapEmptyMarket: false,
       polymarketEarlyExitPolicy: "hold_to_expiry",
     });
     expect(() => parseReferenceBotConfig({ strategy: "polymarket_early", expiryFamily: "one_minute" })).toThrow(/Polymarket strategies/);
     expect(() => parseReferenceBotConfig({ strategy: "polymarket_late", polymarketEarlyExitPolicy: "risk_managed" })).toThrow(/must hold_to_expiry/);
     expect(() => parseReferenceBotConfig({ polymarketLateWindowSeconds: 10, polymarketSubmissionBufferSeconds: 10 })).toThrow(/polymarketSubmissionBufferSeconds/);
     expect(() => parseReferenceBotConfig({ polymarketEarlyExitPolicy: "guess" as never })).toThrow(/polymarketEarlyExitPolicy/);
+    expect(() => parseReferenceBotEnv({ STRYKE_POLY_BOOTSTRAP_EMPTY_MARKET: "sometimes" })).toThrow(/STRYKE_POLY_BOOTSTRAP_EMPTY_MARKET/);
   });
 });

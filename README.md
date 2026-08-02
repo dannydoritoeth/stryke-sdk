@@ -23,6 +23,12 @@ the same check in a bounded window immediately before Stryke closing fees begin,
 keeps a submission buffer, then holds through settlement. Neither strategy
 trades on Polymarket or guarantees profit.
 
+When both real Stryke pools are exactly empty, the default minimum-size bot may
+make the first trade on the stronger Polymarket side if the configured entry
+edge passes. Disable this with `STRYKE_POLY_BOOTSTRAP_EMPTY_MARKET=false`. The
+exception ends as soon as either real pool is funded; normal payout and
+expected-return gates then apply.
+
 The included volatility- and time-adjusted estimator is an inspectable baseline,
 not a guaranteed profitable strategy. Its release-evidence claim will be
 restored only after the principal-backed V2 candidate passes the signed devnet

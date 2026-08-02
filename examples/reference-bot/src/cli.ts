@@ -140,6 +140,24 @@ const runPolymarketLateFixtureSmoke = async () => {
   console.log(JSON.stringify({ event: "polymarket_late_fixture_complete", actions: [...first, ...second].map(({ action, reason }) => `${action}:${reason}`) }));
 };
 
+const runPolymarketBootstrapFixtureSmoke = async () => {
+  const config = parseReferenceBotConfig({ strategy: "polymarket_early", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+  const rounds = new MemoryRoundDecisionStore();
+  const now = Math.floor(Date.now() / 1_000);
+  const market = { marketId: "bootstrap-round", intervalStartTs: now - 10, expiryTs: now + 290, reference: { alignmentStatus: "aligned" }, pools: { yes: "0", no: "0", stale: false }, activation: { yes: { realPoolCollateralUnits: "0" }, no: { realPoolCollateralUnits: "0" } } } as never;
+  const buyQuote = (side: "yes" | "no"): ExecutableQuote => ({ ...sampleQuote, quoteId: `bootstrap-${side}`, side, amount: "1000000", grossAmount: "1000000", economics: { ...sampleQuote.economics, grossAmount: "1000000", projectedWinningPayout: "1000000" } });
+  const price = (askBps: number) => ({ tokenId: "token", bidBps: askBps - 100, askBps, spreadBps: 100, observedAtMs: Date.now() });
+  const adapter = {
+    loadCheckpoint: async () => undefined, reconcilePending: async () => ({ state: "confirmed", clientActionId: "none" }), listPositions: async () => [],
+    evaluatePosition: async () => { throw new StrykeSdkError("configuration", "fixture has no position"); },
+    evaluateEntry: async () => ({ market, estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 280, priceHistory: [] }, buyQuotes: [buyQuote("yes"), buyQuote("no")] as const, proposedSizeLamports: config.tradeSizeLamports, aggregateExposureLamports: 0n, openPositions: 0, dataFresh: true, polymarketPrices: { yes: price(6_000), no: price(3_800) } }),
+    executeBuy: async () => ({ clientActionId: "bootstrap-buy" }), executeSell: async () => ({ clientActionId: "none" }), executeTerminal: async () => ({ clientActionId: "none" }),
+    hasEnteredRound: (candidate: Parameters<MemoryRoundDecisionStore["hasEntry"]>[0]) => rounds.hasEntry(candidate), recordEnteredRound: (candidate: Parameters<MemoryRoundDecisionStore["recordEntry"]>[0]) => rounds.recordEntry(candidate),
+  };
+  const events = await runReferenceBot({ config, adapter: adapter as never, maximumTicks: 2, wait: async () => {} });
+  console.log(JSON.stringify({ event: "polymarket_bootstrap_fixture_complete", actions: events.map(({ action, reason }) => `${action}:${reason}`) }));
+};
+
 const loadSigner = async (config: ReturnType<typeof parseReferenceBotEnv>, walletAdapterPath?: string) => loadWalletForLiveTrading<TransactionSigner>(config, async (path) => {
   let module: { default?: unknown };
   try {
@@ -273,7 +291,8 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
 };
 
 try {
-  if (process.argv.includes("--fixture-polymarket")) await runPolymarketFixtureSmoke();
+  if (process.argv.includes("--fixture-polymarket-bootstrap")) await runPolymarketBootstrapFixtureSmoke();
+  else if (process.argv.includes("--fixture-polymarket")) await runPolymarketFixtureSmoke();
   else if (process.argv.includes("--fixture-polymarket-late")) await runPolymarketLateFixtureSmoke();
   else if (process.argv.some((argument) => argument.startsWith("--profile="))) await runSdkBot(selectedProfile());
   else if (process.argv.includes("--live") || process.argv.includes("--live-data")) await runSdkBot(process.argv.includes("--live") ? "devnet" : "paper");

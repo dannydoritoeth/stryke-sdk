@@ -8,6 +8,15 @@ export type ExecutableEntryEconomics = {
   passes: boolean; reason: string;
 };
 
+export type EmptyMarketBootstrapDecision = {
+  quote: ExecutableQuote;
+  side: QuoteSide;
+  referenceProbabilityBps: number;
+  referenceEdgeBps: number;
+  passes: boolean;
+  reason: "polymarket_empty_market_bootstrap" | "bootstrap_reference_tie" | "bootstrap_reference_below_threshold";
+};
+
 const safeNumber = (value: bigint, field: string): number => {
   if (value < BigInt(Number.MIN_SAFE_INTEGER) || value > BigInt(Number.MAX_SAFE_INTEGER)) throw new RangeError(`${field} exceeds safe diagnostic range`);
   return Number(value);
@@ -44,4 +53,23 @@ export const selectExecutablePolymarketEntry = ({ quotes, prices, entryEdgeBps, 
   const [best, second] = ranked as [ExecutableEntryEconomics, ExecutableEntryEconomics];
   if (best.passes && second.passes && best.holdReturnBps === second.holdReturnBps && best.relativeEdgeBps === second.relativeEdgeBps) return { ...best, passes: false, reason: "economic_tie" };
   return best;
+};
+
+export const selectEmptyMarketBootstrapEntry = ({ quotes, prices, entryEdgeBps }: {
+  quotes: readonly [ExecutableQuote, ExecutableQuote];
+  prices: Readonly<Record<QuoteSide, PolymarketExecutablePrice>>;
+  entryEdgeBps: number;
+}): EmptyMarketBootstrapDecision => {
+  const ranked = quotes
+    .map((quote) => ({ quote, side: quote.side, referenceProbabilityBps: prices[quote.side].askBps }))
+    .sort((a, b) => b.referenceProbabilityBps - a.referenceProbabilityBps || a.side.localeCompare(b.side));
+  const [best, second] = ranked as [typeof ranked[number], typeof ranked[number]];
+  const referenceEdgeBps = best.referenceProbabilityBps - 5_000;
+  if (best.referenceProbabilityBps === second.referenceProbabilityBps) {
+    return { ...best, referenceEdgeBps, passes: false, reason: "bootstrap_reference_tie" };
+  }
+  if (referenceEdgeBps < entryEdgeBps) {
+    return { ...best, referenceEdgeBps, passes: false, reason: "bootstrap_reference_below_threshold" };
+  }
+  return { ...best, referenceEdgeBps, passes: true, reason: "polymarket_empty_market_bootstrap" };
 };
