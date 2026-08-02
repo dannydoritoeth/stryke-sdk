@@ -48,5 +48,7 @@ describe("reference-bot devnet matrix runner", () => {
     expect(source).toContain('result.liquiditySeed');
     expect(source).toContain('{ liquidityFailure }');
     expect(source).toContain('devnet_bot_matrix_stopped_after_incomplete_cell');
+    expect(source).toContain('devnet_liquidity_rollover_retry');
+    expect(source).toContain('attempt <= 3');
   });
 });

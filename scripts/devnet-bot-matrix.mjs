@@ -84,6 +84,19 @@ const seedOpposingLiquidity = ({ asset, expiry, strategy, marketId }) => new Pro
   });
 });
 
+const seedLateLiquidityWithRolloverRetry = async (cell) => {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try { return await seedOpposingLiquidity(cell); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("Market rolled while seeding opposing liquidity") || attempt === 3) throw error;
+      console.log(JSON.stringify({ event: "devnet_liquidity_rollover_retry", asset: cell.asset, expiry: cell.expiry, strategy: cell.strategy, attempt }));
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_000));
+    }
+  }
+  throw new Error("Unreachable liquidity rollover retry state");
+};
+
 const runCell = ({ asset, expiry, strategy }, attempt = 1) => new Promise((complete) => {
   const cellId = `${asset.toLowerCase()}-${expiry}-${strategy}`;
   const checkpoint = resolve(directory, `${cellId}.checkpoint.json`);
@@ -182,7 +195,7 @@ const safeRetryableInfrastructureFailure = (result) =>
 const results = [];
 const liquiditySeeds = [];
 for (const cell of cells) {
-  if (withOpposingLiquidity && cell.strategy === "polymarket_late") liquiditySeeds.push(await seedOpposingLiquidity(cell));
+  if (withOpposingLiquidity && cell.strategy === "polymarket_late") liquiditySeeds.push(await seedLateLiquidityWithRolloverRetry(cell));
   let result = await runCell(cell);
   if (safeRetryableInfrastructureFailure(result)) {
     console.log(JSON.stringify({ event: "devnet_bot_matrix_safe_retry", asset: cell.asset, expiry: cell.expiry, strategy: cell.strategy, delayMs: 5_000 }));
