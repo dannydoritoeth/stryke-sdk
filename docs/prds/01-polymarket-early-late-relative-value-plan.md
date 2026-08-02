@@ -43,6 +43,7 @@ generic volatility estimator's `0.5` placeholder in a Polymarket decision.
 | `STRYKE_POLY_ENTRY_EDGE_BPS` | existing control | executable relative-edge gate |
 | `STRYKE_POLY_MIN_HOLD_RETURN_BPS` | non-negative | hold EV gate |
 | `STRYKE_POLY_MIN_WIN_PROFIT_BPS` | non-negative | projected win-profit gate |
+| `STRYKE_POLY_BOOTSTRAP_EMPTY_MARKET` | `true` for the minimum-size reference bot | exact-empty bootstrap branch |
 | `STRYKE_POLY_EXIT_POLICY` | `hold_to_expiry`, `exit_on_convergence`, `risk_managed`; valid only for early | exit dispatcher |
 | `STRYKE_POLY_EXIT_EDGE_BPS` | existing control | convergence exit |
 
@@ -108,6 +109,15 @@ evaluate_entry(quotes, polyBooks):
   evaluate Up and Down independently
   rank passing sides by holdReturnBps, then relativeEdgeBps
   on exact tie: skip
+
+if both authoritative real pools are exactly zero:
+  if bootstrap disabled: use normal economics (which rejects zero profit)
+  select higher Polymarket ask
+  require selected ask - 5_000 >= entryEdgeBps
+  require all native safety and strategy timing gates
+  buy configured micro size with reason polymarket_empty_market_bootstrap
+if either real pool is non-zero:
+  never use bootstrap; require normal executable economics
 ```
 
 Use conservative integer rounding: cost probability rounds up; returns round
@@ -185,6 +195,8 @@ Status: complete and verified locally.
 - Preserve one-action-per-tick, checkpoint and same-round protections.
 - Add structured decision diagnostics without wallet material, raw signed
   transactions or secrets.
+- Add an explicit exact-empty first-trader bootstrap branch; do not weaken
+  normal relative-value economics for one-sided or already-active markets.
 
 Gate: all configuration controls reach isolated final consumers and focused
 strategy/runtime tests pass.
@@ -239,6 +251,9 @@ claim and actual CLI fixtures pass.
 - `early_risk_managed_policy_applies_stop_loss_and_take_profit`
 - `polymarket_unavailable_fails_entry_closed_and_holds_existing_position`
 - `every_new_env_control_reaches_its_final_runtime_consumer`
+- `empty_market_bootstrap_selects_reference_favoured_side_at_threshold`
+- `empty_market_bootstrap_rejects_disabled_tie_and_below_threshold_paths`
+- `one_sided_market_cannot_use_empty_market_bootstrap`
 
 ### Runtime/composition
 
@@ -255,6 +270,7 @@ claim and actual CLI fixtures pass.
 | --- | --- | --- | --- | --- | --- |
 | Market alignment | Exact BTC/SOL 5m/15m/1h token identity | Native 1m and degraded aligned round skip | Missing/mismatched token IDs fail closed | Later correctly aligned round becomes eligible | CLI observes skip then next-round evaluation |
 | Entry economics | Positive executable edge, win profit and hold EV | Either side; exact threshold; tie skips | Missing/stale/inconsistent payout or quote blocks | Fresh quote on later eligible tick | CLI records all calculation inputs |
+| First trader | Exact zero/zero real pools bootstrap a reference-favoured micro trade | Disabled, tie and below threshold skip | One-sided/non-empty state cannot bypass economics | Next round may bootstrap independently | Actual CLI first trade, lifecycle and next round |
 | Early timing | Entry inside open window | Before window waits; after window skips | Invalid duration/config fails startup | Restart inside window may continue after reconciliation | Two early rounds through CLI |
 | Late timing | Entry before fee onset and safety buffer | Too early waits; final window can skip | Closing/locked/incoherent schedule blocks | Dependency recovery only within original window | Two late hold-to-terminal rounds through CLI |
 | Early exit | Configured hold, convergence or risk exit | Polymarket unavailable safely holds | Stale/expired sell quote prevents submission | Fresh reference/quote permits later exit | CLI convergence and expiry variants |

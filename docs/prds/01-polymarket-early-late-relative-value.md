@@ -54,6 +54,7 @@ must fail closed for that decision.
 | POLY-09 | Every decision emits non-secret timing, price, fee, payout and rejection diagnostics. | buy/skip/block/hold/sell/terminal |
 | POLY-10 | Configuration is validated and traced from `.env` to its final runtime calculation or branch. | default/boundary/malformed/conflict |
 | POLY-11 | The actual public CLI proves repeated market cycles and restart safety before handoff. | early/late; two cycles; restart |
+| POLY-12 | Optionally bootstrap a completely empty aligned market with the configured micro trade so the bot may be first, while clearly distinguishing this liquidity-start action from a positive-EV entry. | enabled/disabled; exact empty state; Up/Down/tie; early/late |
 
 ## Scope
 
@@ -115,6 +116,23 @@ The candidate side must pass all of:
 - price impact, trade size, aggregate exposure, open-position and kill-switch
   controls; and
 - the selected strategy's timing gate.
+
+### Empty-market bootstrap
+
+When `STRYKE_POLY_BOOTSTRAP_EMPTY_MARKET=true` and both authoritative real
+pools are exactly zero, the bot may place the configured trade size as the
+first trade. It selects the side with the higher fresh Polymarket ask only when
+that probability is at least `50% + STRYKE_POLY_ENTRY_EDGE_BPS`; an exact tie
+or insufficient reference conviction skips. The normal timing, identity,
+freshness, spread, impact, size, exposure, fee-phase, kill-switch and
+one-entry-per-round controls still apply.
+
+This is an explicit liquidity-start action. With no opposing principal its
+initial projected win profit is zero, so it bypasses only the positive win
+profit and hold-EV gates and must log `polymarket_empty_market_bootstrap`. As
+soon as either real pool is non-zero, the standard executable-edge, win-profit
+and hold-EV rules apply without exception. Virtual depth is not evidence of
+real opposing principal.
 
 Using a top-of-book price remains acceptable for the initial micro-size
 baseline. Documentation must call it top-of-book reference pricing unless the
@@ -180,6 +198,9 @@ requiring code edits. Example profiles should remain minimum-size and explain:
    matrix.
 10. The reviewed candidate is published to the handoff remote/tag only after
     all required gates pass.
+11. Enabled empty-market bootstrap can be the first signed trade only at exact
+    zero/zero real pools; disabled, one-sided, tied-reference and below-threshold
+    paths cannot use the exception.
 
 ## Risks
 
