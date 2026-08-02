@@ -3,7 +3,8 @@ import { MemoryActionCheckpointStore, PYTH_FEED_IDS, PriceStore, SUPPORTED_PROGR
 
 import { runMarketTick } from "../src/bot.js";
 import { parseReferenceBotConfig } from "../src/config.js";
-import { authoritativeActivationFor, createSdkRuntimeAdapter, positionCountsTowardEntryCapacity } from "../src/sdk-runtime.js";
+import { authoritativeActivationFor, createSdkRuntimeAdapter, positionCountsTowardEntryCapacity, shouldFetchPolymarketEntryPrices } from "../src/sdk-runtime.js";
+import { quote } from "./fixtures.js";
 
 describe("SDK runtime composition", () => {
   it("trading_requires_authoritative_activation_state_and_matching_policy", () => {
@@ -22,6 +23,22 @@ describe("SDK runtime composition", () => {
     for (const state of ["pending_confirmation", "open_position", "sellable", "awaiting_resolution"] as const) {
       expect(positionCountsTowardEntryCapacity({ lifecycle: { state } } as never)).toBe(true);
     }
+  });
+  it("late_runtime_does_not_fetch_polymarket_books_before_entry_window_and_fetches_inside_it", () => {
+    const config = parseReferenceBotConfig({
+      strategy: "polymarket_late",
+      polymarketEarlyExitPolicy: "hold_to_expiry",
+      polymarketLateWindowSeconds: 20,
+      polymarketSubmissionBufferSeconds: 3,
+    });
+    const closingStartsAt = 1_000;
+    const market = { intervalStartTs: 700 } as never;
+    const timingQuote = quote({
+      closingProtection: { ...quote().closingProtection, closingStartsAt, hardLockTs: 1_005 },
+    });
+    expect(shouldFetchPolymarketEntryPrices({ config, market, quote: timingQuote, nowSeconds: 979 })).toBe(false);
+    expect(shouldFetchPolymarketEntryPrices({ config, market, quote: timingQuote, nowSeconds: 980 })).toBe(true);
+    expect(shouldFetchPolymarketEntryPrices({ config, market, quote: timingQuote, nowSeconds: 997 })).toBe(false);
   });
   it("actual_sdk_tick_consumes_market_side_size_slippage_estimator_and_risk_config", async () => {
     const now = Date.now();

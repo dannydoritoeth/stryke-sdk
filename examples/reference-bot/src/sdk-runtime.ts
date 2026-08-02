@@ -21,6 +21,7 @@ import type { ReferenceBotConfig } from "./config.js";
 import { calculateBufferedEntrySize } from "./sizing.js";
 import type { PolymarketClient } from "./polymarket-client.js";
 import type { RoundDecisionStore } from "./round-state.js";
+import { polymarketEntryWindow } from "./strategy/entry-window.js";
 
 export const positionCountsTowardEntryCapacity = (position: PilotPosition): boolean =>
   ["pending_confirmation", "open_position", "sellable", "awaiting_resolution"].includes(position.lifecycle.state);
@@ -37,6 +38,26 @@ const canonicalDecimalIdentity = (value: string): string => {
 const sameTargetIdentity = (left: unknown, right: unknown): boolean =>
   typeof left === "string" && typeof right === "string" &&
   canonicalDecimalIdentity(left) === canonicalDecimalIdentity(right);
+
+export const shouldFetchPolymarketEntryPrices = ({
+  config,
+  market,
+  quote,
+  nowSeconds,
+}: {
+  config: ReferenceBotConfig;
+  market: PilotMarket;
+  quote: Awaited<ReturnType<QuotesClient["get"]>>;
+  nowSeconds: number;
+}): boolean => !config.strategy.startsWith("polymarket_") || polymarketEntryWindow({
+  mode: config.strategy === "polymarket_late" ? "polymarket_late" : "polymarket_early",
+  market,
+  quote,
+  now: nowSeconds,
+  earlyWindowSeconds: config.polymarketEarlyWindowSeconds,
+  lateWindowSeconds: config.polymarketLateWindowSeconds,
+  submissionBufferSeconds: config.polymarketSubmissionBufferSeconds,
+}).eligible;
 
 export const authoritativeActivationFor = (market: PilotMarket, configuredLimit: bigint) => {
   if (!market.activation) {
@@ -265,7 +286,13 @@ export const createSdkRuntimeAdapter = ({
         quotes.buy({ market, side: "yes", amount, maximumSlippageBps: config.maximumPriceImpactBps }),
         quotes.buy({ market, side: "no", amount, maximumSlippageBps: config.maximumPriceImpactBps }),
       ]);
-      const externalPrices = await polymarketPrices(market);
+      const shouldFetchPolymarket = shouldFetchPolymarketEntryPrices({
+        config,
+        market,
+        quote: yesQuote,
+        nowSeconds: Math.floor(now() / 1_000),
+      });
+      const externalPrices = shouldFetchPolymarket ? await polymarketPrices(market) : undefined;
       return { market, estimatorInput: estimatorInput(market), buyQuotes: [yesQuote, noQuote], proposedSizeLamports, aggregateExposureLamports, openPositions, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}) };
     },
     executeBuy: (evaluation, quote) => prepareAndExecute(evaluation.market, quote),

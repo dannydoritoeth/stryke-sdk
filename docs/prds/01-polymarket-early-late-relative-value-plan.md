@@ -13,6 +13,20 @@ the strategy wallet owning the setup positions invalidates an independent
 entry lifecycle. A genuine opposing pool is required unless an independent
 devnet liquidity-fixture wallet is separately approved.
 
+Phase 5 late-window incident (run `bot-matrix-20260802T032413876Z`): BTC 5m
+early completed first-trader buy, independent two-sided seeding, convergence
+sell, reconciliation and next evaluation. The following late cell seeded both
+sides but missed its narrow decision window after repeated
+`retryable_source_unavailable` results. Confirmed direct cause: the composed
+runtime fetched both Polymarket books on every pre-window tick and checked the
+late timing gate only afterward. This created avoidable upstream traffic and
+left source failures concentrated at the decision boundary. The scoped
+remediation is timing-first evaluation: native market/quote timing remains
+authoritative, no Polymarket book is requested before an eligible entry window,
+fresh books are requested only while eligible, and any eligible-window source
+failure fails closed and retries only while that same window remains open.
+Caching an older reference or widening freshness is explicitly out of scope.
+
 Linked PRD: [01-polymarket-early-late-relative-value.md](01-polymarket-early-late-relative-value.md)
 
 ## Architecture and separation of concerns
@@ -154,7 +168,10 @@ late_cycle():
     hold until API lifecycle is claimable/refundable/lost
     execute at most one claim/refund
     return
-  evaluate current aligned market and timing window
+  evaluate current aligned market and authoritative quote timing window
+  if window is not eligible: wait/skip without requesting Polymarket books
+  if window is eligible: request fresh Polymarket books
+  if fresh books are unavailable: fail closed and retry only while this window remains eligible
   evaluate executable edge and hold economics
   buy at most one side or record exact skip/block reason
 ```
@@ -223,6 +240,10 @@ claim and actual CLI fixtures pass.
 - Record run IDs, candidate commit, configuration, decisions, signatures and
   lifecycle outcomes without secrets.
 - Publish the reviewed commit/tag only after all gates pass.
+- Verify the timing-first late path in the real matrix: pre-window ticks make
+  no Polymarket book requests, the eligible window performs a fresh request,
+  and a transient eligible-window failure either recovers inside that same
+  window or produces a bounded no-trade result.
 
 ## Named tests
 
@@ -263,6 +284,9 @@ claim and actual CLI fixtures pass.
 - `late_cli_does_not_submit_when_decision_finishes_inside_safety_buffer`
 - `restart_reconciles_early_and_late_actions_without_duplicate_submission`
 - `reference_recovery_enters_only_while_the_original_window_remains_eligible`
+- `late_runtime_does_not_fetch_polymarket_books_before_entry_window`
+- `late_runtime_fetches_fresh_books_after_window_becomes_eligible`
+- `late_runtime_source_failure_recovers_only_inside_original_window`
 
 ## Path coverage matrix
 
@@ -272,7 +296,7 @@ claim and actual CLI fixtures pass.
 | Entry economics | Positive executable edge, win profit and hold EV | Either side; exact threshold; tie skips | Missing/stale/inconsistent payout or quote blocks | Fresh quote on later eligible tick | CLI records all calculation inputs |
 | First trader | Exact zero/zero real pools bootstrap a reference-favoured micro trade | Disabled, tie and below threshold skip | One-sided/non-empty state cannot bypass economics | Next round may bootstrap independently | Actual CLI first trade, lifecycle and next round |
 | Early timing | Entry inside open window | Before window waits; after window skips | Invalid duration/config fails startup | Restart inside window may continue after reconciliation | Two early rounds through CLI |
-| Late timing | Entry before fee onset and safety buffer | Too early waits; final window can skip | Closing/locked/incoherent schedule blocks | Dependency recovery only within original window | Two late hold-to-terminal rounds through CLI |
+| Late timing | Entry before fee onset and safety buffer; Polymarket is fetched only after eligibility | Too early waits without external-book polling; final window can skip | Closing/locked/incoherent schedule or eligible-window source outage blocks | Fresh dependency recovery only within original window; no stale-cache substitution | Two late hold-to-terminal rounds through CLI and signed matrix request-count evidence |
 | Early exit | Configured hold, convergence or risk exit | Polymarket unavailable safely holds | Stale/expired sell quote prevents submission | Fresh reference/quote permits later exit | CLI convergence and expiry variants |
 | Late lifecycle | Hold, then claim winning position | Lost position completes; refundable position refunds | Non-actionable terminal state does nothing | Pending terminal action reconciles after restart | CLI claim/refund and next round |
 | Configuration | Valid defaults and boundaries | Explicit supported policy variants | Missing, malformed, outside-boundary and conflicting values fail startup | Corrected config succeeds after restart | Config register plus CLI profile output |

@@ -267,7 +267,7 @@ export const runMarketTick = async ({
     throw error;
   }
   if (isPolymarketStrategy(config)) {
-    if (evaluation.market.reference.alignmentStatus !== "aligned" || !evaluation.polymarketPrices) {
+    if (evaluation.market.reference.alignmentStatus !== "aligned") {
       return event(tick, "entry", "skip", "reference_not_aligned", { marketId: evaluation.market.marketId });
     }
     if (await adapter.hasConvergenceExitedRound?.(evaluation.market)) {
@@ -284,6 +284,9 @@ export const runMarketTick = async ({
       submissionBufferSeconds: config.polymarketSubmissionBufferSeconds,
     });
     if (!window.eligible) return event(tick, "entry", "skip", window.reason, { marketId: evaluation.market.marketId, details: { mode, opensAt: window.opensAt, closesAt: window.closesAt, now: nowSeconds } });
+    if (!evaluation.polymarketPrices) {
+      return event(tick, "entry", "skip", "reference_not_aligned", { marketId: evaluation.market.marketId });
+    }
     const exactEmptyMarket = evaluation.market.activation?.yes.realPoolCollateralUnits === "0"
       && evaluation.market.activation?.no.realPoolCollateralUnits === "0";
     const bootstrap = config.polymarketBootstrapEmptyMarket && exactEmptyMarket

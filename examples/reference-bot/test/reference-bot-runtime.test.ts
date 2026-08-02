@@ -477,13 +477,55 @@ describe("reference bot composed runtime", () => {
       ...(await adapter().evaluateEntry()), market: { ...market, intervalStartTs: 700, reference: { alignmentStatus: "aligned" } } as never,
       buyQuotes, polymarketPrices: { yes: price(6000), no: price(3800) },
     }) });
-    await expect(runMarketTick({ tick: 1, config, adapter: runtime, nowSeconds: 979 })).resolves.toMatchObject({ action: "skip", reason: "entry_window_not_open" });
+    const waitingWithoutExternalPrices = adapter({ evaluateEntry: async () => ({
+      ...(await adapter().evaluateEntry()), market: { ...market, intervalStartTs: 700, reference: { alignmentStatus: "aligned" } } as never,
+      buyQuotes,
+    }) });
+    await expect(runMarketTick({ tick: 1, config, adapter: waitingWithoutExternalPrices, nowSeconds: 979 })).resolves.toMatchObject({ action: "skip", reason: "entry_window_not_open" });
     await expect(runMarketTick({ tick: 2, config, adapter: runtime, nowSeconds: 980 })).resolves.toMatchObject({ action: "buy", reason: "polymarket_executable_edge" });
     await expect(runMarketTick({ tick: 3, config, adapter: runtime, nowSeconds: 997 })).resolves.toMatchObject({ action: "skip", reason: "entry_window_closed" });
 
     const holding = adapter({ listPositions: async () => [position()], evaluatePosition: runtime.evaluatePosition });
     await expect(runMarketTick({ tick: 4, config, adapter: holding, nowSeconds: 990 })).resolves.toMatchObject({ action: "hold", reason: "position_not_economically_complete", positionDecisions: [{ reason: "strategy_holds_to_expiry" }] });
     expect(holding.executeSell).not.toHaveBeenCalled();
+  });
+
+  it("late_runtime_source_failure_recovers_only_inside_original_window", async () => {
+    const nowSeconds = Math.floor(Date.now() / 1_000);
+    const config = parseReferenceBotConfig({
+      strategy: "polymarket_late", polymarketEarlyExitPolicy: "hold_to_expiry",
+      readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false,
+      polymarketLateWindowSeconds: 20, polymarketSubmissionBufferSeconds: 3,
+    });
+    const priced = (["yes", "no"] as const).map((side) => quote({
+      side, grossAmount: "1000000",
+      closingProtection: { ...quote().closingProtection, closingStartsAt: nowSeconds + 20, hardLockTs: nowSeconds + 25 },
+      economics: { ...quote().economics, grossAmount: "1000000", projectedWinningPayout: "2000000" },
+    })) as [ReturnType<typeof quote>, ReturnType<typeof quote>];
+    const externalPrice = (askBps: number) => ({ tokenId: "token", bidBps: askBps - 100, askBps, spreadBps: 100, observedAtMs: Date.now() });
+    let evaluations = 0;
+    const runtime = adapter({
+      evaluateEntry: async () => {
+        evaluations += 1;
+        if (evaluations === 1) throw new StrykeSdkError("source_unavailable", "transient Polymarket outage", true);
+        return {
+          ...(await adapter().evaluateEntry()),
+          market: { ...market, intervalStartTs: nowSeconds - 280, reference: { alignmentStatus: "aligned" } } as never,
+          buyQuotes: priced,
+          polymarketPrices: { yes: externalPrice(6000), no: externalPrice(3800) },
+        };
+      },
+    });
+    const controller = new AbortController();
+    const events = await runReferenceBot({
+      config, adapter: runtime, wait: async () => {}, signal: controller.signal,
+      onEvent: () => { if (evaluations === 2) controller.abort(); },
+    });
+    expect(events.map(({ action, reason }) => [action, reason])).toEqual([
+      ["blocked", "retryable_source_unavailable"],
+      ["buy", "polymarket_executable_edge"],
+    ]);
+    expect(runtime.executeBuy).toHaveBeenCalledTimes(1);
   });
 
   it("early_strategy_window_exit_policy_and_return_thresholds_reach_final_consumers", async () => {
