@@ -17,6 +17,7 @@ const option = (name) => {
 const requestedAsset = option("asset");
 const requestedExpiry = option("expiry");
 const requestedStrategy = option("strategy");
+const withOpposingLiquidity = process.argv.includes("--with-opposing-liquidity");
 const timeoutSeconds = Number(option("timeout-seconds") ?? "7200");
 const paperTimeoutSeconds = Number(option("paper-timeout-seconds") ?? "90");
 if (requestedAsset && !assets.includes(requestedAsset)) throw new Error("--asset must be BTC or SOL");
@@ -24,6 +25,7 @@ if (requestedExpiry && !expiries.includes(requestedExpiry)) throw new Error("--e
 if (requestedStrategy && !strategies.includes(requestedStrategy)) throw new Error("--strategy must be polymarket_early or polymarket_late");
 if (!Number.isSafeInteger(timeoutSeconds) || timeoutSeconds < 60) throw new Error("--timeout-seconds must be an integer >= 60");
 if (!Number.isSafeInteger(paperTimeoutSeconds) || paperTimeoutSeconds < 30) throw new Error("--paper-timeout-seconds must be an integer >= 30");
+if (withOpposingLiquidity && !process.env.STRYKE_LIQUIDITY_KEYPAIR_PATH) throw new Error("STRYKE_LIQUIDITY_KEYPAIR_PATH is required with --with-opposing-liquidity");
 
 const cells = assets
   .filter((asset) => !requestedAsset || asset === requestedAsset)
@@ -61,6 +63,24 @@ const runPaperFollowUp = ({ cellId, cellEnv, lines }) => new Promise((complete) 
   paper.on("exit", () => {
     clearTimeout(timer);
     complete(evaluated);
+  });
+});
+
+const seedOpposingLiquidity = ({ asset, expiry, strategy }) => new Promise((complete, reject) => {
+  const cellId = `${asset.toLowerCase()}-${expiry}-${strategy}`;
+  const child = spawn(process.execPath, ["scripts/devnet-seed-opposing-pool.mjs", "--asset", asset, "--expiry", expiry, "--amount-lamports", "1000000", "--i-approve-devnet-liquidity"], {
+    cwd: process.cwd(), env: process.env, stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => { stdout += String(chunk); process.stdout.write(`[${cellId}:liquidity] ${chunk}`); });
+  child.stderr.on("data", (chunk) => { stderr += String(chunk); process.stderr.write(`[${cellId}:liquidity] ${chunk}`); });
+  child.on("exit", (code) => {
+    if (code !== 0) reject(new Error(`Opposing liquidity failed for ${cellId}: ${stderr || stdout}`));
+    else {
+      const event = stdout.split("\n").flatMap((line) => { try { return [JSON.parse(line)]; } catch { return []; } }).find((row) => row.event === "devnet_opposing_liquidity_seeded");
+      complete(event);
+    }
   });
 });
 
@@ -144,7 +164,9 @@ const safeRetryableInfrastructureFailure = (result) =>
   });
 
 const results = [];
+const liquiditySeeds = [];
 for (const cell of cells) {
+  if (withOpposingLiquidity) liquiditySeeds.push(await seedOpposingLiquidity(cell));
   let result = await runCell(cell);
   if (safeRetryableInfrastructureFailure(result)) {
     console.log(JSON.stringify({ event: "devnet_bot_matrix_safe_retry", asset: cell.asset, expiry: cell.expiry, strategy: cell.strategy, delayMs: 5_000 }));
@@ -156,7 +178,7 @@ for (const cell of cells) {
 }
 const selectedSides = [...new Set(results.flatMap((result) => result.actions.filter((event) => event.action === "buy" && event.signature).map((event) => event.side)))].sort();
 const completedByStrategy = Object.fromEntries(strategies.map((strategy) => [strategy, results.filter((result) => result.strategy === strategy && result.lifecycleCompleted).length]));
-const report = { schemaVersion: "stryke.referenceBotDevnetMatrix.v2", runId, revision, generatedAt: new Date().toISOString(), selectedSides, completedByStrategy, results };
+const report = { schemaVersion: "stryke.referenceBotDevnetMatrix.v2", runId, revision, generatedAt: new Date().toISOString(), withOpposingLiquidity, liquiditySeeds, selectedSides, completedByStrategy, results };
 await writeFile(resolve(directory, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify({ event: "devnet_bot_matrix_complete", runId, directory, cells: results.length }));
 const completeCells = results.every((result) => result.tickCount >= 2 && result.actions.some((event) => event.action === "buy" && event.signature) && result.lifecycleCompleted && result.nextMarketEvaluated);
