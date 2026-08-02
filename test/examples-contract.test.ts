@@ -61,15 +61,22 @@ describe("documented example contract", () => {
     expect(troubleshooting).toContain("npm run start:devnet -w @stryke/reference-bot -- --preflight-only");
   });
 
-  it("reference_bot_completes_two_dual_entitlement_market_cycles", () => {
+  it("reference_bot_completes_two_early_market_cycles", () => {
     const result = spawnSync("npm", ["run", "test:polymarket-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
     expect(result.status, result.stderr).toBe(0);
     for (const expected of [
-      "buy:polymarket_relative_edge",
+      "buy:polymarket_executable_edge",
       "hold:position_not_economically_complete",
       "sell:polymarket_convergence",
       "skip:same_round_reentry_blocked",
     ]) expect(result.stdout).toContain(expected);
-    expect(result.stdout.match(/buy:polymarket_relative_edge/g)).toHaveLength(2);
+    expect(result.stdout.match(/buy:polymarket_executable_edge/g)).toHaveLength(2);
+  }, 30_000);
+
+  it("reference_bot_completes_two_late_hold_and_settlement_cycles", () => {
+    const result = spawnSync("npm", ["run", "test:polymarket-late-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
+    expect(result.status, result.stderr).toBe(0);
+    for (const expected of ["buy:polymarket_executable_edge", "hold:position_not_economically_complete", "claim:terminal_confirmed", "skip:same_round_reentry_blocked"]) expect(result.stdout).toContain(expected);
+    expect(result.stdout.match(/buy:polymarket_executable_edge/g)).toHaveLength(2);
   }, 30_000);
 });

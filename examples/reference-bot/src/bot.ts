@@ -15,9 +15,9 @@ import { decideBestEntry, type BestEntryDecision } from "./entry.js";
 import { decidePositionExit, type PositionDecision } from "./manage-position.js";
 import { estimateFairProbability, volatilityAdjustedProbabilities, type FairProbabilityInput } from "./strategy.js";
 import type { PolymarketExecutablePrice } from "./polymarket-client.js";
-import { convergenceReached } from "./polymarket-relative-value.js";
 import { selectExecutablePolymarketEntry } from "./strategy/polymarket-entry.js";
 import { polymarketEntryWindow, type PolymarketTimingMode } from "./strategy/entry-window.js";
+import { decidePolymarketEarlyExit } from "./strategy/polymarket-exit.js";
 
 export type RuntimeAction = "buy" | "sell" | "claim" | "refund";
 
@@ -72,14 +72,16 @@ export interface ReferenceBotRuntimeAdapter {
   executeSell(position: PilotPosition, exposure: PilotPositionSideExposure, evaluation: PositionEvaluation, reason: string): Promise<RuntimeExecution>;
   executeTerminal(position: PilotPosition, action: PositionTerminalAction): Promise<RuntimeExecution>;
   hasConvergenceExitedRound?(market: PilotMarket): Promise<boolean>;
+  hasEnteredRound?(market: PilotMarket): Promise<boolean>;
+  recordEnteredRound?(market: PilotMarket): Promise<void>;
 }
 
 const terminalStates = new Set(["claimable", "refundable"]);
 const completeStates = new Set(["lost", "claimed", "refunded", "sold", "expired_unclaimed"]);
 const openStates = new Set(["open_position", "sellable"]);
-const isPolymarketStrategy = (config: ReferenceBotConfig) => config.estimator.startsWith("polymarket_");
+const isPolymarketStrategy = (config: ReferenceBotConfig) => config.strategy.startsWith("polymarket_");
 const polymarketMode = (config: ReferenceBotConfig): PolymarketTimingMode =>
-  config.estimator === "polymarket_late" ? "polymarket_late" : "polymarket_early";
+  config.strategy === "polymarket_late" ? "polymarket_late" : "polymarket_early";
 
 const isTradingLockedError = (error: unknown): boolean =>
   error instanceof StrykeSdkError &&
@@ -185,31 +187,39 @@ export const runMarketTick = async ({
       positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "position_data_stale" });
       continue;
     }
-    if (isPolymarketStrategy(config) && (polymarketMode(config) === "polymarket_late" || config.polymarketEarlyExitPolicy === "hold_to_expiry")) {
+    if (isPolymarketStrategy(config) && polymarketMode(config) === "polymarket_late") {
       positionDecisions.push({ positionId: position.positionId, action: "hold", reason: "strategy_holds_to_expiry" });
       continue;
     }
-    let model: { fairProbability: number; diagnostics: Record<string, string | number | boolean> };
-    try { model = isPolymarketStrategy(config)
-      ? { fairProbability: 0.5, diagnostics: { estimator: config.estimator, yesModelProbability: 0.5, noModelProbability: 0.5, secondsRemaining: evaluation.estimatorInput.secondsRemaining } }
-      : modelEvaluation(evaluation.estimatorInput, config); }
-    catch { positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "model_inputs_unavailable" }); continue; }
-    const fairProbability = model.fairProbability;
-    const decision: PositionDecision = decidePositionExit({
-      side: exposure.side, fairProbability, sellQuote: evaluation.sellQuote,
-      shares: evaluation.sellQuote.amount,
-      ...(exposure.costBasisCollateralUnits === undefined ? {} : { costBasisCollateralUnits: exposure.costBasisCollateralUnits }),
-      ifWinPayout: evaluation.ifWinPayout, stopLossBps: config.stopLossBps,
-      takeProfitBps: config.takeProfitBps,
-    });
-    if (isPolymarketStrategy(config) && decision.action === "hold" && evaluation.polymarketPrices) {
-      const convergence = convergenceReached({ side: exposure.side, strykeSellProbabilityBps: evaluation.sellQuote.normalizedSideProbabilityBps, prices: evaluation.polymarketPrices, exitEdgeBps: config.polymarketExitEdgeBps });
-      if (convergence.reached) Object.assign(decision, { action: "sell", reason: "polymarket_convergence" });
-      Object.assign(model.diagnostics, { remainingEdgeBps: convergence.remainingEdgeBps });
-    } else if (isPolymarketStrategy(config) && decision.action === "hold" && evaluation.polymarketUnavailable) {
-      Object.assign(model.diagnostics, { convergenceReferenceAvailable: false });
+    if (isPolymarketStrategy(config)) {
+      const result = decidePolymarketEarlyExit({
+        policy: config.polymarketEarlyExitPolicy,
+        side: exposure.side,
+        sellQuote: evaluation.sellQuote,
+        shares: evaluation.sellQuote.amount,
+        ...(exposure.costBasisCollateralUnits === undefined ? {} : { costBasisCollateralUnits: exposure.costBasisCollateralUnits }),
+        ifWinPayout: evaluation.ifWinPayout,
+        stopLossBps: config.stopLossBps,
+        takeProfitBps: config.takeProfitBps,
+        ...(evaluation.polymarketPrices ? { prices: evaluation.polymarketPrices } : {}),
+        exitEdgeBps: config.polymarketExitEdgeBps,
+      });
+      const details = { strategy: config.strategy, secondsRemaining: evaluation.estimatorInput.secondsRemaining, ...result.diagnostics, ...(result.decision.pnlBps === undefined ? {} : { pnlBps: result.decision.pnlBps.toString() }), ...(result.decision.sellNowValue === undefined ? {} : { sellNowValue: result.decision.sellNowValue.toString() }) };
+      positionDecisions.push({ positionId: position.positionId, action: result.decision.action, reason: result.decision.reason, details });
+      if (result.decision.action === "sell") sellCandidates.push({ position, exposure, evaluation, decision: result.decision, details });
+      continue;
     }
-    const details = { ...model.diagnostics, fairProbability, ...(decision.pnlBps === undefined ? {} : { pnlBps: decision.pnlBps.toString() }), ...(decision.sellNowValue === undefined ? {} : { sellNowValue: decision.sellNowValue.toString() }), ...(decision.holdValue === undefined ? {} : { holdValue: decision.holdValue.toString() }) };
+    let model: { fairProbability: number; diagnostics: Record<string, string | number | boolean> };
+    try { model = modelEvaluation(evaluation.estimatorInput, config); }
+    catch { positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "model_inputs_unavailable" }); continue; }
+    const decision: PositionDecision = decidePositionExit({
+          side: exposure.side, fairProbability: model.fairProbability, sellQuote: evaluation.sellQuote,
+          shares: evaluation.sellQuote.amount,
+          ...(exposure.costBasisCollateralUnits === undefined ? {} : { costBasisCollateralUnits: exposure.costBasisCollateralUnits }),
+          ifWinPayout: evaluation.ifWinPayout, stopLossBps: config.stopLossBps,
+          takeProfitBps: config.takeProfitBps,
+        });
+    const details = { ...model.diagnostics, fairProbability: model.fairProbability, ...(decision.pnlBps === undefined ? {} : { pnlBps: decision.pnlBps.toString() }), ...(decision.sellNowValue === undefined ? {} : { sellNowValue: decision.sellNowValue.toString() }), ...(decision.holdValue === undefined ? {} : { holdValue: decision.holdValue.toString() }) };
     positionDecisions.push({ positionId: position.positionId, action: decision.action, reason: decision.reason, details });
     if (decision.action === "sell") sellCandidates.push({ position, exposure, evaluation, decision, details });
   }
@@ -263,6 +273,9 @@ export const runMarketTick = async ({
     if (await adapter.hasConvergenceExitedRound?.(evaluation.market)) {
       return event(tick, "entry", "skip", "same_round_reentry_blocked", { marketId: evaluation.market.marketId });
     }
+    if (await adapter.hasEnteredRound?.(evaluation.market)) {
+      return event(tick, "entry", "skip", "same_round_reentry_blocked", { marketId: evaluation.market.marketId });
+    }
     const mode = polymarketMode(config);
     const window = polymarketEntryWindow({
       mode, market: evaluation.market, quote: evaluation.buyQuotes[0], now: nowSeconds,
@@ -295,6 +308,7 @@ export const runMarketTick = async ({
     if (failedSafety) return event(tick, "entry", "blocked", failedSafety[0], { marketId: evaluation.market.marketId, details });
     if (config.readOnlyMode || !config.liveTradingEnabled) return event(tick, "entry", "dry_run", config.readOnlyMode ? "read_only" : "live_off", { marketId: evaluation.market.marketId, details });
     const result = await adapter.executeBuy(evaluation, relative.quote);
+    await adapter.recordEnteredRound?.(evaluation.market);
     return event(tick, "entry", "buy", relative.reason, { marketId: evaluation.market.marketId, details, ...result });
   }
   let model: ReturnType<typeof modelEvaluation>;

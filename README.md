@@ -15,11 +15,13 @@ positions consume the API-authored side valuation; neither the SDK nor the bot
 recomputes payout from aggregate pools. Missing, stale, V1 or inconsistent
 economics stop before signing.
 
-The recommended baseline uses realised volatility, exact time remaining and
-strike distance. It quotes YES and NO at the same executable size, chooses the
-stronger qualifying edge, and opens only inside buffered fee-free activation
-capacity before closing protection begins. The two earlier distance estimators
-remain as transparent educational integration examples.
+The default `polymarket_early` baseline compares both executable Stryke sides
+with the aligned Polymarket asks shortly after a round opens. It buys only when
+the total debit, fee, price impact, projected Winning Payout, expected return
+and win profit all pass the configured thresholds. `polymarket_late` performs
+the same check in a bounded window immediately before Stryke closing fees begin,
+keeps a submission buffer, then holds through settlement. Neither strategy
+trades on Polymarket or guarantees profit.
 
 The included volatility- and time-adjusted estimator is an inspectable baseline,
 not a guaranteed profitable strategy. Its release-evidence claim will be
@@ -57,19 +59,20 @@ npm run start:live -w @stryke/reference-bot
 wallet loading because this pilot is devnet-only and mainnet requires separate
 approval and compatible API/program deployment.
 
-Select `volatility_adjusted_probability` for the recommended generic baseline.
-Select `polymarket_relative_value` on aligned `5m`, `15m`, or `1h` rounds for
-the optional relative-value baseline. It compares executable Polymarket asks
-with executable Stryke buy pricing and uses executable bids as a convergence
-exit signal. It skips native or degraded references and never trades on
-Polymarket; this is not arbitrage.
+Use `STRYKE_STRATEGY=polymarket_early` for the default early strategy. For the
+pre-fee strategy, set `STRYKE_STRATEGY=polymarket_late` and
+`STRYKE_POLY_EXIT_POLICY=hold_to_expiry`. Both support aligned `5m`, `15m`,
+and `1h` rounds; native 1m and degraded-reference rounds are skipped. Early can
+hold to expiry, exit when prices converge, or use the existing risk controls.
+Late always holds to expiry because its entry window is intentionally close to
+the fee schedule and lock.
 Replace only the exported estimator seam in `examples/reference-bot/src/strategy.ts`
 for your own signal. Every run prints
 effective non-secret config and each waiting, blocked, hold, entry, exit, claim,
 or refund reason. No command forces a trade.
 
-Each quote includes `closingProtection`. During `closing` or `locked`, the bot
-opens no position; during `locked`, it holds any
+Each quote includes authoritative `closingStartsAt` and hard-lock timing.
+During `closing` or `locked`, the bot opens no position; during `locked`, it holds any
 existing position until settlement, then claims or refunds once. Locked trades
 are not retried for that market.
 

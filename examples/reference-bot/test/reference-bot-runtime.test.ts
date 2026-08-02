@@ -315,7 +315,7 @@ describe("reference bot composed runtime", () => {
   });
 
   it("polymarket_relative_cli_loop_enters_holds_and_exits_on_convergence", async () => {
-    const config = parseReferenceBotConfig({ estimator: "polymarket_early", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+    const config = parseReferenceBotConfig({ strategy: "polymarket_early", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
     const alignedMarket = { ...market, intervalStartTs: Math.floor(Date.now() / 1_000) - 10, reference: { alignmentStatus: "aligned" } } as never;
     let tick = 0;
     const actions: string[] = [];
@@ -347,7 +347,7 @@ describe("reference bot composed runtime", () => {
   });
 
   it("polymarket_relative_strategy_skips_degraded_reference_without_external_prices", async () => {
-    const config = parseReferenceBotConfig({ estimator: "polymarket_relative_value", killSwitchEnabled: false });
+    const config = parseReferenceBotConfig({ strategy: "polymarket_early", killSwitchEnabled: false });
     const runtime = adapter({ evaluateEntry: async () => ({
       ...(await adapter().evaluateEntry()),
       market: { ...market, reference: { alignmentStatus: "degraded" } } as never,
@@ -359,7 +359,7 @@ describe("reference bot composed runtime", () => {
   });
 
   it("polymarket_relative_strategy_blocks_same_round_after_restart_but_allows_next_round", async () => {
-    const config = parseReferenceBotConfig({ estimator: "polymarket_early", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+    const config = parseReferenceBotConfig({ strategy: "polymarket_early", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
     let exitedMarketId = "market-1";
     let currentMarketId = "market-1";
     const price = (bidBps: number, askBps: number) => ({ tokenId: "token", bidBps, askBps, spreadBps: askBps - bidBps, observedAtMs: Date.now() });
@@ -381,7 +381,7 @@ describe("reference bot composed runtime", () => {
   });
 
   it("unavailable_polymarket_exit_keeps_native_stop_loss_and_safe_hold_active", async () => {
-    const config = parseReferenceBotConfig({ estimator: "polymarket_relative_value", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+    const config = parseReferenceBotConfig({ strategy: "polymarket_early", polymarketEarlyExitPolicy: "risk_managed", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
     for (const [proceeds, action, reason] of [["90", "sell", "stop_loss"], ["95", "hold", "position_not_economically_complete"]] as const) {
       const runtime = adapter({
         listPositions: async () => [position()],
@@ -397,7 +397,7 @@ describe("reference bot composed runtime", () => {
   });
 
   it("late_strategy_enters_only_inside_the_pre_fee_window_and_holds_to_expiry", async () => {
-    const config = parseReferenceBotConfig({ estimator: "polymarket_late", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false, polymarketLateWindowSeconds: 20, polymarketSubmissionBufferSeconds: 3 });
+    const config = parseReferenceBotConfig({ strategy: "polymarket_late", polymarketEarlyExitPolicy: "hold_to_expiry", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false, polymarketLateWindowSeconds: 20, polymarketSubmissionBufferSeconds: 3 });
     const closingStartsAt = 1_000;
     const buyQuotes = (["yes", "no"] as const).map((side) => quote({
       side, grossAmount: "1000000",
@@ -416,5 +416,18 @@ describe("reference bot composed runtime", () => {
     const holding = adapter({ listPositions: async () => [position()], evaluatePosition: runtime.evaluatePosition });
     await expect(runMarketTick({ tick: 4, config, adapter: holding, nowSeconds: 990 })).resolves.toMatchObject({ action: "hold", reason: "position_not_economically_complete", positionDecisions: [{ reason: "strategy_holds_to_expiry" }] });
     expect(holding.executeSell).not.toHaveBeenCalled();
+  });
+
+  it("early_strategy_window_exit_policy_and_return_thresholds_reach_final_consumers", async () => {
+    const base = parseReferenceBotConfig({ strategy: "polymarket_early", killSwitchEnabled: false, polymarketEarlyWindowSeconds: 5, polymarketEarlyExitPolicy: "hold_to_expiry", polymarketMinimumHoldReturnBps: 2_001, polymarketMinimumWinProfitBps: 10_001 });
+    const start = 1_000;
+    const priced = (["yes", "no"] as const).map((side) => quote({ side, grossAmount: "100", economics: { ...quote().economics, grossAmount: "100", projectedWinningPayout: "200" }, closingProtection: { ...quote().closingProtection, closingStartsAt: 1_100, hardLockTs: 1_105 } })) as [ReturnType<typeof quote>, ReturnType<typeof quote>];
+    const price = (askBps: number) => ({ tokenId: "token", bidBps: askBps - 100, askBps, spreadBps: 100, observedAtMs: 1 });
+    const runtime = adapter({ evaluateEntry: async () => ({ ...(await adapter().evaluateEntry()), market: { ...market, intervalStartTs: start, reference: { alignmentStatus: "aligned" } } as never, buyQuotes: priced, polymarketPrices: { yes: price(6000), no: price(3800) } }) });
+    await expect(runMarketTick({ tick: 1, config: base, adapter: runtime, nowSeconds: start + 1 })).resolves.toMatchObject({ action: "skip", reason: "insufficient_win_profit" });
+    await expect(runMarketTick({ tick: 2, config: { ...base, polymarketMinimumWinProfitBps: 1, polymarketMinimumHoldReturnBps: 2_001 }, adapter: runtime, nowSeconds: start + 1 })).resolves.toMatchObject({ action: "skip", reason: "insufficient_hold_expected_return" });
+    await expect(runMarketTick({ tick: 3, config: { ...base, polymarketMinimumWinProfitBps: 1, polymarketMinimumHoldReturnBps: 1 }, adapter: runtime, nowSeconds: start + 5 })).resolves.toMatchObject({ action: "skip", reason: "entry_window_closed" });
+    const holding = adapter({ listPositions: async () => [position()] });
+    await expect(runMarketTick({ tick: 4, config: base, adapter: holding })).resolves.toMatchObject({ positionDecisions: [{ reason: "strategy_holds_to_expiry" }] });
   });
 });

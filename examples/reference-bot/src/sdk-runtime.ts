@@ -120,7 +120,7 @@ export const createSdkRuntimeAdapter = ({
     };
   };
   const polymarketPrices = async (market: PilotMarket) => {
-    if (!config.estimator.startsWith("polymarket_") || market.reference.alignmentStatus !== "aligned") return undefined;
+    if (!config.strategy.startsWith("polymarket_") || market.reference.alignmentStatus !== "aligned") return undefined;
     if (!polymarketClient || !market.reference.upTokenId || !market.reference.downTokenId) {
       throw new StrykeSdkError("source_unavailable", "Aligned Polymarket pricing configuration is unavailable", true);
     }
@@ -271,6 +271,8 @@ export const createSdkRuntimeAdapter = ({
     executeBuy: (evaluation, quote) => prepareAndExecute(evaluation.market, quote),
     executeSell: (position, exposure, evaluation, reason) => prepareAndExecute(evaluation.market, evaluation.sellQuote, { positionId: position.positionId, sharesBefore: exposure.shares, strategyReason: reason }),
     hasConvergenceExitedRound: (market) => roundDecisionStore?.hasConvergenceExit({ marketId: market.marketId, expiryTs: market.expiryTs, strikePrice: market.strikePrice }) ?? Promise.resolve(false),
+    hasEnteredRound: (market) => roundDecisionStore?.hasEntry({ marketId: market.marketId, expiryTs: market.expiryTs, strikePrice: market.strikePrice }) ?? Promise.resolve(false),
+    recordEnteredRound: (market) => roundDecisionStore?.recordEntry({ marketId: market.marketId, expiryTs: market.expiryTs, strikePrice: market.strikePrice }) ?? Promise.resolve(),
     executeTerminal: async (position, action) => {
       const live = requireLive();
       const clientActionId = `pilot-${crypto.randomUUID()}`;

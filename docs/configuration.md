@@ -8,7 +8,8 @@ profile; missing or invalid input fails before wallet or transaction work.
 | --- | --- |
 | `STRYKE_ASSET` | `BTC`, `SOL` |
 | `STRYKE_EXPIRY_FAMILY` | `one_minute`, `five_minute`, `fifteen_minute`, `hourly` |
-| `STRYKE_ESTIMATOR` | `volatility_adjusted_probability` (recommended generic), `polymarket_relative_value` (optional aligned rounds), `distance_to_strike`, `distance_momentum` (educational) |
+| `STRYKE_STRATEGY` | `polymarket_early` (example default), `polymarket_late`, or `baseline` |
+| `STRYKE_ESTIMATOR` | Baseline model: `volatility_adjusted_probability` (default), `distance_to_strike`, or `distance_momentum`; ignored by Polymarket strategies |
 | `STRYKE_TRADE_SIZE_SOL` | positive decimal, maximum 9 decimals |
 | `STRYKE_MAXIMUM_TRADE_SIZE_SOL` | positive decimal; ≥ trade size |
 | `STRYKE_MAXIMUM_AGGREGATE_EXPOSURE_SOL` | positive decimal; ≥ trade cap |
@@ -35,6 +36,12 @@ profile; missing or invalid input fails before wallet or transaction work.
 | `STRYKE_POLY_MAX_SPREAD_BPS` | maximum executable Polymarket spread, default `1000` |
 | `STRYKE_POLY_MAX_PRICE_AGE_MS` | positive book freshness limit, default `5000` |
 | `STRYKE_POLY_TIMEOUT_MS` | positive request timeout up to 30000, default `3000` |
+| `STRYKE_POLY_EARLY_WINDOW_SECONDS` | seconds after interval start in which early entry is allowed, default `60` |
+| `STRYKE_POLY_LATE_WINDOW_SECONDS` | seconds before closing-fee onset at which late evaluation begins, default `20` |
+| `STRYKE_POLY_SUBMISSION_BUFFER_SECONDS` | no-entry buffer before closing-fee onset, default `3`; lower than late window |
+| `STRYKE_POLY_MIN_HOLD_RETURN_BPS` | minimum Polymarket-weighted expected hold return, default `100` |
+| `STRYKE_POLY_MIN_WIN_PROFIT_BPS` | minimum profit if the selected side wins, default `100` |
+| `STRYKE_POLY_EXIT_POLICY` | `hold_to_expiry`, `exit_on_convergence` (default), or `risk_managed`; late always holds |
 
 Connection controls are `STRYKE_API_BASE_URL`, `STRYKE_SOLANA_RPC_URL`,
 `STRYKE_WALLET_ADAPTER_PATH`, `STRYKE_CHECKPOINT_PATH`, and
@@ -50,10 +57,12 @@ public endpoint is used. It is validated with the rest of the typed config and
 printed in the non-secret effective configuration.
 `STRYKE_POLYMARKET_CLOB_URL` selects the public read-only CLOB endpoint.
 
-The relative-value strategy is available only for an `aligned` market
-reference. It compares executable asks for entry and executable bids for
-convergence exit. Native one-minute and degraded fallback rounds are skipped.
-It never places Polymarket orders and is not an arbitrage guarantee.
+The relative-value strategies require an `aligned` market reference. Entry
+uses the quote's total debit and resulting Winning Payout—not the displayed
+spot probability—to calculate the executable cost probability, expected hold
+return and win profit. Early may use executable bids for convergence exit.
+Native one-minute and degraded fallback rounds are skipped. The bot never
+places Polymarket orders and this is not an arbitrage guarantee.
 
 The bundled example wallet adapter reads `STRYKE_WALLET_KEYPAIR_PATH`. Point it
 to an absolute path outside the repository for a separately funded devnet

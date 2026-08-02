@@ -38,6 +38,15 @@ Minimal-Pyth quotes also carry versioned closing protection. The closing fee is
 buy and sell; a bot holds through expiry and proceeds only with API-authored
 claim/refund state.
 
+For aligned 5m, 15m and 1h rounds, `polymarket_early` evaluates only after the
+interval starts and before its early-window deadline. `polymarket_late`
+evaluates during the configured window before the API-authored
+`closingStartsAt`, stops at the submission buffer, and holds an entered position
+through settlement. Entry compares each Polymarket ask with
+`ceil(total Stryke debit / resulting Winning Payout)` and also requires positive
+configured expected-return and win-profit margins. Fees and curve impact are
+therefore included. Missing alignment, prices, timing or payout blocks entry.
+
 A signature is evidence of submission, not confirmation. Only confirmed,
 refreshed activity and position evidence completes the action.
 

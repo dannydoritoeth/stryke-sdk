@@ -1,7 +1,7 @@
 # PRD 01 Implementation Plan: Polymarket Early And Late Relative Value
 
-Status: In progress — phases 1–3 implemented and locally verified; deployed
-API evidence and phases 4–5 remain
+Status: In progress — phases 1–4 implemented and locally verified; deployed
+API timing evidence and signed Phase 5 devnet matrix remain
 
 Linked PRD: [01-polymarket-early-late-relative-value.md](01-polymarket-early-late-relative-value.md)
 
@@ -181,6 +181,8 @@ strategy/runtime tests pass.
 
 ### Phase 4: Public CLI composition and documentation
 
+Status: complete and verified locally.
+
 - Update `.env.example`, README, configuration, mechanics and troubleshooting.
 - Add simple early-paper and late-paper example configurations/commands.
 - Exercise buy/hold/convergence or expiry/terminal/next-round order through the
@@ -274,12 +276,12 @@ financial action record; no new database is required in this repository.
 ## Done Done checklist
 
 - [ ] Upstream API timing contract is deployed and evidenced on devnet.
-- [ ] SDK types/parsers/economics and packed consumer pass.
-- [ ] Early strategy passes all entry and selected exit-policy paths.
-- [ ] Late strategy passes timing, payout, expected-value and hold-to-terminal paths.
-- [ ] All new controls pass default/boundary/malformed/conflict/runtime-consumer tests.
-- [ ] Full repository tests, build, typecheck, docs, boundary and strategy gates pass.
-- [ ] Actual CLI proves two cycles and restart safety for both strategies.
+- [x] SDK types/parsers/economics and packed consumer pass.
+- [x] Early strategy passes all entry and selected exit-policy paths.
+- [x] Late strategy passes timing, payout, expected-value and hold-to-terminal paths.
+- [x] All new controls pass default/boundary/malformed/conflict/runtime-consumer tests.
+- [ ] Full repository tests, build, typecheck, docs and boundary gates pass; publication strategy claim remains intentionally closed pending signed devnet evidence.
+- [x] Actual CLI proves two cycles and restart safety for both strategies.
 - [ ] Signed minimum-size devnet matrix is recorded against the candidate commit.
-- [ ] README and onboarding are concise and truthful.
+- [x] README and onboarding are concise and truthful for the locally verified candidate.
 - [ ] Working tree is clean and the reviewed candidate is pushed/tagged for handoff.
