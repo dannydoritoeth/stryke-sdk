@@ -3,8 +3,9 @@ import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-const expiries = ["one_minute", "five_minute", "fifteen_minute", "hourly"];
+const expiries = ["five_minute", "fifteen_minute", "hourly"];
 const assets = ["BTC", "SOL"];
+const strategies = ["polymarket_early", "polymarket_late"];
 if (!existsSync(".env")) throw new Error("Copy .env.example to .env and configure devnet before running the matrix");
 for (const name of ["STRYKE_API_BASE_URL", "STRYKE_SOLANA_RPC_URL", "STRYKE_WALLET_ADAPTER_PATH"]) {
   if (!process.env[name]) throw new Error(`${name} is required before running the matrix`);
@@ -15,16 +16,22 @@ const option = (name) => {
 };
 const requestedAsset = option("asset");
 const requestedExpiry = option("expiry");
+const requestedStrategy = option("strategy");
 const timeoutSeconds = Number(option("timeout-seconds") ?? "7200");
 const paperTimeoutSeconds = Number(option("paper-timeout-seconds") ?? "90");
 if (requestedAsset && !assets.includes(requestedAsset)) throw new Error("--asset must be BTC or SOL");
 if (requestedExpiry && !expiries.includes(requestedExpiry)) throw new Error("--expiry is invalid");
+if (requestedStrategy && !strategies.includes(requestedStrategy)) throw new Error("--strategy must be polymarket_early or polymarket_late");
 if (!Number.isSafeInteger(timeoutSeconds) || timeoutSeconds < 60) throw new Error("--timeout-seconds must be an integer >= 60");
 if (!Number.isSafeInteger(paperTimeoutSeconds) || paperTimeoutSeconds < 30) throw new Error("--paper-timeout-seconds must be an integer >= 30");
 
 const cells = assets
   .filter((asset) => !requestedAsset || asset === requestedAsset)
-  .flatMap((asset) => expiries.filter((expiry) => !requestedExpiry || expiry === requestedExpiry).map((expiry) => ({ asset, expiry })));
+  .flatMap((asset) => expiries
+    .filter((expiry) => !requestedExpiry || expiry === requestedExpiry)
+    .flatMap((expiry) => strategies
+      .filter((strategy) => !requestedStrategy || strategy === requestedStrategy)
+      .map((strategy) => ({ asset, expiry, strategy }))));
 const revision = process.env.STRYKE_MATRIX_REVISION ?? "working-tree";
 const runId = `bot-matrix-${new Date().toISOString().replaceAll(/[-:.]/g, "").replace("Z", "Z")}`;
 const directory = resolve("artifacts/devnet-bot-matrix", runId);
@@ -57,17 +64,20 @@ const runPaperFollowUp = ({ cellId, cellEnv, lines }) => new Promise((complete) 
   });
 });
 
-const runCell = ({ asset, expiry }, attempt = 1) => new Promise((complete) => {
-  const cellId = `${asset.toLowerCase()}-${expiry}`;
+const runCell = ({ asset, expiry, strategy }, attempt = 1) => new Promise((complete) => {
+  const cellId = `${asset.toLowerCase()}-${expiry}-${strategy}`;
   const checkpoint = resolve(directory, `${cellId}.checkpoint.json`);
+  const roundState = resolve(directory, `${cellId}.rounds.json`);
   const lines = [];
   const cellEnv = {
     ...process.env,
     STRYKE_ASSET: asset,
     STRYKE_EXPIRY_FAMILY: expiry,
+    STRYKE_STRATEGY: strategy,
+    STRYKE_POLY_EXIT_POLICY: strategy === "polymarket_late" ? "hold_to_expiry" : (process.env.STRYKE_POLY_EXIT_POLICY ?? "exit_on_convergence"),
     STRYKE_ESTIMATOR: "volatility_adjusted_probability",
-    ...(expiry === "one_minute" ? { STRYKE_MINIMUM_SECONDS_TO_EXPIRY: process.env.STRYKE_MATRIX_ONE_MINUTE_MINIMUM_SECONDS ?? "5" } : {}),
     STRYKE_CHECKPOINT_PATH: checkpoint,
+    STRYKE_ROUND_STATE_PATH: roundState,
   };
   const child = spawn(process.execPath, ["--env-file-if-exists=.env", "examples/reference-bot/dist/cli.js", "--profile=devnet"], {
     cwd: process.cwd(),
@@ -109,7 +119,7 @@ const runCell = ({ asset, expiry }, attempt = 1) => new Promise((complete) => {
     const buy = actions.find((event) => event.action === "buy" && event.signature);
     const completion = buy && actions.find((event) => event.tick > buy.tick && ["sell", "claim", "refund"].includes(event.action) && event.signature);
     const result = {
-      schemaVersion: "stryke.referenceBotDevnetMatrixCell.v1", runId, revision, asset, expiry, attempt,
+      schemaVersion: "stryke.referenceBotDevnetMatrixCell.v2", runId, revision, asset, expiry, strategy, attempt,
       startedAt, completedAt: new Date().toISOString(), exitCode: code, signal,
       timedOut, tickCount: runtimeEvents.length,
       actions, lifecycleCompleted: Boolean(completion) && cleanLifecycle, nextMarketEvaluated,
@@ -137,14 +147,19 @@ const results = [];
 for (const cell of cells) {
   let result = await runCell(cell);
   if (safeRetryableInfrastructureFailure(result)) {
-    console.log(JSON.stringify({ event: "devnet_bot_matrix_safe_retry", asset: cell.asset, expiry: cell.expiry, delayMs: 5_000 }));
+    console.log(JSON.stringify({ event: "devnet_bot_matrix_safe_retry", asset: cell.asset, expiry: cell.expiry, strategy: cell.strategy, delayMs: 5_000 }));
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 5_000));
     result = await runCell(cell, 2);
   }
-  await writeFile(resolve(directory, `${cell.asset.toLowerCase()}-${cell.expiry}.json`), `${JSON.stringify(result, null, 2)}\n`);
+  await writeFile(resolve(directory, `${cell.asset.toLowerCase()}-${cell.expiry}-${cell.strategy}.json`), `${JSON.stringify(result, null, 2)}\n`);
   results.push(result);
 }
-const report = { schemaVersion: "stryke.referenceBotDevnetMatrix.v1", runId, revision, generatedAt: new Date().toISOString(), results };
+const selectedSides = [...new Set(results.flatMap((result) => result.actions.filter((event) => event.action === "buy" && event.signature).map((event) => event.side)))].sort();
+const completedByStrategy = Object.fromEntries(strategies.map((strategy) => [strategy, results.filter((result) => result.strategy === strategy && result.lifecycleCompleted).length]));
+const report = { schemaVersion: "stryke.referenceBotDevnetMatrix.v2", runId, revision, generatedAt: new Date().toISOString(), selectedSides, completedByStrategy, results };
 await writeFile(resolve(directory, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify({ event: "devnet_bot_matrix_complete", runId, directory, cells: results.length }));
-process.exitCode = results.every((result) => result.tickCount >= 2 && result.actions.some((event) => event.action === "buy" && event.signature) && result.lifecycleCompleted && result.nextMarketEvaluated) ? 0 : 1;
+const completeCells = results.every((result) => result.tickCount >= 2 && result.actions.some((event) => event.action === "buy" && event.signature) && result.lifecycleCompleted && result.nextMarketEvaluated);
+const strategyCyclesComplete = strategies.filter((strategy) => !requestedStrategy || strategy === requestedStrategy).every((strategy) => completedByStrategy[strategy] >= 2);
+const bothSidesObserved = requestedAsset || requestedExpiry || requestedStrategy ? true : selectedSides.includes("yes") && selectedSides.includes("no");
+process.exitCode = completeCells && strategyCyclesComplete && bothSidesObserved ? 0 : 1;
