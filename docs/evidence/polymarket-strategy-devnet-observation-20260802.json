@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "stryke.polymarketStrategyDevnetObservation.v1",
+  "observedAt": "2026-08-02T00:30:45Z",
+  "candidateBranch": "feat/polymarket-early-late-strategies",
+  "apiBranch": "feat/polymarket-strategy-timing",
+  "paper": {
+    "ticks": 2,
+    "preflightPassed": true,
+    "authoritativeClosingStartsAtConsumed": true,
+    "result": "entry_window_closed"
+  },
+  "signedRun": {
+    "runId": "bot-matrix-20260802T002117434Z",
+    "asset": "BTC",
+    "expiryFamily": "five_minute",
+    "strategy": "polymarket_early",
+    "preflightPassed": true,
+    "transactionSubmitted": false,
+    "result": "safe_no_trade",
+    "reason": "The empty opposing pool produced projected payout equal to cost and zero profit if the side won."
+  },
+  "excludedSetup": {
+    "reason": "Same-wallet setup positions cannot provide independent strategy lifecycle evidence.",
+    "amountPerSideLamports": "1000000",
+    "marketId": "pyth_oracle:0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43:SOL:five_minute:1785630900:62824.79760698",
+    "yesSignature": "3Ksu58icPeaNR27pwRZ3L7Tv2FUWiV5Z9hURwNza7H14tLH723C7SDBomRdDim9X58A4WGdCEM6gBE5ccc8DMyWW",
+    "noSignature": "2QtYsXH4J3Cj9KDPXpbDBVGWEr2pz1ZABcJxswoCQsrDLpFfZMbhR1VS9kXm69aQrsNuLC2k6MLc74d8FsGaQj3e"
+  },
+  "gate": "blocked_pending_genuine_opposing_devnet_participation_or_separately_approved_fixture_wallet"
+}

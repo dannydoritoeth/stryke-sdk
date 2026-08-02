@@ -3,6 +3,16 @@
 Status: In progress — phases 1–4 implemented and locally verified; deployed
 API timing evidence and signed Phase 5 devnet matrix remain
 
+Latest Phase 5 observation (2026-08-02): the real paper CLI consumed the
+authoritative timing contract for two ticks. Signed run
+`bot-matrix-20260802T002117434Z` passed devnet preflight and evaluated a new BTC
+5m early window without submitting because the empty opposing pool produced
+zero projected win profit. Two same-wallet 0.001 SOL setup trades were then
+confirmed on both sides, but are explicitly excluded as strategy evidence:
+the strategy wallet owning the setup positions invalidates an independent
+entry lifecycle. A genuine opposing pool is required unless an independent
+devnet liquidity-fixture wallet is separately approved.
+
 Linked PRD: [01-polymarket-early-late-relative-value.md](01-polymarket-early-late-relative-value.md)
 
 ## Architecture and separation of concerns
