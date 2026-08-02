@@ -40,4 +40,12 @@ describe("reference-bot devnet matrix runner", () => {
     expect(source).toContain("result = await runCell(cell, 2)");
     expect(source).not.toContain("runCell(cell, 3)");
   });
+
+  it("lets_early_strategy_trade_first_then_seeds_the_exact_signed_market", () => {
+    expect(source).toContain('strategy === "polymarket_early"');
+    expect(source).toContain('marketId: event.marketId');
+    expect(source).toContain('strategy === "polymarket_late"');
+    expect(source).toContain('result.liquiditySeed');
+    expect(source).toContain('{ liquidityFailure }');
+  });
 });

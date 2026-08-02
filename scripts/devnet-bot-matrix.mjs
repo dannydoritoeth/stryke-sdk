@@ -66,9 +66,9 @@ const runPaperFollowUp = ({ cellId, cellEnv, lines }) => new Promise((complete) 
   });
 });
 
-const seedOpposingLiquidity = ({ asset, expiry, strategy }) => new Promise((complete, reject) => {
+const seedOpposingLiquidity = ({ asset, expiry, strategy, marketId }) => new Promise((complete, reject) => {
   const cellId = `${asset.toLowerCase()}-${expiry}-${strategy}`;
-  const child = spawn(process.execPath, ["scripts/devnet-seed-opposing-pool.mjs", "--asset", asset, "--expiry", expiry, "--amount-lamports", "1000000", ...(strategy === "polymarket_early" ? ["--fresh-round"] : []), "--i-approve-devnet-liquidity"], {
+  const child = spawn(process.execPath, ["scripts/devnet-seed-opposing-pool.mjs", "--asset", asset, "--expiry", expiry, "--amount-lamports", "1000000", ...(marketId ? ["--market-id", marketId] : []), "--i-approve-devnet-liquidity"], {
     cwd: process.cwd(), env: process.env, stdio: ["ignore", "pipe", "pipe"],
   });
   let stdout = "";
@@ -109,13 +109,26 @@ const runCell = ({ asset, expiry, strategy }, attempt = 1) => new Promise((compl
   let completionActionId;
   let cleanLifecycle = false;
   let timedOut = false;
+  let liquiditySeed;
+  let liquiditySeedResult;
+  let liquidityFailure;
   const record = (stream, chunk) => {
     for (const line of String(chunk).split("\n").filter(Boolean)) {
       lines.push({ observedAt: new Date().toISOString(), stream, line });
       process.stdout.write(`[${cellId}] ${line}\n`);
       try {
         const event = JSON.parse(line);
-        if (event.action === "buy" && event.signature && Number.isInteger(event.tick) && buyTick === undefined) buyTick = event.tick;
+        if (event.action === "buy" && event.signature && Number.isInteger(event.tick) && buyTick === undefined) {
+          buyTick = event.tick;
+          if (withOpposingLiquidity && strategy === "polymarket_early") {
+            liquiditySeed = seedOpposingLiquidity({ asset, expiry, strategy, marketId: event.marketId })
+              .then((seed) => { liquiditySeedResult = seed; })
+              .catch((error) => {
+                liquidityFailure = error instanceof Error ? error.message : String(error);
+                child.kill("SIGTERM");
+              });
+          }
+        }
         if (buyTick !== undefined && event.tick > buyTick && ["sell", "claim", "refund"].includes(event.action) && event.signature) completionActionId = event.clientActionId;
         if (completionActionId && event.phase === "reconcile" && event.action === "complete" && event.clientActionId === completionActionId) {
           cleanLifecycle = true;
@@ -129,6 +142,7 @@ const runCell = ({ asset, expiry, strategy }, attempt = 1) => new Promise((compl
   const timer = setTimeout(() => { timedOut = true; child.kill("SIGTERM"); }, timeoutSeconds * 1_000);
   child.on("exit", async (code, signal) => {
     clearTimeout(timer);
+    if (liquiditySeed) await liquiditySeed;
     let nextMarketEvaluated = false;
     if (cleanLifecycle) {
       nextMarketEvaluated = await runPaperFollowUp({ cellId, cellEnv, lines });
@@ -143,6 +157,8 @@ const runCell = ({ asset, expiry, strategy }, attempt = 1) => new Promise((compl
       startedAt, completedAt: new Date().toISOString(), exitCode: code, signal,
       timedOut, tickCount: runtimeEvents.length,
       actions, lifecycleCompleted: Boolean(completion) && cleanLifecycle, nextMarketEvaluated,
+      ...(liquiditySeedResult ? { liquiditySeed: liquiditySeedResult } : {}),
+      ...(liquidityFailure ? { liquidityFailure } : {}),
       checkpointPath: checkpoint, lines,
     };
     await writeFile(resolve(directory, `${cellId}.attempt-${attempt}.json`), `${JSON.stringify(result, null, 2)}\n`);
@@ -166,7 +182,7 @@ const safeRetryableInfrastructureFailure = (result) =>
 const results = [];
 const liquiditySeeds = [];
 for (const cell of cells) {
-  if (withOpposingLiquidity) liquiditySeeds.push(await seedOpposingLiquidity(cell));
+  if (withOpposingLiquidity && cell.strategy === "polymarket_late") liquiditySeeds.push(await seedOpposingLiquidity(cell));
   let result = await runCell(cell);
   if (safeRetryableInfrastructureFailure(result)) {
     console.log(JSON.stringify({ event: "devnet_bot_matrix_safe_retry", asset: cell.asset, expiry: cell.expiry, strategy: cell.strategy, delayMs: 5_000 }));
@@ -174,6 +190,7 @@ for (const cell of cells) {
     result = await runCell(cell, 2);
   }
   await writeFile(resolve(directory, `${cell.asset.toLowerCase()}-${cell.expiry}-${cell.strategy}.json`), `${JSON.stringify(result, null, 2)}\n`);
+  if (result.liquiditySeed) liquiditySeeds.push(result.liquiditySeed);
   results.push(result);
 }
 const selectedSides = [...new Set(results.flatMap((result) => result.actions.filter((event) => event.action === "buy" && event.signature).map((event) => event.side)))].sort();

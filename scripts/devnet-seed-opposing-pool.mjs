@@ -22,6 +22,7 @@ const option = (name, fallback) => {
 const asset = option("asset", "BTC");
 const expiryFamily = option("expiry", "five_minute");
 const amount = BigInt(option("amount-lamports", "1000000"));
+const requiredMarketId = option("market-id", undefined);
 const requireFreshRound = process.argv.includes("--fresh-round");
 if (!["BTC", "SOL"].includes(asset)) throw new Error("--asset must be BTC or SOL");
 if (!["five_minute", "fifteen_minute", "hourly"].includes(expiryFamily)) throw new Error("--expiry is invalid");
@@ -75,6 +76,9 @@ try {
     }
   }
   const selectedMarketId = selectedEvaluation.market.marketId;
+  if (requiredMarketId && selectedMarketId !== requiredMarketId) {
+    throw new Error(`Requested liquidity market ${requiredMarketId} is no longer current; refusing to seed ${selectedMarketId}`);
+  }
   for (const side of ["yes", "no"]) {
     const evaluation = side === "yes" ? selectedEvaluation : await evaluateWithMaterializationRetry();
     if (evaluation.market.marketId !== selectedMarketId) throw new Error("Market rolled while seeding opposing liquidity; retry the cell");
