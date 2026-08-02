@@ -22,6 +22,7 @@ const option = (name, fallback) => {
 const asset = option("asset", "BTC");
 const expiryFamily = option("expiry", "five_minute");
 const amount = BigInt(option("amount-lamports", "1000000"));
+const requireFreshRound = process.argv.includes("--fresh-round");
 if (!["BTC", "SOL"].includes(asset)) throw new Error("--asset must be BTC or SOL");
 if (!["five_minute", "fifteen_minute", "hourly"].includes(expiryFamily)) throw new Error("--expiry is invalid");
 if (amount < 1n || amount > 1_000_000n) throw new Error("--amount-lamports must be 1..1000000");
@@ -58,15 +59,32 @@ try {
     }
   };
   const signatures = [];
+  let selectedEvaluation = await evaluateWithMaterializationRetry();
+  if (requireFreshRound && Math.floor(Date.now() / 1_000) - selectedEvaluation.market.intervalStartTs > 15) {
+    const expiringMarketId = selectedEvaluation.market.marketId;
+    const waitMs = Math.max(1_000, (selectedEvaluation.market.expiryTs - Math.floor(Date.now() / 1_000) + 2) * 1_000);
+    console.log(JSON.stringify({ event: "devnet_liquidity_waiting_for_fresh_round", asset, expiryFamily, waitMs }));
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, waitMs));
+    const freshDeadline = Date.now() + 45_000;
+    for (;;) {
+      selectedEvaluation = await evaluateWithMaterializationRetry();
+      const ageSeconds = Math.floor(Date.now() / 1_000) - selectedEvaluation.market.intervalStartTs;
+      if (selectedEvaluation.market.marketId !== expiringMarketId && ageSeconds <= 20) break;
+      if (Date.now() >= freshDeadline) throw new Error("Fresh market did not materialize before the liquidity deadline");
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 1_000));
+    }
+  }
+  const selectedMarketId = selectedEvaluation.market.marketId;
   for (const side of ["yes", "no"]) {
-    const evaluation = await evaluateWithMaterializationRetry();
+    const evaluation = side === "yes" ? selectedEvaluation : await evaluateWithMaterializationRetry();
+    if (evaluation.market.marketId !== selectedMarketId) throw new Error("Market rolled while seeding opposing liquidity; retry the cell");
     const quote = evaluation.buyQuotes.find((candidate) => candidate.side === side);
     if (!quote) throw new Error(`Missing ${side} quote`);
     const result = await runtime.executeBuy(evaluation, quote);
     signatures.push({ side, marketId: evaluation.market.marketId, signature: result.signature, clientActionId: result.clientActionId });
     await checkpoint.clear(result.clientActionId);
   }
-  console.log(JSON.stringify({ event: "devnet_opposing_liquidity_seeded", owner: signer.address, asset, expiryFamily, amountLamports: amount.toString(), signatures }));
+  console.log(JSON.stringify({ event: "devnet_opposing_liquidity_seeded", owner: signer.address, asset, expiryFamily, amountLamports: amount.toString(), freshRound: requireFreshRound, signatures }));
 } finally {
   subscription.close();
 }

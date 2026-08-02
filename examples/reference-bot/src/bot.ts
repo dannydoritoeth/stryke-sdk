@@ -308,7 +308,13 @@ export const runMarketTick = async ({
       const failedSafety = Object.entries(nativeSafety.safetyChecks).find(([key, passed]) => !passed && !["edge", "time", "feeFreeOpen"].includes(key));
       if (failedSafety) return event(tick, "entry", "blocked", failedSafety[0], { marketId: evaluation.market.marketId, details });
       if (config.readOnlyMode || !config.liveTradingEnabled) return event(tick, "entry", "dry_run", config.readOnlyMode ? "read_only" : "live_off", { marketId: evaluation.market.marketId, details });
-      const result = await adapter.executeBuy(evaluation, bootstrap.quote);
+      let result: RuntimeExecution;
+      try { result = await adapter.executeBuy(evaluation, bootstrap.quote); }
+      catch (error) {
+        if (isTradingLockedError(error)) return event(tick, "entry", "blocked", "trading_locked_until_settlement", { marketId: evaluation.market.marketId, details });
+        if (isQuoteRevalidationError(error)) return event(tick, "entry", "blocked", "quote_changed_before_submission", { marketId: evaluation.market.marketId, details });
+        throw error;
+      }
       await adapter.recordEnteredRound?.(evaluation.market);
       return event(tick, "entry", "buy", bootstrap.reason, { marketId: evaluation.market.marketId, details, ...result });
     }
@@ -335,7 +341,13 @@ export const runMarketTick = async ({
     const failedSafety = Object.entries(nativeSafety.safetyChecks).find(([key, passed]) => !passed && !["edge", "time", "feeFreeOpen"].includes(key));
     if (failedSafety) return event(tick, "entry", "blocked", failedSafety[0], { marketId: evaluation.market.marketId, details });
     if (config.readOnlyMode || !config.liveTradingEnabled) return event(tick, "entry", "dry_run", config.readOnlyMode ? "read_only" : "live_off", { marketId: evaluation.market.marketId, details });
-    const result = await adapter.executeBuy(evaluation, relative.quote);
+    let result: RuntimeExecution;
+    try { result = await adapter.executeBuy(evaluation, relative.quote); }
+    catch (error) {
+      if (isTradingLockedError(error)) return event(tick, "entry", "blocked", "trading_locked_until_settlement", { marketId: evaluation.market.marketId, details });
+      if (isQuoteRevalidationError(error)) return event(tick, "entry", "blocked", "quote_changed_before_submission", { marketId: evaluation.market.marketId, details });
+      throw error;
+    }
     await adapter.recordEnteredRound?.(evaluation.market);
     return event(tick, "entry", "buy", relative.reason, { marketId: evaluation.market.marketId, details, ...result });
   }

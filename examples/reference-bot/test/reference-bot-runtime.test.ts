@@ -358,6 +358,28 @@ describe("reference bot composed runtime", () => {
     expect(runtime.executeBuy).not.toHaveBeenCalled();
   });
 
+  it("polymarket_entry_quote_revalidation_is_contained_instead_of_stopping_the_loop", async () => {
+    const config = parseReferenceBotConfig({ strategy: "polymarket_early", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+    const runtime = adapter({
+      evaluateEntry: async () => ({
+        ...(await adapter().evaluateEntry()),
+        market: { ...market, intervalStartTs: Math.floor(Date.now() / 1_000) - 10, reference: { alignmentStatus: "aligned" } } as never,
+        buyQuotes: [
+          quote({ side: "yes", grossAmount: "1000000", economics: { ...quote().economics, grossAmount: "1000000", projectedWinningPayout: "2000000" } }),
+          quote({ side: "no", grossAmount: "1000000", economics: { ...quote().economics, grossAmount: "1000000", projectedWinningPayout: "2000000" } }),
+        ],
+        polymarketPrices: {
+          yes: { tokenId: "yes", bidBps: 5_700, askBps: 6_000, spreadBps: 300, observedAtMs: Date.now() },
+          no: { tokenId: "no", bidBps: 3_500, askBps: 3_800, spreadBps: 300, observedAtMs: Date.now() },
+        },
+      }),
+      executeBuy: async () => { throw new StrykeSdkError("quote_blocked", "Pilot quote market state or minimum output changed before preparation"); },
+    });
+    await expect(runMarketTick({ tick: 1, config, adapter: runtime })).resolves.toMatchObject({
+      phase: "entry", action: "blocked", reason: "quote_changed_before_submission",
+    });
+  });
+
   it("exact_empty_market_bootstrap_executes_the_first_trade_through_the_runtime", async () => {
     const start = 1_000;
     const config = parseReferenceBotConfig({ strategy: "polymarket_early", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });

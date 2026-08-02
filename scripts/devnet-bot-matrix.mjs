@@ -68,7 +68,7 @@ const runPaperFollowUp = ({ cellId, cellEnv, lines }) => new Promise((complete) 
 
 const seedOpposingLiquidity = ({ asset, expiry, strategy }) => new Promise((complete, reject) => {
   const cellId = `${asset.toLowerCase()}-${expiry}-${strategy}`;
-  const child = spawn(process.execPath, ["scripts/devnet-seed-opposing-pool.mjs", "--asset", asset, "--expiry", expiry, "--amount-lamports", "1000000", "--i-approve-devnet-liquidity"], {
+  const child = spawn(process.execPath, ["scripts/devnet-seed-opposing-pool.mjs", "--asset", asset, "--expiry", expiry, "--amount-lamports", "1000000", ...(strategy === "polymarket_early" ? ["--fresh-round"] : []), "--i-approve-devnet-liquidity"], {
     cwd: process.cwd(), env: process.env, stdio: ["ignore", "pipe", "pipe"],
   });
   let stdout = "";
