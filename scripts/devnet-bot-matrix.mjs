@@ -192,6 +192,10 @@ for (const cell of cells) {
   await writeFile(resolve(directory, `${cell.asset.toLowerCase()}-${cell.expiry}-${cell.strategy}.json`), `${JSON.stringify(result, null, 2)}\n`);
   if (result.liquiditySeed) liquiditySeeds.push(result.liquiditySeed);
   results.push(result);
+  if (result.liquidityFailure || !result.lifecycleCompleted) {
+    console.error(JSON.stringify({ event: "devnet_bot_matrix_stopped_after_incomplete_cell", asset: cell.asset, expiry: cell.expiry, strategy: cell.strategy, liquidityFailure: result.liquidityFailure }));
+    break;
+  }
 }
 const selectedSides = [...new Set(results.flatMap((result) => result.actions.filter((event) => event.action === "buy" && event.signature).map((event) => event.side)))].sort();
 const completedByStrategy = Object.fromEntries(strategies.map((strategy) => [strategy, results.filter((result) => result.strategy === strategy && result.lifecycleCompleted).length]));

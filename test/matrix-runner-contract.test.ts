@@ -47,5 +47,6 @@ describe("reference-bot devnet matrix runner", () => {
     expect(source).toContain('strategy === "polymarket_late"');
     expect(source).toContain('result.liquiditySeed');
     expect(source).toContain('{ liquidityFailure }');
+    expect(source).toContain('devnet_bot_matrix_stopped_after_incomplete_cell');
   });
 });

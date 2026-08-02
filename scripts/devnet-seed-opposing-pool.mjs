@@ -80,13 +80,25 @@ try {
     throw new Error(`Requested liquidity market ${requiredMarketId} is no longer current; refusing to seed ${selectedMarketId}`);
   }
   for (const side of ["yes", "no"]) {
-    const evaluation = side === "yes" ? selectedEvaluation : await evaluateWithMaterializationRetry();
-    if (evaluation.market.marketId !== selectedMarketId) throw new Error("Market rolled while seeding opposing liquidity; retry the cell");
-    const quote = evaluation.buyQuotes.find((candidate) => candidate.side === side);
-    if (!quote) throw new Error(`Missing ${side} quote`);
-    const result = await runtime.executeBuy(evaluation, quote);
-    signatures.push({ side, marketId: evaluation.market.marketId, signature: result.signature, clientActionId: result.clientActionId });
-    await checkpoint.clear(result.clientActionId);
+    let submitted = false;
+    for (let attempt = 1; attempt <= 5 && !submitted; attempt += 1) {
+      const evaluation = side === "yes" && attempt === 1 ? selectedEvaluation : await evaluateWithMaterializationRetry();
+      if (evaluation.market.marketId !== selectedMarketId) throw new Error("Market rolled while seeding opposing liquidity; retry the cell");
+      const quote = evaluation.buyQuotes.find((candidate) => candidate.side === side);
+      if (!quote) throw new Error(`Missing ${side} quote`);
+      try {
+        const result = await runtime.executeBuy(evaluation, quote);
+        signatures.push({ side, marketId: evaluation.market.marketId, signature: result.signature, clientActionId: result.clientActionId });
+        await checkpoint.clear(result.clientActionId);
+        submitted = true;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const retryableQuoteRace = message.includes("minimum output") || message.includes("market state");
+        if (!retryableQuoteRace || attempt === 5) throw error;
+        console.log(JSON.stringify({ event: "devnet_liquidity_quote_retry", asset, expiryFamily, side, marketId: selectedMarketId, attempt }));
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 1_000));
+      }
+    }
   }
   console.log(JSON.stringify({ event: "devnet_opposing_liquidity_seeded", owner: signer.address, asset, expiryFamily, amountLamports: amount.toString(), freshRound: requireFreshRound, signatures }));
 } finally {
