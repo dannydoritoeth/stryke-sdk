@@ -208,17 +208,11 @@ export const parseReferenceBotEnv = (
   env: NodeJS.ProcessEnv = process.env,
   profile: ReferenceBotProfile = "paper"
 ): ReferenceBotConfig => {
-  if (profile === "live") {
-    throw new StrykeSdkError(
-      "configuration",
-      "Mainnet live trading is not approved or compatible with this devnet pilot"
-    );
-  }
   const profiledEnv: NodeJS.ProcessEnv = {
     ...env,
     STRYKE_READ_ONLY_MODE: profile === "paper" ? "true" : "false",
-    STRYKE_LIVE_TRADING_ENABLED: profile === "devnet" ? "true" : "false",
-    STRYKE_KILL_SWITCH_ENABLED: profile === "devnet" ? "false" : "true",
+    STRYKE_LIVE_TRADING_ENABLED: profile === "paper" ? "false" : "true",
+    STRYKE_KILL_SWITCH_ENABLED: profile === "paper" ? "true" : "false",
   };
   const readOnlyMode = booleanEnv(profiledEnv, "STRYKE_READ_ONLY_MODE", true);
   const liveTradingEnabled = booleanEnv(profiledEnv, "STRYKE_LIVE_TRADING_ENABLED", false);

@@ -12,7 +12,7 @@ const capabilities = {
   schemaVersion: "1.0.0",
   apiServiceVersion: "0.4.2",
   compatibility: { minimumSdkVersion: "0.1.0" },
-  cluster: "devnet",
+  cluster: "mainnet-beta",
   contract: {
     profile: "minimal_pyth",
     programId: SUPPORTED_PROGRAM_ID,
@@ -48,7 +48,7 @@ describe("SDK compatibility handshake", () => {
   it.each([
     [{ ...capabilities, apiVersion: "v2" }, "v1"],
     [{ ...capabilities, schemaVersion: "2.0.0" }, "v1"],
-    [{ ...capabilities, cluster: "mainnet-beta" }, "v1"],
+    [{ ...capabilities, cluster: "localnet" }, "v1"],
     [
       { ...capabilities, contract: { ...capabilities.contract, programId: "wrong" } },
       "v1",
@@ -61,6 +61,14 @@ describe("SDK compatibility handshake", () => {
         fetch: async () => response(body, header),
       })
     ).rejects.toBeInstanceOf(StrykeSdkError);
+  });
+
+  it("retains devnet compatibility", async () => {
+    const client = await StrykeClient.connect({
+      apiBaseUrl: "https://devnet.example",
+      fetch: async () => response({ ...capabilities, cluster: "devnet" }),
+    });
+    expect(client.capabilities.cluster).toBe("devnet");
   });
 
   it("accepts additive v1 fields without changing the known contract", async () => {

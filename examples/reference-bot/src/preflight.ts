@@ -16,7 +16,7 @@ export type PreflightCheck =
 
 type PreflightStatus = "checking" | "passed" | "skipped" | "failed";
 
-export const DEVNET_EXECUTION_BUFFER_LAMPORTS = 10_000_000n;
+export const EXECUTION_BUFFER_LAMPORTS = 10_000_000n;
 
 export const emitPreflight = (
   profile: ReferenceBotProfile,
@@ -86,5 +86,5 @@ export const runPreflightCheck = async <T>(
   throw new StrykeSdkError("configuration", `${detail} ${remediation}`);
 };
 
-export const requiredDevnetBalance = (maximumTradeSizeLamports: bigint): bigint =>
-  maximumTradeSizeLamports + DEVNET_EXECUTION_BUFFER_LAMPORTS;
+export const requiredExecutionBalance = (maximumTradeSizeLamports: bigint): bigint =>
+  maximumTradeSizeLamports + EXECUTION_BUFFER_LAMPORTS;

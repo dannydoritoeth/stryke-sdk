@@ -1,6 +1,6 @@
 # Quickstart
 
-Use Node.js 22+. BTC five-minute devnet is the canonical onboarding path. BTC
+Use Node.js 22+. BTC five-minute mainnet is the canonical onboarding path. BTC
 and SOL 1m/5m/15m/1h are supported. One-minute live strategy performance is experimental because timing races are tighter.
 
 ## 1. Copy and inspect the safe configuration
@@ -11,36 +11,35 @@ cp .env.example .env
 npm run start:paper -w @stryke/reference-bot
 ```
 
-Set the invited devnet API in `.env`. Paper mode uses real data and prints the
+The example config uses `https://api.stryketrade.com`. Paper mode uses real data and prints the
 SDK/API/program compatibility fields `sdkVersion`, `apiVersion`,
 `apiSchemaVersion`, `programId`, and `programVersion`. It never loads a wallet
 or submits.
 
-## 2. Create and fund a dedicated devnet wallet
+## 2. Create and fund a dedicated trading wallet
 
-Install the Solana CLI, then create a new devnet-only wallet outside this
+Install the Solana CLI, then create a new dedicated wallet outside this
 repository:
 
 ```bash
-solana-keygen new --outfile ../stryke-devnet-wallet.json
-solana-keygen pubkey ../stryke-devnet-wallet.json
-solana airdrop 2 "$(solana-keygen pubkey ../stryke-devnet-wallet.json)" --url devnet
+solana-keygen new --outfile ../stryke-trading-wallet.json
+solana-keygen pubkey ../stryke-trading-wallet.json
 ```
 
 The JSON file contains the wallet's private key material. Anyone with it can
-control the wallet: never commit, share, or use it as a personal/mainnet
-wallet. Set its path in `.env`:
+control the wallet: never commit, share, or use it as a personal wallet. Fund
+the printed address with only the mainnet SOL you intend to risk, then set its path in `.env`:
 
 ```env
 STRYKE_WALLET_ADAPTER_PATH=./examples/reference-bot/wallet-adapter.example.mjs
-STRYKE_WALLET_KEYPAIR_PATH=../stryke-devnet-wallet.json
+STRYKE_WALLET_KEYPAIR_PATH=../stryke-trading-wallet.json
 ```
 
-## 3. Make minimum-size devnet trades
+## 3. Make minimum-size mainnet trades
 
 Configure the separately funded wallet adapter in `.env`, inspect every value,
-then run `npm run start:devnet -w @stryke/reference-bot`. It uses the same
-continuous loop with signed devnet transactions. A trade occurs only when the
+then run `npm run start:live -w @stryke/reference-bot`. It uses the same
+continuous loop with signed mainnet transactions. A trade occurs only when the
 estimator and all safety checks pass.
 
 Unavailable/stale data blocks decisions. There is no alternate-price or
@@ -104,17 +103,13 @@ the higher model edge, buffered fee-free real-pool capacity, open closing state,
 and every freshness, impact, time, size, exposure, checkpoint, mode and
 kill-switch check. Every outcome prints a reason.
 
-## 6. Keep mainnet closed until approved
-
-`npm run start:live -w @stryke/reference-bot` is reserved for a separately
-approved compatible mainnet deployment. This devnet pilot rejects it before
-wallet loading.
+## 6. Review before signing
 
 The wallet module must default-export an `@solana/kit` `TransactionSigner`.
 Keep wallet files outside the repository. Never put wallet secrets or signed
 transactions in environment variables or logs.
 
-Before approval, review cluster, owner, market, side, amount, quote economics,
+Before signing, review cluster, owner, market, side, amount, quote economics,
 minimum output, and blockhash. If an action is submitted/unknown, keep the same
 checkpoint and action ID; the next run reconciles before any new action. The
 same loop handles sell, claim/refund, and subsequent markets—do not start a

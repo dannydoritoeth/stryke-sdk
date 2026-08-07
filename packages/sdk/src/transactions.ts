@@ -16,6 +16,7 @@ import { StrykeSdkError } from "./errors.js";
 import type { ExecutableQuote } from "./quotes.js";
 import { assertMarketTradeable, type PilotMarket } from "./markets.js";
 import { terminalActionFor, type PilotPosition, type PositionTerminalAction } from "./positions.js";
+import type { SupportedCluster } from "./compatibility.js";
 
 export type LatestBlockhash = {
   blockhash: string;
@@ -65,7 +66,7 @@ type PrepResponse = {
     signers: string[];
     programId: string;
     contractProfile: "minimal_pyth";
-    cluster?: "devnet";
+    cluster?: SupportedCluster;
   };
   metadata?: { environment?: { solanaCluster?: string } };
 };
@@ -106,7 +107,7 @@ export type MaterializedPilotTransaction = {
   recentBlockhash: string;
   lastValidBlockHeight: bigint;
   review: {
-    cluster: "devnet";
+    cluster: SupportedCluster;
     programId: string;
     owner: string;
     market: Record<string, unknown>;
@@ -324,7 +325,7 @@ export class TransactionsClient {
       ["expiryTs", response.market.expiryTs === marketIdentity.expiryTs],
       ["targetValue", response.market.targetValue === marketIdentity.targetValue],
       ["collateral", JSON.stringify(response.market.collateral) === JSON.stringify(marketIdentity.collateral)],
-      ["cluster", response.metadata?.environment?.solanaCluster === "devnet"],
+      ["cluster", response.metadata?.environment?.solanaCluster === this.client.capabilities.cluster],
       ["contractProfile", response.transaction.contractProfile === "minimal_pyth"],
       ["programId", response.transaction.programId === this.client.capabilities.contract.programId],
     ].filter(([, matches]) => !matches).map(([field]) => field);
@@ -361,7 +362,7 @@ export class TransactionsClient {
       recentBlockhash: lifetime.blockhash,
       lastValidBlockHeight: lifetime.lastValidBlockHeight,
       review: {
-        cluster: "devnet",
+        cluster: this.client.capabilities.cluster,
         programId: response.transaction.programId,
         owner,
         market: response.market,
@@ -423,7 +424,7 @@ export class TransactionsClient {
         expiryTs: response.market.expiryTs,
         targetValue: response.market.targetValue,
       }) !== JSON.stringify(market) ||
-      response.metadata?.environment?.solanaCluster !== "devnet" ||
+      response.metadata?.environment?.solanaCluster !== this.client.capabilities.cluster ||
       response.transaction.contractProfile !== "minimal_pyth" ||
       response.transaction.programId !== this.client.capabilities.contract.programId
     ) {
@@ -448,7 +449,7 @@ export class TransactionsClient {
       intentHash,
       recentBlockhash: latest.value.blockhash,
       lastValidBlockHeight: latest.value.lastValidBlockHeight,
-      review: { cluster: "devnet", programId: response.transaction.programId, owner, market, action },
+      review: { cluster: this.client.capabilities.cluster, programId: response.transaction.programId, owner, market, action },
       transactionMessage,
       raw: response,
     };

@@ -1,7 +1,7 @@
 # Stryke SDK Pilot
 
-Private TypeScript SDK and reference bot for invited developers trading Stryke
-BTC/SOL devnet markets. This is educational software, not investment advice;
+Private TypeScript SDK and reference bot for trading Stryke ([https://stryketrade.com](https://stryketrade.com))
+BTC/SOL markets. This is educational software, not investment advice;
 outcomes are not guaranteed. Node.js 22+ is required.
 
 The SDK supplies typed markets, Pyth prices/history, executable quotes, reviewed
@@ -30,9 +30,7 @@ exception ends as soon as either real pool is funded; normal payout and
 expected-return gates then apply.
 
 The included volatility- and time-adjusted estimator is an inspectable baseline,
-not a guaranteed profitable strategy. Its release-evidence claim will be
-restored only after the principal-backed V2 candidate passes the signed devnet
-matrix.
+not a guaranteed profitable strategy.
 
 ## Three-step confidence ladder
 
@@ -42,28 +40,21 @@ cp .env.example .env
 npm run start:paper -w @stryke/reference-bot
 ```
 
-Open `.env` to inspect the minimum-size strategy and risk settings. Replace the
-invited devnet API value before using real data. Paper mode reads real markets,
+Open `.env` to inspect the minimum-size strategy and risk settings. Paper mode reads real markets,
 Pyth prices, and quotes but never loads a wallet or submits a transaction.
-
-```bash
-npm run start:devnet -w @stryke/reference-bot
-```
-
-Devnet mode uses the same `.env` values and a separately funded wallet adapter
-to make minimum-size signed devnet trades when the estimator and every safety
-gate pass. It continuously manages positions, exits or waits for expiry,
-claims/refunds, reconciles, and repeats.
-
-Before the first devnet run, follow the [quickstart wallet steps](docs/quickstart.md#2-create-and-fund-a-dedicated-devnet-wallet) to create a dedicated keypair, fund its public address, and set its file path in `.env`.
 
 ```bash
 npm run start:live -w @stryke/reference-bot
 ```
 
-`start:live` is the eventual mainnet command. It currently fails closed before
-wallet loading because this pilot is devnet-only and mainnet requires separate
-approval and compatible API/program deployment.
+Live mode uses the mainnet API/RPC values and a separately funded wallet adapter
+to make minimum-size signed mainnet trades when the estimator and every safety
+gate pass. It continuously manages positions, exits or waits for expiry,
+claims/refunds, reconciles, and repeats.
+
+Mainnet execution remains protected by every configured safety gate.
+
+Before the first signed run, follow the [quickstart wallet steps](docs/quickstart.md#2-create-and-fund-a-dedicated-trading-wallet) to create a dedicated keypair, fund its public address, and set its file path in `.env`. Devnet compatibility remains available through `npm run start:devnet -w @stryke/reference-bot` with devnet API and RPC values.
 
 Use `STRYKE_STRATEGY=polymarket_early` for the default early strategy. For the
 pre-fee strategy, set `STRYKE_STRATEGY=polymarket_late` and

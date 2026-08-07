@@ -9,21 +9,21 @@ consequence of that first failed check.
 | Failed check | What to do |
 | --- | --- |
 | `environment` | Run `cp .env.example .env`, inspect it, and retry |
-| `api` | Correct `STRYKE_API_BASE_URL`; confirm the invited API is healthy and compatible |
+| `api` | Correct `STRYKE_API_BASE_URL`; confirm the API is healthy and compatible |
 | `pyth` | Check internet access and `STRYKE_PYTH_HERMES_URL`; never substitute another feed |
 | `wallet` | Check both wallet paths; generate the dedicated keypair using the quickstart if missing |
-| `rpc` | Correct `STRYKE_SOLANA_RPC_URL` and confirm it is a reachable devnet endpoint |
-| `funding` | Run the exact devnet `solana airdrop` command printed in `remediation` |
+| `rpc` | Correct `STRYKE_SOLANA_RPC_URL` and confirm it reaches the selected cluster |
+| `funding` | Fund the dedicated wallet as directed by the printed `remediation` |
 
 The wallet address and file path may be printed, but keypair bytes are never
 printed. Do not paste the keypair JSON, a seed phrase, or signed transaction
 into an issue, log, or coding-agent prompt.
 
-To check the configured devnet API, Pyth feed, wallet, RPC, and funding without
+To check the configured mainnet API, Pyth feed, wallet, RPC, and funding without
 entering the trading loop or signing, run:
 
 ```bash
-npm run start:devnet -w @stryke/reference-bot -- --preflight-only
+npm run start:live -w @stryke/reference-bot -- --preflight-only
 ```
 
 Catch `StrykeSdkError`, inspect `code` and `retryable`, and log only its bounded
@@ -33,7 +33,7 @@ quote freshness, action reconciliation, or any signing precondition.
 | Code | Recovery precondition |
 | --- | --- |
 | `configuration` | Correct missing/invalid config; never add inline secrets |
-| `compatibility` | Use the supported devnet API/schema/program combination |
+| `compatibility` | Use a supported API/schema/program and mainnet-beta or devnet cluster combination |
 | `validation` | Correct the caller input or reject the malformed response |
 | `unsupported_asset` | Select BTC or SOL |
 | `unsupported_expiry` | Select 1m, 5m, 15m, or 1h |

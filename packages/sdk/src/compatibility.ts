@@ -7,6 +7,8 @@ export const SUPPORTED_PROGRAM_ID =
   "GmXBVbwqBhjetu9VSbFoQQMHDi22WAMBn4oNwj9sjnSE" as const;
 export const SUPPORTED_PROGRAM_VERSION = "0.1.0" as const;
 export const SUPPORTED_QUOTE_MATH_VERSION = "independent_curve_v1" as const;
+export const SUPPORTED_CLUSTERS = ["mainnet-beta", "devnet"] as const;
+export type SupportedCluster = (typeof SUPPORTED_CLUSTERS)[number];
 
 export const PILOT_ASSETS = ["BTC", "SOL"] as const;
 export const PILOT_EXPIRY_FAMILIES = [
@@ -24,7 +26,7 @@ export type ApiCapabilitiesV1 = {
   schemaVersion: string;
   apiServiceVersion: string;
   compatibility: { minimumSdkVersion: string };
-  cluster: "devnet";
+  cluster: SupportedCluster;
   contract: {
     profile: "minimal_pyth";
     programId: string;
@@ -93,7 +95,7 @@ export const parseCapabilitiesV1 = (value: unknown): ApiCapabilitiesV1 => {
   if (
     parsed.apiVersion !== SUPPORTED_API_VERSION ||
     parsed.schemaVersion !== SUPPORTED_API_SCHEMA_VERSION ||
-    parsed.cluster !== "devnet" ||
+    !SUPPORTED_CLUSTERS.includes(parsed.cluster as SupportedCluster) ||
     parsed.contract.profile !== "minimal_pyth" ||
     parsed.contract.programId !== SUPPORTED_PROGRAM_ID ||
     parsed.contract.programVersion !== SUPPORTED_PROGRAM_VERSION

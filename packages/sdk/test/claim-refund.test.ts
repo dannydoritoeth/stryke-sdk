@@ -47,7 +47,7 @@ const prepareTerminal = async (
     metadata: { environment: { solanaCluster: "devnet" } },
   };
   const client = {
-    capabilities: { contract: { programId: SUPPORTED_PROGRAM_ID } },
+    capabilities: { cluster: "devnet", contract: { programId: SUPPORTED_PROGRAM_ID } },
     requestJson: async () => response,
   };
   const rpc = {

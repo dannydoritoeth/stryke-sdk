@@ -147,8 +147,8 @@ describe("reference bot config", () => {
     expect(config).toMatchObject({ profile: "paper", readOnlyMode: true, liveTradingEnabled: false, killSwitchEnabled: true });
   });
 
-  it("live_profile_fails_closed_until_mainnet_is_approved", () => {
-    expect(() => parseReferenceBotEnv({}, "live")).toThrow(/Mainnet live trading is not approved/);
+  it("live_profile_enables_mainnet_execution_and_requires_explicit_controls", () => {
+    expect(() => parseReferenceBotEnv({}, "live")).toThrow(/STRYKE_ASSET/);
   });
 
   it("wires_polymarket_controls_from_env_and_validates_hysteresis", () => {

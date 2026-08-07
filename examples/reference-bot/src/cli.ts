@@ -24,7 +24,7 @@ import { pathToFileURL } from "node:url";
 
 import { runReferenceBot } from "./bot.js";
 import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, resolveReferenceBotRuntimeBindings, type ReferenceBotProfile } from "./config.js";
-import { emitPreflight, requireRootEnvFile, requiredDevnetBalance, runPreflightCheck } from "./preflight.js";
+import { emitPreflight, requireRootEnvFile, requiredExecutionBalance, runPreflightCheck } from "./preflight.js";
 import { createSdkRuntimeAdapter } from "./sdk-runtime.js";
 import { loadWalletForLiveTrading } from "./wallet.js";
 import { PolymarketClient } from "./polymarket-client.js";
@@ -212,7 +212,7 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
     profile,
     "api",
     "Connected to a compatible Stryke API.",
-    "Check STRYKE_API_BASE_URL and confirm the invited devnet API is healthy and compatible.",
+    "Check STRYKE_API_BASE_URL and confirm the Stryke API is healthy and compatible.",
     () => StrykeClient.connect({ apiBaseUrl: bindings.apiBaseUrl! })
   );
   const lookbackSeconds = config.historyLookbackSeconds[config.expiryFamily];
@@ -240,8 +240,8 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
       emitPreflight(profile, "pyth", "failed", error instanceof Error ? error.message : "Pyth startup failed", pythRemediation);
       throw error;
     }
-    const signer = profile === "devnet"
-      ? await runPreflightCheck(profile, "wallet", "Loaded the configured devnet wallet adapter.", "Check STRYKE_WALLET_ADAPTER_PATH and STRYKE_WALLET_KEYPAIR_PATH; follow docs/quickstart.md to create the keypair.", () => loadSigner(config, bindings.walletAdapterPath))
+    const signer = profile !== "paper"
+      ? await runPreflightCheck(profile, "wallet", "Loaded the configured wallet adapter.", "Check STRYKE_WALLET_ADAPTER_PATH and STRYKE_WALLET_KEYPAIR_PATH; follow docs/quickstart.md to configure the wallet.", () => loadSigner(config, bindings.walletAdapterPath))
       : undefined;
     const rpc = createSolanaRpc(bindings.solanaRpcUrl);
     if (profile === "paper") {
@@ -252,18 +252,20 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
       const balance = await runPreflightCheck(
         profile,
         "rpc",
-        `Connected to devnet RPC for wallet ${signer.address}.`,
-        "Check STRYKE_SOLANA_RPC_URL and confirm the endpoint is reachable and set to devnet.",
+        `Connected to ${profile === "live" ? "mainnet" : "devnet"} RPC for wallet ${signer.address}.`,
+        `Check STRYKE_SOLANA_RPC_URL and confirm the endpoint is reachable and set to ${profile === "live" ? "mainnet-beta" : "devnet"}.`,
         async () => (await rpc.getBalance(signer.address, { commitment: "confirmed" }).send()).value,
         { attempts: 3, retryDelayMs: 1_500, attemptTimeoutMs: 5_000 }
       );
-      const minimumBalance = requiredDevnetBalance(config.maximumTradeSizeLamports);
+      const minimumBalance = requiredExecutionBalance(config.maximumTradeSizeLamports);
       if (balance < minimumBalance) {
-        const remediation = `Run \`solana airdrop 2 ${signer.address} --url devnet\`, then retry.`;
+        const remediation = profile === "devnet"
+          ? `Run \`solana airdrop 2 ${signer.address} --url devnet\`, then retry.`
+          : `Fund wallet ${signer.address} with enough mainnet SOL for fees and the configured trade cap, then retry.`;
         emitPreflight(profile, "funding", "failed", `Wallet ${signer.address} has ${balance} lamports; at least ${minimumBalance} are required.`, remediation);
         throw new StrykeSdkError("configuration", remediation);
       }
-      emitPreflight(profile, "funding", "passed", `Wallet ${signer.address} has enough devnet SOL for the configured trade cap and execution buffer.`);
+      emitPreflight(profile, "funding", "passed", `Wallet ${signer.address} has enough SOL for the configured trade cap and execution buffer.`);
     }
     if (process.argv.includes("--preflight-only")) {
       console.log(JSON.stringify({ event: "reference_bot_preflight_complete", profile }));
@@ -295,7 +297,7 @@ try {
   else if (process.argv.includes("--fixture-polymarket")) await runPolymarketFixtureSmoke();
   else if (process.argv.includes("--fixture-polymarket-late")) await runPolymarketLateFixtureSmoke();
   else if (process.argv.some((argument) => argument.startsWith("--profile="))) await runSdkBot(selectedProfile());
-  else if (process.argv.includes("--live") || process.argv.includes("--live-data")) await runSdkBot(process.argv.includes("--live") ? "devnet" : "paper");
+  else if (process.argv.includes("--live") || process.argv.includes("--live-data")) await runSdkBot(process.argv.includes("--live") ? "live" : "paper");
   else await runFixtureSmoke();
 } catch (error) {
   const failure = error instanceof StrykeSdkError ? { code: error.code, message: error.message, retryable: error.retryable } : { code: "configuration", message: error instanceof Error ? error.message : "Reference bot startup failed", retryable: false };

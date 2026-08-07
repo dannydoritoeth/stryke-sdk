@@ -200,7 +200,7 @@ describe("pilot transaction materialization", () => {
       quote,
     });
     const client = {
-      capabilities: { contract: { programId: SUPPORTED_PROGRAM_ID } },
+      capabilities: { cluster: "devnet", contract: { programId: SUPPORTED_PROGRAM_ID } },
       requestJson: async () => ({ ...prep, intentHash }),
     };
     const rpc = {
@@ -265,7 +265,7 @@ describe("pilot transaction materialization", () => {
     ];
     for (const response of responses) {
       const client = {
-        capabilities: { contract: { programId: SUPPORTED_PROGRAM_ID } },
+        capabilities: { cluster: "devnet", contract: { programId: SUPPORTED_PROGRAM_ID } },
         requestJson: async () => response,
       };
       await expect(
@@ -314,7 +314,7 @@ describe("pilot transaction materialization", () => {
       { ...prep.quoteBinding, maximumSlippageBpsApplied: 999 },
     ]) {
       const client = {
-        capabilities: { contract: { programId: SUPPORTED_PROGRAM_ID } },
+        capabilities: { cluster: "devnet", contract: { programId: SUPPORTED_PROGRAM_ID } },
         requestJson: async () => ({ ...prep, intentHash, quoteBinding }),
       };
       await expect(
@@ -391,7 +391,7 @@ describe("pilot transaction materialization", () => {
       observedAt: new Date(now).toISOString(),
     };
     const client = {
-      capabilities: { contract: { programId: SUPPORTED_PROGRAM_ID } },
+      capabilities: { cluster: "devnet", contract: { programId: SUPPORTED_PROGRAM_ID } },
       requestJson: async (path: string) => {
         calls.push(path);
         return actionResponse;

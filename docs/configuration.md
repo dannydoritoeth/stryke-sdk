@@ -48,8 +48,8 @@ Connection controls are `STRYKE_API_BASE_URL`, `STRYKE_SOLANA_RPC_URL`,
 `STRYKE_WALLET_ADAPTER_PATH`, `STRYKE_CHECKPOINT_PATH`, and
 `STRYKE_ROUND_STATE_PATH`. Booleans are exactly
 `true` or `false` when used by custom integrations. The public commands force
-safe mode precedence: paper is read-only, devnet enables signed devnet actions,
-and live fails closed pending mainnet approval. The checkpoint defaults to
+safe mode precedence: paper is read-only, live enables signed mainnet actions,
+and devnet remains available for compatible test deployments. The checkpoint defaults to
 `.stryke/reference-bot-action.json`.
 Confirmed convergence exits are stored separately in
 `.stryke/reference-bot-rounds.json` so restart cannot re-enter the same round.
@@ -66,8 +66,8 @@ Native one-minute and degraded fallback rounds are skipped. The bot never
 places Polymarket orders and this is not an arbitrage guarantee.
 
 The bundled example wallet adapter reads `STRYKE_WALLET_KEYPAIR_PATH`. Point it
-to an absolute path outside the repository for a separately funded devnet
-keypair, or use the quickstart's `../stryke-devnet-wallet.json` path. Generate
+to an absolute path outside the repository for a separately funded trading
+keypair, or use the quickstart's `../stryke-trading-wallet.json` path. Generate
 that dedicated wallet with `solana-keygen new`; its JSON file contains private
 key material and must not be committed or shared. The key bytes are never
 copied into `.env` or logs.

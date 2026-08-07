@@ -27,7 +27,7 @@ describe("pilot documentation contract", () => {
       "TransactionsClient",
       "PositionsClient",
       "start:paper",
-      "devnet-only",
+      "mainnet",
     ]) {
       expect(sdkReadme).toContain(phrase);
     }
@@ -38,13 +38,12 @@ describe("pilot documentation contract", () => {
     expect(quickstart).toMatch(/one-minute live strategy performance is experimental/i);
   });
 
-  it("quickstart_creates_funds_and_protects_a_dedicated_devnet_wallet", () => {
-    expect(quickstart).toContain("solana-keygen new --outfile ../stryke-devnet-wallet.json");
-    expect(quickstart).toContain("solana-keygen pubkey ../stryke-devnet-wallet.json");
-    expect(quickstart).toContain("solana airdrop 2");
-    expect(quickstart).toContain("STRYKE_WALLET_KEYPAIR_PATH=../stryke-devnet-wallet.json");
+  it("quickstart_creates_funds_and_protects_a_dedicated_trading_wallet", () => {
+    expect(quickstart).toContain("solana-keygen new --outfile ../stryke-trading-wallet.json");
+    expect(quickstart).toContain("solana-keygen pubkey ../stryke-trading-wallet.json");
+    expect(quickstart).toContain("STRYKE_WALLET_KEYPAIR_PATH=../stryke-trading-wallet.json");
     expect(quickstart).toMatch(/JSON file contains.*private key material/is);
-    expect(quickstart).toMatch(/never commit, share.*personal\/mainnet/is);
+    expect(quickstart).toMatch(/never commit, share.*personal wallet/is);
   });
 
   it("startup_failures_have_ai_readable_remediation", () => {
@@ -80,7 +79,7 @@ describe("pilot documentation contract", () => {
     expect(readme).toContain("npm run start:paper -w @stryke/reference-bot");
     expect(readme).toContain("npm run start:devnet -w @stryke/reference-bot");
     expect(readme).toContain("npm run start:live -w @stryke/reference-bot");
-    expect(readme).toMatch(/mainnet.*fails closed/is);
+    expect(readme).toMatch(/mainnet.*safety gate/is);
   });
 
   it("docs_show_sdk_api_program_compatibility_output", () => {

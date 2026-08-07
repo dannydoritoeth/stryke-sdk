@@ -1,6 +1,6 @@
 # @stryke/sdk
 
-Typed infrastructure for the private Stryke bot-developer pilot.
+Typed infrastructure for Stryke bot developers.
 
 The package is consumed from this repository during the pilot and is not yet
 published to npm. Node.js 22 or newer is required.
@@ -14,14 +14,14 @@ npm ci
 npm run build -w @stryke/sdk
 ```
 
-Connect to the supplied invited-devnet API, select one canonical market, and
+Connect to the mainnet API, select one canonical market, and
 request an executable quote:
 
 ```ts
 import { MarketsClient, QuotesClient, StrykeClient } from "@stryke/sdk";
 
 const client = await StrykeClient.connect({
-  apiBaseUrl: process.env.STRYKE_API_BASE_URL!,
+  apiBaseUrl: process.env.STRYKE_API_BASE_URL ?? "https://api.stryketrade.com",
 });
 const market = await new MarketsClient(client).current("BTC", "five_minute");
 const quote = await new QuotesClient(client).get({
@@ -78,8 +78,9 @@ cp .env.example .env
 npm run start:paper -w @stryke/reference-bot
 ```
 
-Live execution is devnet-only, disabled by default, and requires a separately
-funded wallet adapter plus every explicit live gate. Private keys never belong
+Signed execution requires a separately funded wallet adapter plus every
+explicit live gate. Mainnet is the default; devnet remains compatible when the
+API advertises `cluster: "devnet"`. Private keys never belong
 in SDK configuration or logs.
 
 ## Typed errors
