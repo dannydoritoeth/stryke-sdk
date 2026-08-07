@@ -4,11 +4,14 @@ import { describe, expect, it } from "vitest";
 const source = readFileSync(new URL("../scripts/devnet-bot-matrix.mjs", import.meta.url), "utf8");
 
 describe("reference-bot devnet matrix runner", () => {
-  it("invokes_the_real_reference_bot_cli_for_all_eight_cells", () => {
+  it("invokes_the_real_reference_bot_cli_for_the_aligned_strategy_matrix", () => {
     expect(source).toContain('examples/reference-bot/dist/cli.js');
     expect(source).toContain('"--profile=devnet"');
     expect(source).toContain('["BTC", "SOL"]');
-    for (const expiry of ["one_minute", "five_minute", "fifteen_minute", "hourly"]) expect(source).toContain(`"${expiry}"`);
+    for (const expiry of ["five_minute", "fifteen_minute", "hourly"]) expect(source).toContain(`"${expiry}"`);
+    expect(source).not.toContain('"one_minute"');
+    expect(source).toContain('["polymarket_early", "polymarket_late"]');
+    expect(source).toContain("STRYKE_STRATEGY: strategy");
     expect(source).not.toMatch(/packages\/sdk|test\/devnet|devnet-lifecycle-matrix/);
   });
 
@@ -17,7 +20,9 @@ describe("reference-bot devnet matrix runner", () => {
     expect(source).toContain('event.action === "buy" && event.signature');
     expect(source).toContain("result.lifecycleCompleted");
     expect(source).toContain("result.nextMarketEvaluated");
-    expect(source).toContain('STRYKE_MATRIX_ONE_MINUTE_MINIMUM_SECONDS ?? "5"');
+    expect(source).toContain("completedByStrategy[strategy] >= 2");
+    expect(source).toContain('selectedSides.includes("yes") && selectedSides.includes("no")');
+    expect(source).toContain("STRYKE_ROUND_STATE_PATH: roundState");
   });
 
   it("matrix_paper_follow_up_retries_rollover_until_entry_evaluation", () => {
@@ -34,5 +39,16 @@ describe("reference-bot devnet matrix runner", () => {
     expect(source).toContain('event.event === "reference_bot_error" && event.message === "fetch failed"');
     expect(source).toContain("result = await runCell(cell, 2)");
     expect(source).not.toContain("runCell(cell, 3)");
+  });
+
+  it("lets_early_strategy_trade_first_then_seeds_the_exact_signed_market", () => {
+    expect(source).toContain('strategy === "polymarket_early"');
+    expect(source).toContain('marketId: event.marketId');
+    expect(source).toContain('strategy === "polymarket_late"');
+    expect(source).toContain('result.liquiditySeed');
+    expect(source).toContain('{ liquidityFailure }');
+    expect(source).toContain('devnet_bot_matrix_stopped_after_incomplete_cell');
+    expect(source).toContain('devnet_liquidity_rollover_retry');
+    expect(source).toContain('attempt <= 3');
   });
 });

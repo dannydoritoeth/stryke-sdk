@@ -21,7 +21,7 @@ export const decidePolymarketRelativeEntry = ({
   const ranked = quotes.map((quote) => ({
     quote,
     side: quote.side,
-    edgeBps: prices[quote.side].askBps - quote.executableProbabilityBps,
+    edgeBps: prices[quote.side].askBps - quote.normalizedSideProbabilityBps,
   })).sort((a, b) => b.edgeBps - a.edgeBps || a.side.localeCompare(b.side));
   const best = ranked[0]!;
   return best.edgeBps >= entryEdgeBps

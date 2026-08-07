@@ -1,7 +1,7 @@
 # Stryke SDK Pilot
 
-Private TypeScript SDK and reference bot for invited developers trading Stryke
-BTC/SOL devnet markets. This is educational software, not investment advice;
+Private TypeScript SDK and reference bot for trading Stryke ([https://stryketrade.com](https://stryketrade.com))
+BTC/SOL markets. This is educational software, not investment advice;
 outcomes are not guaranteed. Node.js 22+ is required.
 
 The SDK supplies typed markets, Pyth prices/history, executable quotes, reviewed
@@ -9,13 +9,28 @@ transactions, restart-safe reconciliation, positions, sells, claims, and
 refunds. The reference bot continuously reconciles → evaluates every open
 position → manages/exits → settles → evaluates the next market.
 
-The recommended baseline uses realised volatility, exact time remaining and
-strike distance. It quotes YES and NO at the same executable size, chooses the
-stronger qualifying edge, and opens only inside buffered fee-free activation
-capacity before closing protection begins. The two earlier distance estimators
-remain as transparent educational integration examples.
+The SDK requires principal-backed economics V2. Quotes expose exact principal,
+participation, executable Current Value and Winning Payout fields. Active
+positions consume the API-authored side valuation; neither the SDK nor the bot
+recomputes payout from aggregate pools. Missing, stale, V1 or inconsistent
+economics stop before signing.
 
-The reference bot includes a volatility- and time-adjusted baseline that evaluates both sides against executable Stryke pricing and understands the fee-free activation region. It is intended as a credible starting point, not a guaranteed profitable strategy.
+The default `polymarket_early` baseline compares both executable Stryke sides
+with the aligned Polymarket asks shortly after a round opens. It buys only when
+the total debit, fee, price impact, projected Winning Payout, expected return
+and win profit all pass the configured thresholds. `polymarket_late` performs
+the same check in a bounded window immediately before Stryke closing fees begin,
+keeps a submission buffer, then holds through settlement. Neither strategy
+trades on Polymarket or guarantees profit.
+
+When both real Stryke pools are exactly empty, the default minimum-size bot may
+make the first trade on the stronger Polymarket side if the configured entry
+edge passes. Disable this with `STRYKE_POLY_BOOTSTRAP_EMPTY_MARKET=false`. The
+exception ends as soon as either real pool is funded; normal payout and
+expected-return gates then apply.
+
+The included volatility- and time-adjusted estimator is an inspectable baseline,
+not a guaranteed profitable strategy.
 
 ## Three-step confidence ladder
 
@@ -25,42 +40,36 @@ cp .env.example .env
 npm run start:paper -w @stryke/reference-bot
 ```
 
-Open `.env` to inspect the minimum-size strategy and risk settings. Replace the
-invited devnet API value before using real data. Paper mode reads real markets,
+Open `.env` to inspect the minimum-size strategy and risk settings. Paper mode reads real markets,
 Pyth prices, and quotes but never loads a wallet or submits a transaction.
-
-```bash
-npm run start:devnet -w @stryke/reference-bot
-```
-
-Devnet mode uses the same `.env` values and a separately funded wallet adapter
-to make minimum-size signed devnet trades when the estimator and every safety
-gate pass. It continuously manages positions, exits or waits for expiry,
-claims/refunds, reconciles, and repeats.
-
-Before the first devnet run, follow the [quickstart wallet steps](docs/quickstart.md#2-create-and-fund-a-dedicated-devnet-wallet) to create a dedicated keypair, fund its public address, and set its file path in `.env`.
 
 ```bash
 npm run start:live -w @stryke/reference-bot
 ```
 
-`start:live` is the eventual mainnet command. It currently fails closed before
-wallet loading because this pilot is devnet-only and mainnet requires separate
-approval and compatible API/program deployment.
+Live mode uses the mainnet API/RPC values and a separately funded wallet adapter
+to make minimum-size signed mainnet trades when the estimator and every safety
+gate pass. It continuously manages positions, exits or waits for expiry,
+claims/refunds, reconciles, and repeats.
 
-Select `volatility_adjusted_probability` for the recommended generic baseline.
-Select `polymarket_relative_value` on aligned `5m`, `15m`, or `1h` rounds for
-the optional relative-value baseline. It compares executable Polymarket asks
-with executable Stryke buy pricing and uses executable bids as a convergence
-exit signal. It skips native or degraded references and never trades on
-Polymarket; this is not arbitrage.
+Mainnet execution remains protected by every configured safety gate.
+
+Before the first signed run, follow the [quickstart wallet steps](docs/quickstart.md#2-create-and-fund-a-dedicated-trading-wallet) to create a dedicated keypair, fund its public address, and set its file path in `.env`. Devnet compatibility remains available through `npm run start:devnet -w @stryke/reference-bot` with devnet API and RPC values.
+
+Use `STRYKE_STRATEGY=polymarket_early` for the default early strategy. For the
+pre-fee strategy, set `STRYKE_STRATEGY=polymarket_late` and
+`STRYKE_POLY_EXIT_POLICY=hold_to_expiry`. Both support aligned `5m`, `15m`,
+and `1h` rounds; native 1m and degraded-reference rounds are skipped. Early can
+hold to expiry, exit when prices converge, or use the existing risk controls.
+Late always holds to expiry because its entry window is intentionally close to
+the fee schedule and lock.
 Replace only the exported estimator seam in `examples/reference-bot/src/strategy.ts`
 for your own signal. Every run prints
 effective non-secret config and each waiting, blocked, hold, entry, exit, claim,
 or refund reason. No command forces a trade.
 
-Each quote includes `closingProtection`. During `closing` or `locked`, the bot
-opens no position; during `locked`, it holds any
+Each quote includes authoritative `closingStartsAt` and hard-lock timing.
+During `closing` or `locked`, the bot opens no position; during `locked`, it holds any
 existing position until settlement, then claims or refunds once. Locked trades
 are not retried for that market.
 

@@ -14,6 +14,7 @@ const entryEvidence = {
 export const configControlInventory = {
   STRYKE_ASSET: { consumer: "SDK market discovery and Pyth selection", evidence: runtimeEvidence("actual_sdk_tick_consumes_market_side_size_slippage_estimator_and_risk_config") },
   STRYKE_EXPIRY_FAMILY: { consumer: "SDK market discovery", evidence: runtimeEvidence("actual_sdk_tick_consumes_market_side_size_slippage_estimator_and_risk_config") },
+  STRYKE_STRATEGY: { consumer: "baseline, early Polymarket, or late Polymarket strategy dispatcher", evidence: { file: "examples/reference-bot/test/reference-bot-runtime.test.ts", title: "early_strategy_window_exit_policy_and_return_thresholds_reach_final_consumers" } },
   STRYKE_ESTIMATOR: { consumer: "entry and exit probability estimator", evidence: runtimeEvidence("actual_sdk_tick_consumes_market_side_size_slippage_estimator_and_risk_config") },
   STRYKE_TRADE_SIZE_SOL: { consumer: "buy quote amount", evidence: runtimeEvidence("actual_sdk_tick_consumes_market_side_size_slippage_estimator_and_risk_config") },
   STRYKE_MAXIMUM_TRADE_SIZE_SOL: { consumer: "entry size gate and devnet funding preflight", evidence: entryEvidence },
@@ -51,5 +52,12 @@ export const configControlInventory = {
   STRYKE_POLY_MAX_SPREAD_BPS: { consumer: "Polymarket executable book validator", evidence: { file: "examples/reference-bot/test/polymarket-client.test.ts", title: "maximum_spread_reaches_the_executable_book_consumer" } },
   STRYKE_POLY_MAX_PRICE_AGE_MS: { consumer: "Polymarket executable book freshness validator", evidence: { file: "examples/reference-bot/test/polymarket-client.test.ts", title: "maximum_price_age_reaches_the_freshness_consumer" } },
   STRYKE_POLY_TIMEOUT_MS: { consumer: "Polymarket executable book request timeout", evidence: { file: "examples/reference-bot/test/polymarket-client.test.ts", title: "timeout_reaches_the_request_abort_consumer" } },
+  STRYKE_POLY_EARLY_WINDOW_SECONDS: { consumer: "early entry-window deadline", evidence: { file: "examples/reference-bot/test/reference-bot-runtime.test.ts", title: "early_strategy_window_exit_policy_and_return_thresholds_reach_final_consumers" } },
+  STRYKE_POLY_LATE_WINDOW_SECONDS: { consumer: "late entry-window opening boundary", evidence: { file: "examples/reference-bot/test/reference-bot-runtime.test.ts", title: "late_strategy_enters_only_inside_the_pre_fee_window_and_holds_to_expiry" } },
+  STRYKE_POLY_SUBMISSION_BUFFER_SECONDS: { consumer: "late pre-fee submission cutoff", evidence: { file: "examples/reference-bot/test/reference-bot-runtime.test.ts", title: "late_strategy_enters_only_inside_the_pre_fee_window_and_holds_to_expiry" } },
+  STRYKE_POLY_MIN_HOLD_RETURN_BPS: { consumer: "executable entry expected-return gate", evidence: { file: "examples/reference-bot/test/reference-bot-runtime.test.ts", title: "early_strategy_window_exit_policy_and_return_thresholds_reach_final_consumers" } },
+  STRYKE_POLY_MIN_WIN_PROFIT_BPS: { consumer: "executable entry win-profit gate", evidence: { file: "examples/reference-bot/test/reference-bot-runtime.test.ts", title: "early_strategy_window_exit_policy_and_return_thresholds_reach_final_consumers" } },
+  STRYKE_POLY_BOOTSTRAP_EMPTY_MARKET: { consumer: "exact-empty market first-trade bootstrap", evidence: { file: "examples/reference-bot/test/reference-bot-runtime.test.ts", title: "bootstrap_is_configurable_and_never_applies_after_either_real_pool_is_funded" } },
+  STRYKE_POLY_EXIT_POLICY: { consumer: "early position lifecycle policy", evidence: { file: "examples/reference-bot/test/reference-bot-runtime.test.ts", title: "early_strategy_window_exit_policy_and_return_thresholds_reach_final_consumers" } },
   STRYKE_POLYMARKET_CLOB_URL: { consumer: "Polymarket read-only CLOB client endpoint", evidence: configEvidence("wires_polymarket_controls_from_env_and_validates_hysteresis") },
 };

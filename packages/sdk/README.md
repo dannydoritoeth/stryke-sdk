@@ -1,6 +1,6 @@
 # @stryke/sdk
 
-Typed infrastructure for the private Stryke bot-developer pilot.
+Typed infrastructure for Stryke bot developers.
 
 The package is consumed from this repository during the pilot and is not yet
 published to npm. Node.js 22 or newer is required.
@@ -14,14 +14,14 @@ npm ci
 npm run build -w @stryke/sdk
 ```
 
-Connect to the supplied invited-devnet API, select one canonical market, and
+Connect to the mainnet API, select one canonical market, and
 request an executable quote:
 
 ```ts
 import { MarketsClient, QuotesClient, StrykeClient } from "@stryke/sdk";
 
 const client = await StrykeClient.connect({
-  apiBaseUrl: process.env.STRYKE_API_BASE_URL!,
+  apiBaseUrl: process.env.STRYKE_API_BASE_URL ?? "https://api.stryketrade.com",
 });
 const market = await new MarketsClient(client).current("BTC", "five_minute");
 const quote = await new QuotesClient(client).get({
@@ -55,6 +55,17 @@ remain executable at the returned fee. `locked` and `expired` are returned as
 non-retryable `quote_blocked` errors; missing or unknown policy fields fail
 closed as incompatible API data.
 
+Successful quotes are accepted only for the SDK's supported `programId` and
+`mathVersion`. Use `normalizedSideProbabilityBps` for market/strategy
+comparisons and `averageExecutionPriceBps` for the sized trade. Canonical
+`grossAmount`, `feeAmount`, `netAmount`, `sharesIn`, `sharesOut`, and post-trade
+side state remain integer strings so no precision is lost.
+
+To exit a position, pass the exact raw side balance to `sellAvailable`. It
+either returns a quote for that entire balance or throws a typed error; it never
+silently reduces the sell and leaves residual shares. A retryable failure may
+be retried on a later loop tick with a freshly read balance and market.
+
 Use the returned `market` and `quote` unchanged with `TransactionsClient`.
 Simulate before wallet approval, then submit, confirm, and reconcile the same
 stable action ID. Use `PositionsClient` and its API-authoritative terminal
@@ -67,8 +78,9 @@ cp .env.example .env
 npm run start:paper -w @stryke/reference-bot
 ```
 
-Live execution is devnet-only, disabled by default, and requires a separately
-funded wallet adapter plus every explicit live gate. Private keys never belong
+Signed execution requires a separately funded wallet adapter plus every
+explicit live gate. Mainnet is the default; devnet remains compatible when the
+API advertises `cluster: "devnet"`. Private keys never belong
 in SDK configuration or logs.
 
 ## Typed errors

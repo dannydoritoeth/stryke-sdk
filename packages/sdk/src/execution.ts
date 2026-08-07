@@ -47,6 +47,28 @@ const requireLiveBlockhash = async (
   }
 };
 
+const refreshConfirmed = async (
+  adapter: ReviewedExecutionAdapter,
+  input: { clientActionId: string; signature: string }
+): Promise<unknown> => {
+  const maximumAttempts = 10;
+  for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+    try {
+      return await adapter.refresh(input);
+    } catch (error) {
+      if (
+        !(error instanceof StrykeSdkError) ||
+        !error.retryable ||
+        attempt === maximumAttempts
+      ) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+  throw new StrykeSdkError("source_stale", "Confirmed action refresh did not converge", true);
+};
+
 export class ReviewedTransactionExecutor {
   constructor(
     private readonly transactions: TransactionsClient,
@@ -62,13 +84,13 @@ export class ReviewedTransactionExecutor {
       throw new StrykeSdkError("intent_mismatch", "Checkpoint intent does not match API action");
     }
     if (reconciled.state === "confirmed") {
-      await this.checkpoint.clear(pending.clientActionId);
       if (reconciled.signature) {
-        await this.adapter.refresh({
+        await refreshConfirmed(this.adapter, {
           clientActionId: pending.clientActionId,
           signature: reconciled.signature,
         });
       }
+      await this.checkpoint.clear(pending.clientActionId);
       return reconciled;
     }
     if (reconciled.state === "failed" || reconciled.state === "expired") {
@@ -182,7 +204,7 @@ export class ReviewedTransactionExecutor {
       );
     }
     if (confirmation.state === "confirmed") {
-      const refreshed = await this.adapter.refresh({
+      const refreshed = await refreshConfirmed(this.adapter, {
         clientActionId: transaction.clientActionId,
         signature,
       });

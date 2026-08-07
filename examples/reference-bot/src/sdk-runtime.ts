@@ -6,7 +6,6 @@ import {
   TransactionsClient,
   createPilotIntentHash,
   createTerminalIntentHash,
-  positionIfWinPayout,
   type ActionCheckpointStore,
   type LatestBlockhashRpc,
   type PilotMarket,
@@ -22,6 +21,7 @@ import type { ReferenceBotConfig } from "./config.js";
 import { calculateBufferedEntrySize } from "./sizing.js";
 import type { PolymarketClient } from "./polymarket-client.js";
 import type { RoundDecisionStore } from "./round-state.js";
+import { polymarketEntryWindow } from "./strategy/entry-window.js";
 
 export const positionCountsTowardEntryCapacity = (position: PilotPosition): boolean =>
   ["pending_confirmation", "open_position", "sellable", "awaiting_resolution"].includes(position.lifecycle.state);
@@ -38,6 +38,26 @@ const canonicalDecimalIdentity = (value: string): string => {
 const sameTargetIdentity = (left: unknown, right: unknown): boolean =>
   typeof left === "string" && typeof right === "string" &&
   canonicalDecimalIdentity(left) === canonicalDecimalIdentity(right);
+
+export const shouldFetchPolymarketEntryPrices = ({
+  config,
+  market,
+  quote,
+  nowSeconds,
+}: {
+  config: ReferenceBotConfig;
+  market: PilotMarket;
+  quote: Awaited<ReturnType<QuotesClient["get"]>>;
+  nowSeconds: number;
+}): boolean => !config.strategy.startsWith("polymarket_") || polymarketEntryWindow({
+  mode: config.strategy === "polymarket_late" ? "polymarket_late" : "polymarket_early",
+  market,
+  quote,
+  now: nowSeconds,
+  earlyWindowSeconds: config.polymarketEarlyWindowSeconds,
+  lateWindowSeconds: config.polymarketLateWindowSeconds,
+  submissionBufferSeconds: config.polymarketSubmissionBufferSeconds,
+}).eligible;
 
 export const authoritativeActivationFor = (market: PilotMarket, configuredLimit: bigint) => {
   if (!market.activation) {
@@ -121,7 +141,7 @@ export const createSdkRuntimeAdapter = ({
     };
   };
   const polymarketPrices = async (market: PilotMarket) => {
-    if (config.estimator !== "polymarket_relative_value" || market.reference.alignmentStatus !== "aligned") return undefined;
+    if (!config.strategy.startsWith("polymarket_") || market.reference.alignmentStatus !== "aligned") return undefined;
     if (!polymarketClient || !market.reference.upTokenId || !market.reference.downTokenId) {
       throw new StrykeSdkError("source_unavailable", "Aligned Polymarket pricing configuration is unavailable", true);
     }
@@ -227,13 +247,14 @@ export const createSdkRuntimeAdapter = ({
       : [],
     evaluatePosition: async (position, exposure) => {
       const market = await marketFor(position);
-      const ifWinPayout = positionIfWinPayout(position, exposure);
+      const ifWinPayout = exposure.winningPayoutCollateralUnits;
       if (!ifWinPayout) throw new StrykeSdkError("position_state", "API-authored payout inputs are unavailable");
       let externalPrices: Awaited<ReturnType<typeof polymarketPrices>>;
       let polymarketUnavailable = false;
       try { externalPrices = await polymarketPrices(market); }
       catch { polymarketUnavailable = true; }
-      return { market, estimatorInput: estimatorInput(market), sellQuote: await quotes.sellAvailable({ market, side: exposure.side, ownedShares: exposure.shares, maximumSlippageBps: config.maximumPriceImpactBps }), ifWinPayout, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}), ...(polymarketUnavailable ? { polymarketUnavailable: true } : {}) };
+      if (!owner) throw new StrykeSdkError("position_state", "Position owner is unavailable");
+      return { market, estimatorInput: estimatorInput(market), sellQuote: await quotes.sellAvailable({ market, side: exposure.side, ownedShares: exposure.shares, maximumSlippageBps: config.maximumPriceImpactBps, owner }), ifWinPayout, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}), ...(polymarketUnavailable ? { polymarketUnavailable: true } : {}) };
     },
     evaluateEntry: async () => {
       const market = await markets.current(
@@ -265,12 +286,20 @@ export const createSdkRuntimeAdapter = ({
         quotes.buy({ market, side: "yes", amount, maximumSlippageBps: config.maximumPriceImpactBps }),
         quotes.buy({ market, side: "no", amount, maximumSlippageBps: config.maximumPriceImpactBps }),
       ]);
-      const externalPrices = await polymarketPrices(market);
+      const shouldFetchPolymarket = shouldFetchPolymarketEntryPrices({
+        config,
+        market,
+        quote: yesQuote,
+        nowSeconds: Math.floor(now() / 1_000),
+      });
+      const externalPrices = shouldFetchPolymarket ? await polymarketPrices(market) : undefined;
       return { market, estimatorInput: estimatorInput(market), buyQuotes: [yesQuote, noQuote], proposedSizeLamports, aggregateExposureLamports, openPositions, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}) };
     },
     executeBuy: (evaluation, quote) => prepareAndExecute(evaluation.market, quote),
     executeSell: (position, exposure, evaluation, reason) => prepareAndExecute(evaluation.market, evaluation.sellQuote, { positionId: position.positionId, sharesBefore: exposure.shares, strategyReason: reason }),
     hasConvergenceExitedRound: (market) => roundDecisionStore?.hasConvergenceExit({ marketId: market.marketId, expiryTs: market.expiryTs, strikePrice: market.strikePrice }) ?? Promise.resolve(false),
+    hasEnteredRound: (market) => roundDecisionStore?.hasEntry({ marketId: market.marketId, expiryTs: market.expiryTs, strikePrice: market.strikePrice }) ?? Promise.resolve(false),
+    recordEnteredRound: (market) => roundDecisionStore?.recordEntry({ marketId: market.marketId, expiryTs: market.expiryTs, strikePrice: market.strikePrice }) ?? Promise.resolve(),
     executeTerminal: async (position, action) => {
       const live = requireLive();
       const clientActionId = `pilot-${crypto.randomUUID()}`;

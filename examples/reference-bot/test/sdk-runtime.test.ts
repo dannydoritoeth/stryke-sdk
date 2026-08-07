@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { MemoryActionCheckpointStore, PYTH_FEED_IDS, PriceStore } from "@stryke/sdk";
+import { MemoryActionCheckpointStore, PYTH_FEED_IDS, PriceStore, SUPPORTED_PROGRAM_ID, SUPPORTED_QUOTE_MATH_VERSION } from "@stryke/sdk";
 
 import { runMarketTick } from "../src/bot.js";
 import { parseReferenceBotConfig } from "../src/config.js";
-import { authoritativeActivationFor, createSdkRuntimeAdapter, positionCountsTowardEntryCapacity } from "../src/sdk-runtime.js";
+import { authoritativeActivationFor, createSdkRuntimeAdapter, positionCountsTowardEntryCapacity, shouldFetchPolymarketEntryPrices } from "../src/sdk-runtime.js";
+import { quote } from "./fixtures.js";
 
 describe("SDK runtime composition", () => {
   it("trading_requires_authoritative_activation_state_and_matching_policy", () => {
@@ -22,6 +23,22 @@ describe("SDK runtime composition", () => {
     for (const state of ["pending_confirmation", "open_position", "sellable", "awaiting_resolution"] as const) {
       expect(positionCountsTowardEntryCapacity({ lifecycle: { state } } as never)).toBe(true);
     }
+  });
+  it("late_runtime_does_not_fetch_polymarket_books_before_entry_window_and_fetches_inside_it", () => {
+    const config = parseReferenceBotConfig({
+      strategy: "polymarket_late",
+      polymarketEarlyExitPolicy: "hold_to_expiry",
+      polymarketLateWindowSeconds: 20,
+      polymarketSubmissionBufferSeconds: 3,
+    });
+    const closingStartsAt = 1_000;
+    const market = { intervalStartTs: 700 } as never;
+    const timingQuote = quote({
+      closingProtection: { ...quote().closingProtection, closingStartsAt, hardLockTs: 1_005 },
+    });
+    expect(shouldFetchPolymarketEntryPrices({ config, market, quote: timingQuote, nowSeconds: 979 })).toBe(false);
+    expect(shouldFetchPolymarketEntryPrices({ config, market, quote: timingQuote, nowSeconds: 980 })).toBe(true);
+    expect(shouldFetchPolymarketEntryPrices({ config, market, quote: timingQuote, nowSeconds: 997 })).toBe(false);
   });
   it("actual_sdk_tick_consumes_market_side_size_slippage_estimator_and_risk_config", async () => {
     const now = Date.now();
@@ -64,7 +81,7 @@ describe("SDK runtime composition", () => {
           metadata: { contractVersion: "stryke.botMarket.v1", generatedAt: new Date(now).toISOString(), stale: false },
         };
         return {
-          quote: { quoteId: "quote-1", generatedAt: new Date(now).toISOString(), expiresAt: new Date(now + 30_000).toISOString(), marketStateVersion: "state-1", amount: "1234567", fee: "0", feeBreakdown: { feeMode: "waived", normalTradingFeeWaivedCollateralUnits: "0", grossTradeFeeCollateralUnits: "0", normalTradingFeeBps: 0, feeBpsApplied: 0 }, closingProtection: { policyVersion: 1, phase: "open", baseFeeBps: 0, closingFeeBps: 0, effectiveFeeBps: 0, hardLockTs: Math.floor(now / 1_000) + 55, secondsUntilLock: 55 }, expectedShares: "1234567", minimumOutput: "1225060", maximumSlippageBpsApplied: 77, executionPriceBps: 5000, priceImpactBps: 1 },
+          quote: { quoteId: "quote-1", generatedAt: new Date(now).toISOString(), expiresAt: new Date(now + 30_000).toISOString(), marketStateVersion: "state-1", programId: SUPPORTED_PROGRAM_ID, mathVersion: SUPPORTED_QUOTE_MATH_VERSION, amount: "1234567", fee: "0", grossAmount: "1234567", feeAmount: "0", netAmount: "1234567", sharesOut: "1234567", averageExecutionPriceBps: "5000", postTradeSideReserve: "1234567", postTradeSideShares: "1234567", feeBreakdown: { feeMode: "waived", normalTradingFeeWaivedCollateralUnits: "0", grossTradeFeeCollateralUnits: "0", normalTradingFeeBps: 0, feeBpsApplied: 0 }, closingProtection: { policyVersion: 1, phase: "open", baseFeeBps: 0, closingFeeBps: 0, effectiveFeeBps: 0, closingStartsAt: Math.floor(now / 1_000) + 30, hardLockTs: Math.floor(now / 1_000) + 55, secondsUntilLock: 55 }, expectedShares: "1234567", minimumOutput: "1225060", maximumSlippageBpsApplied: 77, executionPriceBps: 5000, priceImpactBps: 1, economics: { economicVersion: 2, grossAmount: "1234567", tradeFee: "0", netPrincipalDelta: "1234567", participationUnitsDelta: "1234567", remainingPrincipal: "1234567", desiredCurveValue: "1234567", backedPremium: "0", surplusDelta: "0", executableCurrentValue: "1234567", projectedWinningPayout: "1234567", currentPnl: "0", profitIfWins: "0" } },
           metadata: { stale: false },
         };
       },
@@ -105,7 +122,9 @@ describe("SDK runtime composition", () => {
         owner: "owner", tokenSymbol: "BTC", tokenMint: "So11111111111111111111111111111111111111112",
         source: "pyth_oracle", collateral: { mint: "11111111111111111111111111111111" },
         expiryFamily: "five_minute", expiryTs: 1_800_000_000, targetValue: "70000.00000000",
-        yesShares: "10", noShares: "0", pilotLifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() },
+        yesShares: "10", noShares: "0", yesCostBasisCollateralUnits: "7", economicVersion: 2,
+        valuation: { costBasisCollateralUnits: "7", currentValueCollateralUnits: "8", currentPnlCollateralUnits: "1", winningPayoutCollateralUnits: "12", profitIfWinsCollateralUnits: "5", marketStateVersion: "state-1", generatedAt: new Date().toISOString(), stale: false },
+        pilotLifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() },
       }] : [],
       metadata: { stale: false, generatedAt: new Date().toISOString() },
     }) };

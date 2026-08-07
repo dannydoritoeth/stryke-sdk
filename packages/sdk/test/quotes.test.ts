@@ -5,6 +5,8 @@ import {
   StrykeSdkError,
   assertQuoteUsable,
   type PilotMarket,
+  SUPPORTED_PROGRAM_ID,
+  SUPPORTED_QUOTE_MATH_VERSION,
 } from "../src/index.js";
 
 const market = {
@@ -67,8 +69,19 @@ const responseBody = (action: "buy" | "sell") => ({
     generatedAt: "2026-07-22T00:00:00.000Z",
     expiresAt: "2026-07-22T00:00:05.000Z",
     marketStateVersion: "market_v1_123",
+    programId: SUPPORTED_PROGRAM_ID,
+    mathVersion: SUPPORTED_QUOTE_MATH_VERSION,
+    quoteSlot: "123456",
     amount: "1000000000",
     fee: "10000000",
+    grossAmount: action === "buy" ? "1000000000" : "471934000",
+    feeAmount: "10000000",
+    netAmount: action === "buy" ? "990000000" : "461934000",
+    ...(action === "sell" ? { sharesIn: "1000000000" } : {}),
+    ...(action === "buy" ? { sharesOut: "1981585268214571657" } : {}),
+    averageExecutionPriceBps: action === "buy" ? "5046" : "4719",
+    postTradeSideReserve: "1000000000",
+    postTradeSideShares: "1981585268214571657",
     feeBreakdown: {
       feeMode: "standard",
       normalTradingFeeWaivedCollateralUnits: "0",
@@ -82,6 +95,7 @@ const responseBody = (action: "buy" | "sell") => ({
       baseFeeBps: 100,
       closingFeeBps: 0,
       effectiveFeeBps: 100,
+      closingStartsAt: 1_799_999_970,
       hardLockTs: 1_799_999_995,
       secondsUntilLock: 295,
     },
@@ -92,6 +106,32 @@ const responseBody = (action: "buy" | "sell") => ({
     maximumSlippageBpsApplied: 100,
     executionPriceBps: 4996,
     priceImpactBps: action === "buy" ? 330 : 0,
+    economics: {
+      economicVersion: 2,
+      grossAmount: action === "buy" ? "1000000000" : "471934000",
+      tradeFee: "10000000",
+      netPrincipalDelta: action === "buy" ? "990000000" : "-500000000",
+      participationUnitsDelta:
+        action === "buy" ? "1981585268214571657" : "-1000000000",
+      remainingPrincipal: action === "buy" ? "990000000" : "0",
+      desiredCurveValue: action === "buy" ? "990000000" : "471934000",
+      backedPremium: "0",
+      surplusDelta: "0",
+      executableCurrentValue: action === "buy" ? "990000000" : "461934000",
+      projectedWinningPayout: action === "buy" ? "1200000000" : "500000000",
+      currentPnl: action === "buy" ? "0" : "-38066000",
+      profitIfWins: action === "buy" ? "210000000" : "0",
+    },
+    quotedTradeValuation: {
+      costBasisCollateralUnits: action === "buy" ? "990000000" : "500000000",
+      currentValueCollateralUnits: action === "buy" ? "990000000" : "461934000",
+      currentPnlCollateralUnits: action === "buy" ? "0" : "-38066000",
+      winningPayoutCollateralUnits: action === "buy" ? "1200000000" : "500000000",
+      profitIfWinsCollateralUnits: action === "buy" ? "210000000" : "0",
+      marketStateVersion: "market_v1_123",
+      generatedAt: "2026-07-22T00:00:00.000Z",
+      stale: false,
+    },
     stale: false,
   },
   metadata: { stale: false },
@@ -109,6 +149,7 @@ describe("executable quote client", () => {
       side: "yes",
       amount: "1000000000",
       maximumSlippageBps: 100,
+      ...(action === "sell" ? { owner: "owner-1" } : {}),
     });
   };
 
@@ -119,8 +160,12 @@ describe("executable quote client", () => {
       expectedShares: "1981585268214571657",
       minimumOutput: "1961769415532425940",
       executableProbabilityBps: 4996,
+      normalizedSideProbabilityBps: 4996,
+      averageExecutionPriceBps: "5046",
+      mathVersion: SUPPORTED_QUOTE_MATH_VERSION,
       priceImpactBps: 330,
       feeBreakdown: { feeMode: "standard", feeBpsApplied: 100 },
+      economics: { economicVersion: 2, netPrincipalDelta: "990000000" },
     });
   });
 
@@ -130,39 +175,145 @@ describe("executable quote client", () => {
       expectedNetProceeds: "461934000",
       minimumOutput: "457314660",
       executableProbabilityBps: 4996,
+      normalizedSideProbabilityBps: 4996,
+      averageExecutionPriceBps: "4719",
       priceImpactBps: 0,
       fee: "10000000",
       feeBreakdown: { feeMode: "standard", grossTradeFeeCollateralUnits: "10000000" },
+      economics: { economicVersion: 2, executableCurrentValue: "461934000" },
     });
   });
 
-  it("sell_available_reduces_only_amount_unavailable_quotes", async () => {
+  it("sdk_decodes_dual_entitlement_quote_exactly", async () => {
+    await expect(getQuote("buy")).resolves.toMatchObject({
+      economics: {
+        economicVersion: 2,
+        netPrincipalDelta: "990000000",
+        participationUnitsDelta: "1981585268214571657",
+        projectedWinningPayout: "1200000000",
+        profitIfWins: "210000000",
+      },
+      quotedTradeValuation: {
+        winningPayoutCollateralUnits: "1200000000",
+      },
+    });
+  });
+
+  it("sdk_accepts_authoritative_economics_with_unavailable_optional_current_value", async () => {
+    const body = responseBody("buy");
+    const valuation = body.quote.quotedTradeValuation;
+    const client = {
+      requestJson: async () => ({
+        ...body,
+        quote: {
+          ...body.quote,
+          quotedTradeValuation: {
+            costBasisCollateralUnits: valuation.costBasisCollateralUnits,
+            winningPayoutCollateralUnits: valuation.winningPayoutCollateralUnits,
+            profitIfWinsCollateralUnits: valuation.profitIfWinsCollateralUnits,
+            marketStateVersion: valuation.marketStateVersion,
+            generatedAt: valuation.generatedAt,
+            stale: false,
+          },
+        },
+      }),
+    };
+
+    const quote = await new QuotesClient(
+      client as never,
+      () => Date.parse("2026-07-22T00:00:01Z")
+    ).buy({
+        market,
+        side: "yes",
+        amount: "1000000000",
+        maximumSlippageBps: 100,
+      });
+    expect(quote).toMatchObject({
+      economics: { currentPnl: "0" },
+    });
+    expect(quote.quotedTradeValuation).not.toHaveProperty("currentPnlCollateralUnits");
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["V1", { ...responseBody("buy").quote.economics, economicVersion: 1 }],
+    ["mismatch", { ...responseBody("buy").quote.economics, projectedWinningPayout: "1" }],
+  ])("fails closed for %s principal-backed economics", async (_name, economics) => {
+    const body = responseBody("buy");
+    const client = {
+      requestJson: async () => ({
+        ...body,
+        quote: { ...body.quote, economics },
+      }),
+    };
+    await expect(
+      new QuotesClient(client as never, () => Date.parse("2026-07-22T00:00:01Z")).buy({
+        market,
+        side: "yes",
+        amount: "1000000000",
+        maximumSlippageBps: 100,
+      })
+    ).rejects.toMatchObject({ code: expect.stringMatching(/compatibility|api_response/) });
+  });
+
+  it.each([
+    ["missing program", { programId: undefined }, "validation"],
+    ["wrong program", { programId: "11111111111111111111111111111111" }, "compatibility"],
+    ["missing math", { mathVersion: undefined }, "validation"],
+    ["wrong math", { mathVersion: "legacy_curve" }, "compatibility"],
+  ] as const)("fails closed for %s quote identity", async (_name, identity, code) => {
+    const body = responseBody("sell");
+    const client = { requestJson: async () => ({ ...body, quote: { ...body.quote, ...identity } }) };
+    await expect(new QuotesClient(client as never, () => Date.parse("2026-07-22T00:00:01Z")).sell({
+      market, side: "yes", amount: "1000000000", maximumSlippageBps: 100, owner: "owner-1",
+    })).rejects.toMatchObject({ code });
+  });
+
+  it("sell_available_never_reduces_the_exact_owned_balance", async () => {
     const requested: string[] = [];
     const client = {
       requestJson: async (_path: string, init: { body: string }) => {
         const amount = JSON.parse(init.body).amount as string;
         requested.push(amount);
-        if (amount === "1000000000") {
-          return {
-            quote: {
-              amount,
-              stale: true,
-              unavailableReason: "Quote is unavailable for this amount.",
-              closingProtection: responseBody("sell").quote.closingProtection,
-            },
-            metadata: { stale: true },
-          };
-        }
         return {
-          ...responseBody("sell"),
-          quote: { ...responseBody("sell").quote, amount },
+          quote: {
+            amount,
+            stale: true,
+            unavailableReason: "Quote is unavailable for this amount.",
+            closingProtection: responseBody("sell").quote.closingProtection,
+          },
+          metadata: { stale: true },
         };
       },
     };
     const quotes = new QuotesClient(client as never, () => Date.parse("2026-07-22T00:00:01Z"));
-    await expect(quotes.sellAvailable({ market, side: "yes", ownedShares: "1000000000", maximumSlippageBps: 100 }))
-      .resolves.toMatchObject({ amount: "990000000", action: "sell" });
-    expect(requested).toEqual(["1000000000", "990000000"]);
+    await expect(quotes.sellAvailable({ market, side: "yes", ownedShares: "1000000000", maximumSlippageBps: 100, owner: "owner-1" }))
+      .rejects.toMatchObject({ code: "quote_blocked", message: "Quote is unavailable for this amount." });
+    expect(requested).toEqual(["1000000000"]);
+  });
+
+  it("sell_available_retries_the_same_exact_balance_on_a_later_call", async () => {
+    const requested: string[] = [];
+    let unavailable = true;
+    const client = {
+      requestJson: async (_path: string, init: { body: string }) => {
+        const amount = JSON.parse(init.body).amount as string;
+        requested.push(amount);
+        if (unavailable) {
+          unavailable = false;
+          return {
+            quote: { amount, stale: true, unavailableReason: "temporary", closingProtection: responseBody("sell").quote.closingProtection },
+            metadata: { stale: true },
+          };
+        }
+        return responseBody("sell");
+      },
+    };
+    const quotes = new QuotesClient(client as never, () => Date.parse("2026-07-22T00:00:01Z"));
+    const input = { market, side: "yes" as const, ownedShares: "1000000000", maximumSlippageBps: 100, owner: "owner-1" };
+    await expect(quotes.sellAvailable(input)).rejects.toMatchObject({ code: "quote_blocked" });
+    await expect(quotes.sellAvailable(input)).resolves.toMatchObject({ amount: "1000000000" });
+    expect(requested).toEqual(["1000000000", "1000000000"]);
   });
 
   it("sell_available_does_not_mask_non_amount_failures", async () => {
@@ -178,8 +329,26 @@ describe("executable quote client", () => {
       }),
     };
     const quotes = new QuotesClient(client as never);
-    await expect(quotes.sellAvailable({ market, side: "yes", ownedShares: "1000000000", maximumSlippageBps: 100 }))
+    await expect(quotes.sellAvailable({ market, side: "yes", ownedShares: "1000000000", maximumSlippageBps: 100, owner: "owner-1" }))
       .rejects.toMatchObject({ code: "quote_blocked", message: "Trading is locked before settlement." });
+  });
+
+  it("sdk_requires_and_forwards_owner_for_principal_backed_sell_quotes", async () => {
+    let requestedBody: Record<string, unknown> | undefined;
+    const quotes = new QuotesClient({
+      requestJson: async (_path: string, init: { body: string }) => {
+        requestedBody = JSON.parse(init.body) as Record<string, unknown>;
+        return responseBody("sell");
+      },
+    } as never, () => Date.parse("2026-07-22T00:00:01Z"));
+    await expect(quotes.sell({
+      market, side: "yes", amount: "1000000000", maximumSlippageBps: 100,
+    })).rejects.toMatchObject({ code: "validation" });
+    await quotes.sell({
+      market, side: "yes", amount: "1000000000", maximumSlippageBps: 100,
+      owner: "owner-1",
+    });
+    expect(requestedBody).toMatchObject({ owner: "owner-1", action: "sell" });
   });
 
   it("expired_quote_is_blocked", async () => {
@@ -216,6 +385,8 @@ describe("executable quote client", () => {
         quote: {
           ...responseBody("buy").quote,
           fee: "70000000",
+          feeAmount: "70000000",
+          netAmount: "930000000",
           feeBreakdown: {
             ...responseBody("buy").quote.feeBreakdown,
             feeMode: "closing",
@@ -228,6 +399,11 @@ describe("executable quote client", () => {
             closingFeeBps: 700,
             effectiveFeeBps: 700,
             secondsUntilLock: 8,
+          },
+          economics: {
+            ...responseBody("buy").quote.economics,
+            tradeFee: "70000000",
+            netPrincipalDelta: "930000000",
           },
         },
       }),
@@ -312,8 +488,17 @@ describe("executable quote client", () => {
         quote: {
           ...responseBody("buy").quote,
           amount,
+          grossAmount: amount,
+          netAmount: "18446744073699551615",
           expectedShares,
+          sharesOut: expectedShares,
           minimumOutput: "182622766329724560988",
+          economics: {
+            ...responseBody("buy").quote.economics,
+            grossAmount: amount,
+            netPrincipalDelta: "18446744073699551615",
+            participationUnitsDelta: expectedShares,
+          },
         },
       }),
     };

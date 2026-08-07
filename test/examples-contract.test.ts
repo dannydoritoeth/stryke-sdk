@@ -32,18 +32,10 @@ describe("documented example contract", () => {
     }
   });
 
-  it("documented_live_command_refuses_without_mainnet_approval", () => {
-    const env = { ...process.env };
-    delete env.STRYKE_READ_ONLY_MODE;
-    delete env.STRYKE_LIVE_TRADING_ENABLED;
-    delete env.STRYKE_KILL_SWITCH_ENABLED;
-    delete env.STRYKE_WALLET_ADAPTER_PATH;
-    const result = spawnSync("npm", ["run", "start:live", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8", env });
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('"event":"reference_bot_error"');
-    expect(result.stderr).toContain("Mainnet live trading is not approved");
-    expect(result.stderr).not.toMatch(/seed phrase|private key|secret key/i);
-  }, 30_000);
+  it("documented_live_command_selects_the_mainnet_profile", () => {
+    const manifest = JSON.parse(readFileSync(join(workspace, "examples/reference-bot/package.json"), "utf8")) as { scripts: Record<string, string> };
+    expect(manifest.scripts["start:live"]).toContain("--profile=live");
+  });
 
   it("three_mode_commands_load_the_root_env_file", () => {
     const manifest = JSON.parse(readFileSync(join(workspace, "examples/reference-bot/package.json"), "utf8")) as { scripts: Record<string, string> };
@@ -53,23 +45,37 @@ describe("documented example contract", () => {
     }
   });
 
-  it("documented_devnet_preflight_can_stop_before_the_loop", () => {
+  it("documented_mainnet_preflight_can_stop_before_the_loop", () => {
     const cli = readFileSync(join(workspace, "examples/reference-bot/src/cli.ts"), "utf8");
     const troubleshooting = readFileSync(join(workspace, "docs/troubleshooting.md"), "utf8");
     expect(cli).toContain('process.argv.includes("--preflight-only")');
     expect(cli.indexOf('process.argv.includes("--preflight-only")')).toBeLessThan(cli.indexOf("new FileActionCheckpointStore"));
-    expect(troubleshooting).toContain("npm run start:devnet -w @stryke/reference-bot -- --preflight-only");
+    expect(troubleshooting).toContain("npm run start:live -w @stryke/reference-bot -- --preflight-only");
   });
 
-  it("real_cli_composes_polymarket_entry_hold_exit_restart_block_and_next_round", () => {
+  it("reference_bot_completes_two_early_market_cycles", () => {
     const result = spawnSync("npm", ["run", "test:polymarket-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
     expect(result.status, result.stderr).toBe(0);
     for (const expected of [
-      "buy:polymarket_relative_edge",
+      "buy:polymarket_executable_edge",
       "hold:position_not_economically_complete",
       "sell:polymarket_convergence",
       "skip:same_round_reentry_blocked",
     ]) expect(result.stdout).toContain(expected);
-    expect(result.stdout.match(/buy:polymarket_relative_edge/g)).toHaveLength(2);
+    expect(result.stdout.match(/buy:polymarket_executable_edge/g)).toHaveLength(2);
+  }, 30_000);
+
+  it("reference_bot_completes_two_late_hold_and_settlement_cycles", () => {
+    const result = spawnSync("npm", ["run", "test:polymarket-late-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
+    expect(result.status, result.stderr).toBe(0);
+    for (const expected of ["buy:polymarket_executable_edge", "hold:position_not_economically_complete", "claim:terminal_confirmed", "skip:same_round_reentry_blocked"]) expect(result.stdout).toContain(expected);
+    expect(result.stdout.match(/buy:polymarket_executable_edge/g)).toHaveLength(2);
+  }, 30_000);
+
+  it("reference_bot_bootstraps_an_exact_empty_market_through_two_cli_iterations", () => {
+    const result = spawnSync("npm", ["run", "test:polymarket-bootstrap-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain("buy:polymarket_empty_market_bootstrap");
+    expect(result.stdout).toContain("skip:same_round_reentry_blocked");
   }, 30_000);
 });

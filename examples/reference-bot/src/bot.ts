@@ -15,7 +15,9 @@ import { decideBestEntry, type BestEntryDecision } from "./entry.js";
 import { decidePositionExit, type PositionDecision } from "./manage-position.js";
 import { estimateFairProbability, volatilityAdjustedProbabilities, type FairProbabilityInput } from "./strategy.js";
 import type { PolymarketExecutablePrice } from "./polymarket-client.js";
-import { convergenceReached, decidePolymarketRelativeEntry } from "./polymarket-relative-value.js";
+import { selectEmptyMarketBootstrapEntry, selectExecutablePolymarketEntry } from "./strategy/polymarket-entry.js";
+import { polymarketEntryWindow, type PolymarketTimingMode } from "./strategy/entry-window.js";
+import { decidePolymarketEarlyExit } from "./strategy/polymarket-exit.js";
 
 export type RuntimeAction = "buy" | "sell" | "claim" | "refund";
 
@@ -70,11 +72,16 @@ export interface ReferenceBotRuntimeAdapter {
   executeSell(position: PilotPosition, exposure: PilotPositionSideExposure, evaluation: PositionEvaluation, reason: string): Promise<RuntimeExecution>;
   executeTerminal(position: PilotPosition, action: PositionTerminalAction): Promise<RuntimeExecution>;
   hasConvergenceExitedRound?(market: PilotMarket): Promise<boolean>;
+  hasEnteredRound?(market: PilotMarket): Promise<boolean>;
+  recordEnteredRound?(market: PilotMarket): Promise<void>;
 }
 
 const terminalStates = new Set(["claimable", "refundable"]);
 const completeStates = new Set(["lost", "claimed", "refunded", "sold", "expired_unclaimed"]);
 const openStates = new Set(["open_position", "sellable"]);
+const isPolymarketStrategy = (config: ReferenceBotConfig) => config.strategy.startsWith("polymarket_");
+const polymarketMode = (config: ReferenceBotConfig): PolymarketTimingMode =>
+  config.strategy === "polymarket_late" ? "polymarket_late" : "polymarket_early";
 
 const isTradingLockedError = (error: unknown): boolean =>
   error instanceof StrykeSdkError &&
@@ -114,10 +121,12 @@ export const runMarketTick = async ({
   tick,
   config,
   adapter,
+  nowSeconds = Math.floor(Date.now() / 1_000),
 }: {
   tick: number;
   config: ReferenceBotConfig;
   adapter: ReferenceBotRuntimeAdapter;
+  nowSeconds?: number;
 }): Promise<RuntimeEvent> => {
   const checkpoint = await adapter.loadCheckpoint();
   if (checkpoint) {
@@ -178,27 +187,39 @@ export const runMarketTick = async ({
       positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "position_data_stale" });
       continue;
     }
-    let model: ReturnType<typeof modelEvaluation>;
-    try { model = config.estimator === "polymarket_relative_value"
-      ? { fairProbability: 0.5, diagnostics: { estimator: config.estimator, yesModelProbability: 0.5, noModelProbability: 0.5, secondsRemaining: evaluation.estimatorInput.secondsRemaining } }
-      : modelEvaluation(evaluation.estimatorInput, config); }
-    catch { positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "model_inputs_unavailable" }); continue; }
-    const fairProbability = model.fairProbability;
-    const decision: PositionDecision = decidePositionExit({
-      side: exposure.side, fairProbability, sellQuote: evaluation.sellQuote,
-      shares: evaluation.sellQuote.amount,
-      ...(exposure.costBasisCollateralUnits === undefined ? {} : { costBasisCollateralUnits: exposure.costBasisCollateralUnits }),
-      ifWinPayout: evaluation.ifWinPayout, stopLossBps: config.stopLossBps,
-      takeProfitBps: config.takeProfitBps,
-    });
-    if (config.estimator === "polymarket_relative_value" && decision.action === "hold" && evaluation.polymarketPrices) {
-      const convergence = convergenceReached({ side: exposure.side, strykeSellProbabilityBps: evaluation.sellQuote.executableProbabilityBps, prices: evaluation.polymarketPrices, exitEdgeBps: config.polymarketExitEdgeBps });
-      if (convergence.reached) Object.assign(decision, { action: "sell", reason: "polymarket_convergence" });
-      Object.assign(model.diagnostics, { remainingEdgeBps: convergence.remainingEdgeBps });
-    } else if (config.estimator === "polymarket_relative_value" && decision.action === "hold" && evaluation.polymarketUnavailable) {
-      Object.assign(model.diagnostics, { convergenceReferenceAvailable: false });
+    if (isPolymarketStrategy(config) && polymarketMode(config) === "polymarket_late") {
+      positionDecisions.push({ positionId: position.positionId, action: "hold", reason: "strategy_holds_to_expiry" });
+      continue;
     }
-    const details = { ...model.diagnostics, fairProbability, ...(decision.pnlBps === undefined ? {} : { pnlBps: decision.pnlBps.toString() }), ...(decision.sellNowValue === undefined ? {} : { sellNowValue: decision.sellNowValue.toString() }), ...(decision.holdValue === undefined ? {} : { holdValue: decision.holdValue.toString() }) };
+    if (isPolymarketStrategy(config)) {
+      const result = decidePolymarketEarlyExit({
+        policy: config.polymarketEarlyExitPolicy,
+        side: exposure.side,
+        sellQuote: evaluation.sellQuote,
+        shares: evaluation.sellQuote.amount,
+        ...(exposure.costBasisCollateralUnits === undefined ? {} : { costBasisCollateralUnits: exposure.costBasisCollateralUnits }),
+        ifWinPayout: evaluation.ifWinPayout,
+        stopLossBps: config.stopLossBps,
+        takeProfitBps: config.takeProfitBps,
+        ...(evaluation.polymarketPrices ? { prices: evaluation.polymarketPrices } : {}),
+        exitEdgeBps: config.polymarketExitEdgeBps,
+      });
+      const details = { strategy: config.strategy, secondsRemaining: evaluation.estimatorInput.secondsRemaining, ...result.diagnostics, ...(result.decision.pnlBps === undefined ? {} : { pnlBps: result.decision.pnlBps.toString() }), ...(result.decision.sellNowValue === undefined ? {} : { sellNowValue: result.decision.sellNowValue.toString() }) };
+      positionDecisions.push({ positionId: position.positionId, action: result.decision.action, reason: result.decision.reason, details });
+      if (result.decision.action === "sell") sellCandidates.push({ position, exposure, evaluation, decision: result.decision, details });
+      continue;
+    }
+    let model: { fairProbability: number; diagnostics: Record<string, string | number | boolean> };
+    try { model = modelEvaluation(evaluation.estimatorInput, config); }
+    catch { positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "model_inputs_unavailable" }); continue; }
+    const decision: PositionDecision = decidePositionExit({
+          side: exposure.side, fairProbability: model.fairProbability, sellQuote: evaluation.sellQuote,
+          shares: evaluation.sellQuote.amount,
+          ...(exposure.costBasisCollateralUnits === undefined ? {} : { costBasisCollateralUnits: exposure.costBasisCollateralUnits }),
+          ifWinPayout: evaluation.ifWinPayout, stopLossBps: config.stopLossBps,
+          takeProfitBps: config.takeProfitBps,
+        });
+    const details = { ...model.diagnostics, fairProbability: model.fairProbability, ...(decision.pnlBps === undefined ? {} : { pnlBps: decision.pnlBps.toString() }), ...(decision.sellNowValue === undefined ? {} : { sellNowValue: decision.sellNowValue.toString() }), ...(decision.holdValue === undefined ? {} : { holdValue: decision.holdValue.toString() }) };
     positionDecisions.push({ positionId: position.positionId, action: decision.action, reason: decision.reason, details });
     if (decision.action === "sell") sellCandidates.push({ position, exposure, evaluation, decision, details });
   }
@@ -245,27 +266,92 @@ export const runMarketTick = async ({
     if (isQuoteRevalidationError(error)) return event(tick, "entry", "blocked", "market_changed_during_quote");
     throw error;
   }
-  if (config.estimator === "polymarket_relative_value") {
-    if (evaluation.market.reference.alignmentStatus !== "aligned" || !evaluation.polymarketPrices) {
+  if (isPolymarketStrategy(config)) {
+    if (evaluation.market.reference.alignmentStatus !== "aligned") {
       return event(tick, "entry", "skip", "reference_not_aligned", { marketId: evaluation.market.marketId });
     }
     if (await adapter.hasConvergenceExitedRound?.(evaluation.market)) {
       return event(tick, "entry", "skip", "same_round_reentry_blocked", { marketId: evaluation.market.marketId });
     }
-    const relative = decidePolymarketRelativeEntry({ quotes: evaluation.buyQuotes, prices: evaluation.polymarketPrices, entryEdgeBps: config.polymarketEntryEdgeBps });
-    const details = {
-      estimator: config.estimator,
-      selectedSide: relative.side,
-      edgeBps: relative.edgeBps,
+    if (await adapter.hasEnteredRound?.(evaluation.market)) {
+      return event(tick, "entry", "skip", "same_round_reentry_blocked", { marketId: evaluation.market.marketId });
+    }
+    const mode = polymarketMode(config);
+    const window = polymarketEntryWindow({
+      mode, market: evaluation.market, quote: evaluation.buyQuotes[0], now: nowSeconds,
+      earlyWindowSeconds: config.polymarketEarlyWindowSeconds,
+      lateWindowSeconds: config.polymarketLateWindowSeconds,
+      submissionBufferSeconds: config.polymarketSubmissionBufferSeconds,
+    });
+    if (!window.eligible) return event(tick, "entry", "skip", window.reason, { marketId: evaluation.market.marketId, details: { mode, opensAt: window.opensAt, closesAt: window.closesAt, now: nowSeconds } });
+    if (!evaluation.polymarketPrices) {
+      return event(tick, "entry", "skip", "reference_not_aligned", { marketId: evaluation.market.marketId });
+    }
+    const exactEmptyMarket = evaluation.market.activation?.yes.realPoolCollateralUnits === "0"
+      && evaluation.market.activation?.no.realPoolCollateralUnits === "0";
+    const bootstrap = config.polymarketBootstrapEmptyMarket && exactEmptyMarket
+      ? selectEmptyMarketBootstrapEntry({
+          quotes: evaluation.buyQuotes,
+          prices: evaluation.polymarketPrices,
+          entryEdgeBps: config.polymarketEntryEdgeBps,
+        })
+      : undefined;
+    if (bootstrap) {
+      const details = {
+        estimator: config.estimator, mode,
+        selectedSide: bootstrap.side,
+        entryEdgeBps: config.polymarketEntryEdgeBps,
+        polymarketAskBps: bootstrap.referenceProbabilityBps,
+        bootstrapReferenceEdgeBps: bootstrap.referenceEdgeBps,
+        yesRealPool: "0", noRealPool: "0",
+        entryWindowOpensAt: window.opensAt, entryWindowClosesAt: window.closesAt,
+      };
+      if (!bootstrap.passes) return event(tick, "entry", "skip", bootstrap.reason, { marketId: evaluation.market.marketId, details });
+      const nativeSafety = decideBestEntry({ fairProbability: bootstrap.side === "yes" ? 1 : 0, quotes: evaluation.buyQuotes, config: { ...config, minimumEntryEdgeBps: 0 }, secondsRemaining: evaluation.estimatorInput.secondsRemaining, tradeSizeLamports: evaluation.proposedSizeLamports, aggregateExposureLamports: evaluation.aggregateExposureLamports, openPositions: evaluation.openPositions, dataFresh: evaluation.dataFresh });
+      const failedSafety = Object.entries(nativeSafety.safetyChecks).find(([key, passed]) => !passed && !["edge", "time", "feeFreeOpen"].includes(key));
+      if (failedSafety) return event(tick, "entry", "blocked", failedSafety[0], { marketId: evaluation.market.marketId, details });
+      if (config.readOnlyMode || !config.liveTradingEnabled) return event(tick, "entry", "dry_run", config.readOnlyMode ? "read_only" : "live_off", { marketId: evaluation.market.marketId, details });
+      let result: RuntimeExecution;
+      try { result = await adapter.executeBuy(evaluation, bootstrap.quote); }
+      catch (error) {
+        if (isTradingLockedError(error)) return event(tick, "entry", "blocked", "trading_locked_until_settlement", { marketId: evaluation.market.marketId, details });
+        if (isQuoteRevalidationError(error)) return event(tick, "entry", "blocked", "quote_changed_before_submission", { marketId: evaluation.market.marketId, details });
+        throw error;
+      }
+      await adapter.recordEnteredRound?.(evaluation.market);
+      return event(tick, "entry", "buy", bootstrap.reason, { marketId: evaluation.market.marketId, details, ...result });
+    }
+    const relative = selectExecutablePolymarketEntry({
+      quotes: evaluation.buyQuotes, prices: evaluation.polymarketPrices,
       entryEdgeBps: config.polymarketEntryEdgeBps,
-      strykeProbabilityBps: relative.quote.executableProbabilityBps,
-      polymarketAskBps: evaluation.polymarketPrices[relative.side].askBps,
+      minimumHoldReturnBps: config.polymarketMinimumHoldReturnBps,
+      minimumWinProfitBps: config.polymarketMinimumWinProfitBps,
+    });
+    const details = {
+      estimator: config.estimator, mode,
+      selectedSide: relative.side,
+      edgeBps: relative.relativeEdgeBps,
+      entryEdgeBps: config.polymarketEntryEdgeBps,
+      costProbabilityBps: relative.costProbabilityBps,
+      polymarketAskBps: relative.referenceProbabilityBps,
+      projectedPayout: relative.projectedPayout.toString(), totalCost: relative.totalCost.toString(),
+      profitIfWins: relative.profitIfWins.toString(), winProfitBps: relative.winProfitBps,
+      holdExpectedValue: relative.holdExpectedValue.toString(), holdReturnBps: relative.holdReturnBps,
+      entryWindowOpensAt: window.opensAt, entryWindowClosesAt: window.closesAt,
     };
-    if (relative.action !== "buy") return event(tick, "entry", "skip", relative.reason, { marketId: evaluation.market.marketId, details });
+    if (!relative.passes) return event(tick, "entry", "skip", relative.reason, { marketId: evaluation.market.marketId, details });
     const nativeSafety = decideBestEntry({ fairProbability: relative.side === "yes" ? 1 : 0, quotes: evaluation.buyQuotes, config: { ...config, minimumEntryEdgeBps: 0 }, secondsRemaining: evaluation.estimatorInput.secondsRemaining, tradeSizeLamports: evaluation.proposedSizeLamports, aggregateExposureLamports: evaluation.aggregateExposureLamports, openPositions: evaluation.openPositions, dataFresh: evaluation.dataFresh });
-    if (!Object.entries(nativeSafety.safetyChecks).filter(([key]) => key !== "edge").every(([, passed]) => passed)) return event(tick, "entry", "blocked", nativeSafety.reason, { marketId: evaluation.market.marketId, details });
+    const failedSafety = Object.entries(nativeSafety.safetyChecks).find(([key, passed]) => !passed && !["edge", "time", "feeFreeOpen"].includes(key));
+    if (failedSafety) return event(tick, "entry", "blocked", failedSafety[0], { marketId: evaluation.market.marketId, details });
     if (config.readOnlyMode || !config.liveTradingEnabled) return event(tick, "entry", "dry_run", config.readOnlyMode ? "read_only" : "live_off", { marketId: evaluation.market.marketId, details });
-    const result = await adapter.executeBuy(evaluation, relative.quote);
+    let result: RuntimeExecution;
+    try { result = await adapter.executeBuy(evaluation, relative.quote); }
+    catch (error) {
+      if (isTradingLockedError(error)) return event(tick, "entry", "blocked", "trading_locked_until_settlement", { marketId: evaluation.market.marketId, details });
+      if (isQuoteRevalidationError(error)) return event(tick, "entry", "blocked", "quote_changed_before_submission", { marketId: evaluation.market.marketId, details });
+      throw error;
+    }
+    await adapter.recordEnteredRound?.(evaluation.market);
     return event(tick, "entry", "buy", relative.reason, { marketId: evaluation.market.marketId, details, ...result });
   }
   let model: ReturnType<typeof modelEvaluation>;
@@ -285,9 +371,9 @@ export const runMarketTick = async ({
   const details = {
     ...model.diagnostics, fairProbability: decision.fairProbability, sideFairProbability: decision.sideFairProbability,
     quoteProbability: decision.quoteProbability, edgeBps: decision.edgeBps,
-    yesExecutableProbabilityBps: yesQuote.executableProbabilityBps, noExecutableProbabilityBps: noQuote.executableProbabilityBps,
-    yesEdgeBps: Math.round((fairProbability - yesQuote.executableProbabilityBps / 10_000) * 10_000),
-    noEdgeBps: Math.round(((1 - fairProbability) - noQuote.executableProbabilityBps / 10_000) * 10_000),
+    yesNormalizedProbabilityBps: yesQuote.normalizedSideProbabilityBps, noNormalizedProbabilityBps: noQuote.normalizedSideProbabilityBps,
+    yesEdgeBps: Math.round((fairProbability - yesQuote.normalizedSideProbabilityBps / 10_000) * 10_000),
+    noEdgeBps: Math.round(((1 - fairProbability) - noQuote.normalizedSideProbabilityBps / 10_000) * 10_000),
     effectiveFeeBps: decision.quote.closingProtection.effectiveFeeBps, feeMode: decision.quote.feeBreakdown.feeMode,
     closingPhase: decision.quote.closingProtection.phase, selectedSide: decision.quote.side,
     proposedSize: evaluation.proposedSizeLamports.toString(),
@@ -350,4 +436,6 @@ export * from "./round-state.js";
 export * from "./sdk-runtime.js";
 export * from "./sizing.js";
 export * from "./strategy.js";
+export * from "./strategy/entry-window.js";
+export * from "./strategy/polymarket-entry.js";
 export * from "./wallet.js";

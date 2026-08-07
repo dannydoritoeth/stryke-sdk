@@ -14,6 +14,7 @@
     "test:examples": "vitest run examples",
     "test:localnet": "vitest run test/localnet/pilot-lifecycle.test.ts",
     "devnet:bot-matrix": "npm run build && node --env-file=.env scripts/devnet-bot-matrix.mjs",
+    "devnet:seed-opposing": "npm run build && node --env-file=.env scripts/devnet-seed-opposing-pool.mjs",
     "check:public-boundary": "vitest run test/repository-boundary.test.ts",
     "check:config-controls": "node scripts/check-config-controls.mjs",
     "check:strategy-claim": "node scripts/check-strategy-readme-claim.mjs",

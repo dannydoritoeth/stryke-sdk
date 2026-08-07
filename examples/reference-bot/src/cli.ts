@@ -8,6 +8,7 @@ import {
   SUPPORTED_API_VERSION,
   SUPPORTED_PROGRAM_ID,
   SUPPORTED_PROGRAM_VERSION,
+  SUPPORTED_QUOTE_MATH_VERSION,
   SolanaReviewedExecutionAdapter,
   StrykeClient,
   StrykeSdkError,
@@ -15,6 +16,7 @@ import {
   subscribeHermes,
   seedHermesHistory,
   type ExecutableQuote,
+  type PilotPosition,
 } from "@stryke/sdk";
 import { createSolanaRpc, isTransactionSigner, type TransactionSigner } from "@solana/kit";
 import { resolve } from "node:path";
@@ -22,7 +24,7 @@ import { pathToFileURL } from "node:url";
 
 import { runReferenceBot } from "./bot.js";
 import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, resolveReferenceBotRuntimeBindings, type ReferenceBotProfile } from "./config.js";
-import { emitPreflight, requireRootEnvFile, requiredDevnetBalance, runPreflightCheck } from "./preflight.js";
+import { emitPreflight, requireRootEnvFile, requiredExecutionBalance, runPreflightCheck } from "./preflight.js";
 import { createSdkRuntimeAdapter } from "./sdk-runtime.js";
 import { loadWalletForLiveTrading } from "./wallet.js";
 import { PolymarketClient } from "./polymarket-client.js";
@@ -34,10 +36,14 @@ const compatibility = { sdkVersion: SDK_VERSION, apiVersion: SUPPORTED_API_VERSI
 const sampleQuote: ExecutableQuote = {
   quoteId: "read-only-smoke", generatedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString(),
   marketStateVersion: "documentation-smoke", action: "buy", side: "yes", amount: "10000000", fee: "0",
+  programId: SUPPORTED_PROGRAM_ID, mathVersion: SUPPORTED_QUOTE_MATH_VERSION,
+  grossAmount: "10000000", feeAmount: "0", netAmount: "10000000", sharesIn: "0", sharesOut: "20000000",
+  averageExecutionPriceBps: "5000", postTradeSideReserve: "10000000", postTradeSideShares: "20000000",
   feeBreakdown: { feeMode: "activation_waived", normalTradingFeeWaivedCollateralUnits: "0", grossTradeFeeCollateralUnits: "0", normalTradingFeeBps: 0, feeBpsApplied: 0 },
-  closingProtection: { policyVersion: 1, phase: "open", baseFeeBps: 0, closingFeeBps: 0, effectiveFeeBps: 0, hardLockTs: 1_800_000_000, secondsUntilLock: 60 },
+  closingProtection: { policyVersion: 1, phase: "open", baseFeeBps: 0, closingFeeBps: 0, effectiveFeeBps: 0, closingStartsAt: 1_799_999_970, hardLockTs: 1_800_000_000, secondsUntilLock: 60 },
   expectedShares: "20000000", minimumOutput: "19800000", maximumSlippageBpsApplied: 100,
-  executableProbabilityBps: 4800, priceImpactBps: 25, raw: {},
+  executableProbabilityBps: 4800, normalizedSideProbabilityBps: 4800, priceImpactBps: 25,
+  economics: { economicVersion: 2, grossAmount: "10000000", tradeFee: "0", netPrincipalDelta: "10000000", participationUnitsDelta: "20000000", remainingPrincipal: "10000000", desiredCurveValue: "10000000", backedPremium: "0", surplusDelta: "0", executableCurrentValue: "10000000", projectedWinningPayout: "10000000", currentPnl: "0", profitIfWins: "0" }, raw: {},
 };
 
 const runFixtureSmoke = async () => {
@@ -64,7 +70,7 @@ const runFixtureSmoke = async () => {
             activation: { yes: { realPoolCollateralUnits: "0" }, no: { realPoolCollateralUnits: "0" } },
           } as never,
           estimatorInput: input,
-          buyQuotes: [sampleQuote, { ...sampleQuote, quoteId: "read-only-smoke-no", side: "no", executableProbabilityBps: 6000 }],
+          buyQuotes: [sampleQuote, { ...sampleQuote, quoteId: "read-only-smoke-no", side: "no", executableProbabilityBps: 6000, normalizedSideProbabilityBps: 6000 }],
           proposedSizeLamports: config.tradeSizeLamports,
           aggregateExposureLamports: 0n,
           openPositions: 0,
@@ -80,15 +86,15 @@ const runFixtureSmoke = async () => {
 };
 
 const runPolymarketFixtureSmoke = async () => {
-  const config = parseReferenceBotConfig({ estimator: "polymarket_relative_value", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+  const config = parseReferenceBotConfig({ strategy: "polymarket_early", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
   const rounds = new MemoryRoundDecisionStore();
   let step = 0;
   let marketId = "poly-round-1";
   const price = (bidBps: number, askBps: number) => ({ tokenId: "token", bidBps, askBps, spreadBps: askBps - bidBps, observedAtMs: Date.now() });
-  const market = () => ({ marketId, expiryTs: marketId.endsWith("1") ? 100 : 200, strikePrice: "100", reference: { alignmentStatus: "aligned" }, pools: { yes: "1", no: "1", stale: false }, activation: { yes: { realPoolCollateralUnits: "1" }, no: { realPoolCollateralUnits: "1" } } }) as never;
-  const buyQuote = (side: "yes" | "no", executableProbabilityBps: number): ExecutableQuote => ({ ...sampleQuote, quoteId: `buy-${side}`, side, executableProbabilityBps });
+  const market = () => ({ marketId, intervalStartTs: Math.floor(Date.now() / 1_000) - 10, expiryTs: Math.floor(Date.now() / 1_000) + 290, strikePrice: "100", reference: { alignmentStatus: "aligned" }, pools: { yes: "1", no: "1", stale: false }, activation: { yes: { realPoolCollateralUnits: "1" }, no: { realPoolCollateralUnits: "1" } } }) as never;
+  const buyQuote = (side: "yes" | "no", normalizedSideProbabilityBps: number): ExecutableQuote => ({ ...sampleQuote, quoteId: `buy-${side}`, side, amount: "1000000", grossAmount: "1000000", executableProbabilityBps: normalizedSideProbabilityBps, normalizedSideProbabilityBps, economics: { ...sampleQuote.economics, grossAmount: "1000000", projectedWinningPayout: "2000000" } });
   const { expectedShares: _unusedExpectedShares, ...sampleWithoutBuyOutput } = sampleQuote;
-  const sellQuote: ExecutableQuote = { ...sampleWithoutBuyOutput, quoteId: "sell-yes", action: "sell", side: "yes", amount: "100", expectedNetProceeds: "95", executableProbabilityBps: 4000, expiresAt: new Date(Date.now() + 60_000).toISOString() };
+  const sellQuote: ExecutableQuote = { ...sampleWithoutBuyOutput, quoteId: "sell-yes", action: "sell", side: "yes", amount: "100", grossAmount: "100", feeAmount: "5", fee: "5", netAmount: "95", sharesIn: "100", sharesOut: "0", expectedNetProceeds: "95", executableProbabilityBps: 4000, normalizedSideProbabilityBps: 4000, expiresAt: new Date(Date.now() + 60_000).toISOString() };
   const position = { positionId: "position-1", owner: "owner", market: {}, yesShares: "100", noShares: "0", yesCostBasisCollateralUnits: "100", lifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() }, raw: {} } as never;
   const adapter = {
     loadCheckpoint: async () => undefined,
@@ -105,6 +111,51 @@ const runPolymarketFixtureSmoke = async () => {
   marketId = "poly-round-2";
   const second = await runReferenceBot({ config, adapter: adapter as never, once: true, wait: async () => {} });
   console.log(JSON.stringify({ event: "polymarket_fixture_complete", actions: [...first, ...second].map(({ action, reason }) => `${action}:${reason}`) }));
+};
+
+const runPolymarketLateFixtureSmoke = async () => {
+  const config = parseReferenceBotConfig({ strategy: "polymarket_late", polymarketEarlyExitPolicy: "hold_to_expiry", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+  const rounds = new MemoryRoundDecisionStore();
+  const now = Math.floor(Date.now() / 1_000);
+  let step = 0;
+  let marketId = "late-round-1";
+  const market = () => ({ marketId, intervalStartTs: now - 270, expiryTs: now + 30, strikePrice: "100", reference: { alignmentStatus: "aligned" }, pools: { yes: "1", no: "1", stale: false }, activation: { yes: { realPoolCollateralUnits: "1" }, no: { realPoolCollateralUnits: "1" } } }) as never;
+  const price = (askBps: number) => ({ tokenId: "token", bidBps: askBps - 100, askBps, spreadBps: 100, observedAtMs: Date.now() });
+  const buyQuote = (side: "yes" | "no"): ExecutableQuote => ({ ...sampleQuote, quoteId: `late-${side}`, side, amount: "1000000", grossAmount: "1000000", economics: { ...sampleQuote.economics, grossAmount: "1000000", projectedWinningPayout: "2000000" }, closingProtection: { ...sampleQuote.closingProtection, closingStartsAt: now + 10, hardLockTs: now + 25 } });
+  const open = { positionId: "late-position", owner: "owner", market: {}, yesShares: "100", noShares: "0", yesCostBasisCollateralUnits: "100", lifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() }, raw: {} } as PilotPosition;
+  const terminal = { ...open, claimableAmount: "200", actionDeadline: new Date(Date.now() + 60_000).toISOString(), lifecycle: { ...open.lifecycle, state: "claimable" as const } } as PilotPosition;
+  const adapter = {
+    loadCheckpoint: async () => undefined,
+    reconcilePending: async () => ({ state: "confirmed", clientActionId: "none" }),
+    listPositions: async () => { step += 1; return step === 1 || step >= 4 ? [] : [step === 3 ? terminal : open]; },
+    evaluatePosition: async () => ({ market: market(), estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 10, priceHistory: [] }, sellQuote: buyQuote("yes"), ifWinPayout: "200", dataFresh: true, polymarketPrices: { yes: price(6000), no: price(3800) } }),
+    evaluateEntry: async () => ({ market: market(), estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 30, priceHistory: [] }, buyQuotes: [buyQuote("yes"), buyQuote("no")] as const, proposedSizeLamports: config.tradeSizeLamports, aggregateExposureLamports: 0n, openPositions: 0, dataFresh: true, polymarketPrices: { yes: price(6000), no: price(3800) } }),
+    executeBuy: async () => ({ clientActionId: `buy-${marketId}` }), executeSell: async () => ({ clientActionId: "unexpected-sell" }), executeTerminal: async () => ({ clientActionId: "claim-late-round-1" }),
+    hasEnteredRound: (candidate: Parameters<MemoryRoundDecisionStore["hasEntry"]>[0]) => rounds.hasEntry(candidate),
+    recordEnteredRound: (candidate: Parameters<MemoryRoundDecisionStore["recordEntry"]>[0]) => rounds.recordEntry(candidate),
+  };
+  const first = await runReferenceBot({ config, adapter: adapter as never, maximumTicks: 4, wait: async () => {} });
+  marketId = "late-round-2";
+  const second = await runReferenceBot({ config, adapter: adapter as never, once: true, wait: async () => {} });
+  console.log(JSON.stringify({ event: "polymarket_late_fixture_complete", actions: [...first, ...second].map(({ action, reason }) => `${action}:${reason}`) }));
+};
+
+const runPolymarketBootstrapFixtureSmoke = async () => {
+  const config = parseReferenceBotConfig({ strategy: "polymarket_early", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+  const rounds = new MemoryRoundDecisionStore();
+  const now = Math.floor(Date.now() / 1_000);
+  const market = { marketId: "bootstrap-round", intervalStartTs: now - 10, expiryTs: now + 290, reference: { alignmentStatus: "aligned" }, pools: { yes: "0", no: "0", stale: false }, activation: { yes: { realPoolCollateralUnits: "0" }, no: { realPoolCollateralUnits: "0" } } } as never;
+  const buyQuote = (side: "yes" | "no"): ExecutableQuote => ({ ...sampleQuote, quoteId: `bootstrap-${side}`, side, amount: "1000000", grossAmount: "1000000", economics: { ...sampleQuote.economics, grossAmount: "1000000", projectedWinningPayout: "1000000" } });
+  const price = (askBps: number) => ({ tokenId: "token", bidBps: askBps - 100, askBps, spreadBps: 100, observedAtMs: Date.now() });
+  const adapter = {
+    loadCheckpoint: async () => undefined, reconcilePending: async () => ({ state: "confirmed", clientActionId: "none" }), listPositions: async () => [],
+    evaluatePosition: async () => { throw new StrykeSdkError("configuration", "fixture has no position"); },
+    evaluateEntry: async () => ({ market, estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 280, priceHistory: [] }, buyQuotes: [buyQuote("yes"), buyQuote("no")] as const, proposedSizeLamports: config.tradeSizeLamports, aggregateExposureLamports: 0n, openPositions: 0, dataFresh: true, polymarketPrices: { yes: price(6_000), no: price(3_800) } }),
+    executeBuy: async () => ({ clientActionId: "bootstrap-buy" }), executeSell: async () => ({ clientActionId: "none" }), executeTerminal: async () => ({ clientActionId: "none" }),
+    hasEnteredRound: (candidate: Parameters<MemoryRoundDecisionStore["hasEntry"]>[0]) => rounds.hasEntry(candidate), recordEnteredRound: (candidate: Parameters<MemoryRoundDecisionStore["recordEntry"]>[0]) => rounds.recordEntry(candidate),
+  };
+  const events = await runReferenceBot({ config, adapter: adapter as never, maximumTicks: 2, wait: async () => {} });
+  console.log(JSON.stringify({ event: "polymarket_bootstrap_fixture_complete", actions: events.map(({ action, reason }) => `${action}:${reason}`) }));
 };
 
 const loadSigner = async (config: ReturnType<typeof parseReferenceBotEnv>, walletAdapterPath?: string) => loadWalletForLiveTrading<TransactionSigner>(config, async (path) => {
@@ -161,7 +212,7 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
     profile,
     "api",
     "Connected to a compatible Stryke API.",
-    "Check STRYKE_API_BASE_URL and confirm the invited devnet API is healthy and compatible.",
+    "Check STRYKE_API_BASE_URL and confirm the Stryke API is healthy and compatible.",
     () => StrykeClient.connect({ apiBaseUrl: bindings.apiBaseUrl! })
   );
   const lookbackSeconds = config.historyLookbackSeconds[config.expiryFamily];
@@ -189,8 +240,8 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
       emitPreflight(profile, "pyth", "failed", error instanceof Error ? error.message : "Pyth startup failed", pythRemediation);
       throw error;
     }
-    const signer = profile === "devnet"
-      ? await runPreflightCheck(profile, "wallet", "Loaded the configured devnet wallet adapter.", "Check STRYKE_WALLET_ADAPTER_PATH and STRYKE_WALLET_KEYPAIR_PATH; follow docs/quickstart.md to create the keypair.", () => loadSigner(config, bindings.walletAdapterPath))
+    const signer = profile !== "paper"
+      ? await runPreflightCheck(profile, "wallet", "Loaded the configured wallet adapter.", "Check STRYKE_WALLET_ADAPTER_PATH and STRYKE_WALLET_KEYPAIR_PATH; follow docs/quickstart.md to configure the wallet.", () => loadSigner(config, bindings.walletAdapterPath))
       : undefined;
     const rpc = createSolanaRpc(bindings.solanaRpcUrl);
     if (profile === "paper") {
@@ -201,18 +252,20 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
       const balance = await runPreflightCheck(
         profile,
         "rpc",
-        `Connected to devnet RPC for wallet ${signer.address}.`,
-        "Check STRYKE_SOLANA_RPC_URL and confirm the endpoint is reachable and set to devnet.",
+        `Connected to ${profile === "live" ? "mainnet" : "devnet"} RPC for wallet ${signer.address}.`,
+        `Check STRYKE_SOLANA_RPC_URL and confirm the endpoint is reachable and set to ${profile === "live" ? "mainnet-beta" : "devnet"}.`,
         async () => (await rpc.getBalance(signer.address, { commitment: "confirmed" }).send()).value,
         { attempts: 3, retryDelayMs: 1_500, attemptTimeoutMs: 5_000 }
       );
-      const minimumBalance = requiredDevnetBalance(config.maximumTradeSizeLamports);
+      const minimumBalance = requiredExecutionBalance(config.maximumTradeSizeLamports);
       if (balance < minimumBalance) {
-        const remediation = `Run \`solana airdrop 2 ${signer.address} --url devnet\`, then retry.`;
+        const remediation = profile === "devnet"
+          ? `Run \`solana airdrop 2 ${signer.address} --url devnet\`, then retry.`
+          : `Fund wallet ${signer.address} with enough mainnet SOL for fees and the configured trade cap, then retry.`;
         emitPreflight(profile, "funding", "failed", `Wallet ${signer.address} has ${balance} lamports; at least ${minimumBalance} are required.`, remediation);
         throw new StrykeSdkError("configuration", remediation);
       }
-      emitPreflight(profile, "funding", "passed", `Wallet ${signer.address} has enough devnet SOL for the configured trade cap and execution buffer.`);
+      emitPreflight(profile, "funding", "passed", `Wallet ${signer.address} has enough SOL for the configured trade cap and execution buffer.`);
     }
     if (process.argv.includes("--preflight-only")) {
       console.log(JSON.stringify({ event: "reference_bot_preflight_complete", profile }));
@@ -226,7 +279,7 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
       const executionAdapter = new SolanaReviewedExecutionAdapter({ rpc, signer, refresh: async ({ clientActionId }) => ({ action: await transactions.reconcile(clientActionId), positions: await positions.list(signer.address) }) });
       executor = new ReviewedTransactionExecutor(transactions, checkpoint, executionAdapter);
     }
-    const polymarketClient = config.estimator === "polymarket_relative_value"
+    const polymarketClient = config.strategy.startsWith("polymarket_")
       ? new PolymarketClient(config.polymarketClobUrl)
       : undefined;
     const roundDecisionStore = new FileRoundDecisionStore(bindings.roundStatePath);
@@ -240,9 +293,11 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
 };
 
 try {
-  if (process.argv.includes("--fixture-polymarket")) await runPolymarketFixtureSmoke();
+  if (process.argv.includes("--fixture-polymarket-bootstrap")) await runPolymarketBootstrapFixtureSmoke();
+  else if (process.argv.includes("--fixture-polymarket")) await runPolymarketFixtureSmoke();
+  else if (process.argv.includes("--fixture-polymarket-late")) await runPolymarketLateFixtureSmoke();
   else if (process.argv.some((argument) => argument.startsWith("--profile="))) await runSdkBot(selectedProfile());
-  else if (process.argv.includes("--live") || process.argv.includes("--live-data")) await runSdkBot(process.argv.includes("--live") ? "devnet" : "paper");
+  else if (process.argv.includes("--live") || process.argv.includes("--live-data")) await runSdkBot(process.argv.includes("--live") ? "live" : "paper");
   else await runFixtureSmoke();
 } catch (error) {
   const failure = error instanceof StrykeSdkError ? { code: error.code, message: error.message, retryable: error.retryable } : { code: "configuration", message: error instanceof Error ? error.message : "Reference bot startup failed", retryable: false };

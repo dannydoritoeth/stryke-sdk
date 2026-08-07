@@ -3,10 +3,13 @@ import { resolve } from "node:path";
 
 import type { ReferenceEstimator } from "./strategy.js";
 
+export type ReferenceStrategy = "baseline" | "polymarket_early" | "polymarket_late";
+
 export type ReferenceBotConfig = {
   profile: ReferenceBotProfile;
   asset: PilotAsset;
   expiryFamily: PilotExpiryFamily;
+  strategy: ReferenceStrategy;
   estimator: ReferenceEstimator;
   historyLookbackSeconds: Record<PilotExpiryFamily, number>;
   minimumHistoryCoverageBps: number;
@@ -19,6 +22,13 @@ export type ReferenceBotConfig = {
   polymarketMaximumPriceAgeMs: number;
   polymarketTimeoutMs: number;
   polymarketClobUrl: string;
+  polymarketEarlyWindowSeconds: number;
+  polymarketLateWindowSeconds: number;
+  polymarketSubmissionBufferSeconds: number;
+  polymarketMinimumHoldReturnBps: number;
+  polymarketMinimumWinProfitBps: number;
+  polymarketBootstrapEmptyMarket: boolean;
+  polymarketEarlyExitPolicy: "hold_to_expiry" | "exit_on_convergence" | "risk_managed";
   tradeSizeLamports: bigint;
   maximumTradeSizeLamports: bigint;
   maximumAggregateExposureLamports: bigint;
@@ -49,6 +59,7 @@ export const referenceBotDefaults: ReferenceBotConfig = {
   profile: "paper",
   asset: "BTC",
   expiryFamily: "five_minute",
+  strategy: "baseline",
   estimator: "volatility_adjusted_probability",
   tradeSizeLamports: 1_000_000n,
   maximumTradeSizeLamports: 10_000_000n,
@@ -74,6 +85,13 @@ export const referenceBotDefaults: ReferenceBotConfig = {
   polymarketMaximumPriceAgeMs: 5_000,
   polymarketTimeoutMs: 3_000,
   polymarketClobUrl: "https://clob.polymarket.com",
+  polymarketEarlyWindowSeconds: 60,
+  polymarketLateWindowSeconds: 20,
+  polymarketSubmissionBufferSeconds: 3,
+  polymarketMinimumHoldReturnBps: 100,
+  polymarketMinimumWinProfitBps: 100,
+  polymarketBootstrapEmptyMarket: true,
+  polymarketEarlyExitPolicy: "exit_on_convergence",
   readOnlyMode: true,
   liveTradingEnabled: false,
   killSwitchEnabled: true,
@@ -133,8 +151,12 @@ export const parseReferenceBotConfig = (
   if (!["paper", "devnet", "live"].includes(config.profile)) configurationError("profile");
   if (!["BTC", "SOL"].includes(config.asset)) configurationError("asset");
   if (!["one_minute", "five_minute", "fifteen_minute", "hourly"].includes(config.expiryFamily)) configurationError("expiryFamily");
-  if (!["distance_to_strike", "distance_momentum", "volatility_adjusted_probability", "polymarket_relative_value"].includes(config.estimator)) configurationError("estimator");
-  for (const key of ["readOnlyMode", "liveTradingEnabled", "killSwitchEnabled"] as const) {
+  if (!["baseline", "polymarket_early", "polymarket_late"].includes(config.strategy)) configurationError("strategy");
+  if (!["distance_to_strike", "distance_momentum", "volatility_adjusted_probability"].includes(config.estimator)) configurationError("estimator");
+  if (config.strategy.startsWith("polymarket_") && config.expiryFamily === "one_minute") configurationError("expiryFamily: Polymarket strategies require 5m, 15m, or 1h aligned markets");
+  if (!["hold_to_expiry", "exit_on_convergence", "risk_managed"].includes(config.polymarketEarlyExitPolicy)) configurationError("polymarketEarlyExitPolicy");
+  if (config.strategy === "polymarket_late" && config.polymarketEarlyExitPolicy !== "hold_to_expiry") configurationError("polymarketEarlyExitPolicy: late strategy must hold_to_expiry");
+  for (const key of ["readOnlyMode", "liveTradingEnabled", "killSwitchEnabled", "polymarketBootstrapEmptyMarket"] as const) {
     if (typeof config[key] !== "boolean") configurationError(key);
   }
   for (const key of ["tradeSizeLamports", "maximumTradeSizeLamports", "maximumAggregateExposureLamports", "feeFreeActivationLimitLamports"] as const) {
@@ -164,6 +186,12 @@ export const parseReferenceBotConfig = (
   config.polymarketMaximumSpreadBps = integer(config.polymarketMaximumSpreadBps, "polymarketMaximumSpreadBps", 0, 10_000);
   config.polymarketMaximumPriceAgeMs = integer(config.polymarketMaximumPriceAgeMs, "polymarketMaximumPriceAgeMs", 1, 60_000);
   config.polymarketTimeoutMs = integer(config.polymarketTimeoutMs, "polymarketTimeoutMs", 1, 30_000);
+  config.polymarketEarlyWindowSeconds = integer(config.polymarketEarlyWindowSeconds, "polymarketEarlyWindowSeconds", 1, 3_600);
+  config.polymarketLateWindowSeconds = integer(config.polymarketLateWindowSeconds, "polymarketLateWindowSeconds", 1, 600);
+  config.polymarketSubmissionBufferSeconds = integer(config.polymarketSubmissionBufferSeconds, "polymarketSubmissionBufferSeconds", 1, 60);
+  config.polymarketMinimumHoldReturnBps = integer(config.polymarketMinimumHoldReturnBps, "polymarketMinimumHoldReturnBps", 0, 100_000);
+  config.polymarketMinimumWinProfitBps = integer(config.polymarketMinimumWinProfitBps, "polymarketMinimumWinProfitBps", 0, 100_000);
+  if (config.polymarketSubmissionBufferSeconds >= config.polymarketLateWindowSeconds) configurationError("polymarketSubmissionBufferSeconds");
   if (config.polymarketExitEdgeBps >= config.polymarketEntryEdgeBps) configurationError("polymarketExitEdgeBps");
   if (config.tradeSizeLamports > config.maximumTradeSizeLamports) configurationError("tradeSizeLamports");
   if (config.maximumAggregateExposureLamports < config.maximumTradeSizeLamports) configurationError("maximumAggregateExposureLamports");
@@ -180,17 +208,11 @@ export const parseReferenceBotEnv = (
   env: NodeJS.ProcessEnv = process.env,
   profile: ReferenceBotProfile = "paper"
 ): ReferenceBotConfig => {
-  if (profile === "live") {
-    throw new StrykeSdkError(
-      "configuration",
-      "Mainnet live trading is not approved or compatible with this devnet pilot"
-    );
-  }
   const profiledEnv: NodeJS.ProcessEnv = {
     ...env,
     STRYKE_READ_ONLY_MODE: profile === "paper" ? "true" : "false",
-    STRYKE_LIVE_TRADING_ENABLED: profile === "devnet" ? "true" : "false",
-    STRYKE_KILL_SWITCH_ENABLED: profile === "devnet" ? "false" : "true",
+    STRYKE_LIVE_TRADING_ENABLED: profile === "paper" ? "false" : "true",
+    STRYKE_KILL_SWITCH_ENABLED: profile === "paper" ? "true" : "false",
   };
   const readOnlyMode = booleanEnv(profiledEnv, "STRYKE_READ_ONLY_MODE", true);
   const liveTradingEnabled = booleanEnv(profiledEnv, "STRYKE_LIVE_TRADING_ENABLED", false);
@@ -203,6 +225,7 @@ export const parseReferenceBotEnv = (
   };
   const asset = required("STRYKE_ASSET", referenceBotDefaults.asset) as PilotAsset;
   const expiryFamily = required("STRYKE_EXPIRY_FAMILY", referenceBotDefaults.expiryFamily) as PilotExpiryFamily;
+  const strategy = required("STRYKE_STRATEGY", referenceBotDefaults.strategy) as ReferenceStrategy;
   const estimator = required("STRYKE_ESTIMATOR", referenceBotDefaults.estimator) as ReferenceEstimator;
   const sol = (name: string, fallback: bigint) => solToLamports(required(name, `${Number(fallback) / 1e9}`), name);
   const numeric = (name: string, fallback: number) => {
@@ -210,7 +233,7 @@ export const parseReferenceBotEnv = (
     return numberEnv(profiledEnv, name, fallback);
   };
   const config = parseReferenceBotConfig({
-    profile, asset, expiryFamily, estimator,
+    profile, asset, expiryFamily, strategy, estimator,
     tradeSizeLamports: sol("STRYKE_TRADE_SIZE_SOL", referenceBotDefaults.tradeSizeLamports),
     maximumTradeSizeLamports: sol("STRYKE_MAXIMUM_TRADE_SIZE_SOL", referenceBotDefaults.maximumTradeSizeLamports),
     maximumAggregateExposureLamports: sol("STRYKE_MAXIMUM_AGGREGATE_EXPOSURE_SOL", referenceBotDefaults.maximumAggregateExposureLamports),
@@ -240,6 +263,13 @@ export const parseReferenceBotEnv = (
     polymarketMaximumPriceAgeMs: numeric("STRYKE_POLY_MAX_PRICE_AGE_MS", referenceBotDefaults.polymarketMaximumPriceAgeMs),
     polymarketTimeoutMs: numeric("STRYKE_POLY_TIMEOUT_MS", referenceBotDefaults.polymarketTimeoutMs),
     polymarketClobUrl: profiledEnv.STRYKE_POLYMARKET_CLOB_URL ?? referenceBotDefaults.polymarketClobUrl,
+    polymarketEarlyWindowSeconds: numeric("STRYKE_POLY_EARLY_WINDOW_SECONDS", referenceBotDefaults.polymarketEarlyWindowSeconds),
+    polymarketLateWindowSeconds: numeric("STRYKE_POLY_LATE_WINDOW_SECONDS", referenceBotDefaults.polymarketLateWindowSeconds),
+    polymarketSubmissionBufferSeconds: numeric("STRYKE_POLY_SUBMISSION_BUFFER_SECONDS", referenceBotDefaults.polymarketSubmissionBufferSeconds),
+    polymarketMinimumHoldReturnBps: numeric("STRYKE_POLY_MIN_HOLD_RETURN_BPS", referenceBotDefaults.polymarketMinimumHoldReturnBps),
+    polymarketMinimumWinProfitBps: numeric("STRYKE_POLY_MIN_WIN_PROFIT_BPS", referenceBotDefaults.polymarketMinimumWinProfitBps),
+    polymarketBootstrapEmptyMarket: booleanEnv(profiledEnv, "STRYKE_POLY_BOOTSTRAP_EMPTY_MARKET", referenceBotDefaults.polymarketBootstrapEmptyMarket),
+    polymarketEarlyExitPolicy: (profiledEnv.STRYKE_POLY_EXIT_POLICY ?? referenceBotDefaults.polymarketEarlyExitPolicy) as ReferenceBotConfig["polymarketEarlyExitPolicy"],
     readOnlyMode, liveTradingEnabled, killSwitchEnabled,
     checkpointPath: profiledEnv.STRYKE_CHECKPOINT_PATH ?? referenceBotDefaults.checkpointPath,
     roundStatePath: profiledEnv.STRYKE_ROUND_STATE_PATH ?? referenceBotDefaults.roundStatePath,
