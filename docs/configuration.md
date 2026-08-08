@@ -46,7 +46,15 @@ profile; missing or invalid input fails before wallet or transaction work.
 
 Connection controls are `STRYKE_API_BASE_URL`, `STRYKE_SOLANA_RPC_URL`,
 `STRYKE_WALLET_ADAPTER_PATH`, `STRYKE_CHECKPOINT_PATH`, and
-`STRYKE_ROUND_STATE_PATH`. Booleans are exactly
+`STRYKE_ROUND_STATE_PATH`. The default `STRYKE_STATE_BACKEND=file` needs no
+database and uses those two local paths. Operators who need multiple-host
+restart safety can select `STRYKE_STATE_BACKEND=postgres`, provide
+`STRYKE_DATABASE_URL`, and set a stable `STRYKE_STATE_NAMESPACE`. The public
+Postgres adapter then stores action checkpoints and round decisions and holds
+one renewable lease for the cluster, wallet, asset, and expiry family.
+`STRYKE_LEASE_TTL_MS` defaults to `30000` and accepts 5000–300000. A competing
+bot or lost lease fails closed. The database URL is redacted from effective
+configuration output. Booleans are exactly
 `true` or `false` when used by custom integrations. The public commands force
 safe mode precedence: paper is read-only, live enables signed mainnet actions,
 and devnet remains available for compatible test deployments. The checkpoint defaults to

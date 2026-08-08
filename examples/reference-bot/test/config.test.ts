@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { parseReferenceBotConfig, parseReferenceBotEnv, referenceBotDefaults, resolveReferenceBotRuntimeBindings } from "../src/config.js";
+import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, referenceBotDefaults, resolveReferenceBotRuntimeBindings } from "../src/config.js";
 import { loadWalletForLiveTrading } from "../src/wallet.js";
 
 describe("reference bot config", () => {
@@ -132,6 +132,24 @@ describe("reference bot config", () => {
       roundStatePath: "/tmp/reference-bot/.stryke/reference-bot-rounds.json",
       walletAdapterPath: "/tmp/reference-bot/wallet/adapter.mjs",
     });
+  });
+
+  it("wires_postgres_state_controls_and_redacts_the_database_url", () => {
+    const config = parseReferenceBotEnv({
+      STRYKE_STATE_BACKEND: "postgres",
+      STRYKE_DATABASE_URL: "postgres://user:secret@db.example.com/stryke",
+      STRYKE_STATE_NAMESPACE: "btc-bootstrap",
+      STRYKE_LEASE_TTL_MS: "45000",
+    });
+    expect(config).toMatchObject({
+      stateBackend: "postgres",
+      stateDatabaseUrl: "postgres://user:secret@db.example.com/stryke",
+      stateNamespace: "btc-bootstrap",
+      leaseTtlMs: 45_000,
+    });
+    expect(publicConfig(config).stateDatabaseUrl).toBe("[configured]");
+    expect(() => parseReferenceBotEnv({ STRYKE_STATE_BACKEND: "postgres" })).toThrow("stateDatabaseUrl");
+    expect(() => parseReferenceBotEnv({ STRYKE_STATE_BACKEND: "postgres", STRYKE_DATABASE_URL: "postgres://db", STRYKE_LEASE_TTL_MS: "4999" })).toThrow("leaseTtlMs");
   });
 
   it("active_live_requires_every_explicit_control_before_wallet_or_api_work", () => {

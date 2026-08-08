@@ -10,7 +10,8 @@ const quickstart = read("docs/quickstart.md");
 const mechanics = read("docs/market-mechanics.md");
 const configuration = read("docs/configuration.md");
 const troubleshooting = read("docs/troubleshooting.md");
-const publicDocs = [readme, quickstart, mechanics, configuration, troubleshooting].join("\n");
+const artifactHandoff = read("docs/artifact-handoff.md");
+const publicDocs = [readme, quickstart, mechanics, configuration, troubleshooting, artifactHandoff].join("\n");
 
 describe("pilot documentation contract", () => {
   it("readme_links_quickstart_and_market_mechanics", () => {
@@ -84,6 +85,21 @@ describe("pilot documentation contract", () => {
 
   it("docs_show_sdk_api_program_compatibility_output", () => {
     for (const field of ["sdkVersion", "apiVersion", "apiSchemaVersion", "programId", "programVersion"]) expect(quickstart).toContain(`\`${field}\``);
+  });
+
+  it("artifact_handoff_traces_clean_commit_digests_install_and_portable_state", () => {
+    expect(readme).toContain("[artifact handoff](docs/artifact-handoff.md)");
+    for (const phrase of [
+      "npm run artifact:pack",
+      "stryke.releaseArtifacts.v1",
+      "git rev-parse HEAD",
+      "sha512sum",
+      "npm install ./stryke-sdk-0.1.0.tgz ./stryke-reference-bot-0.1.0.tgz",
+      "npx stryke-reference-bot",
+      "optional Postgres",
+      "separate operator decisions",
+    ]) expect(artifactHandoff).toContain(phrase);
+    expect(artifactHandoff).toMatch(/File state is\s+the default/);
   });
 
   it("public_docs_do_not_leak_private_plans_paths_or_operations", () => {

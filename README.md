@@ -1,6 +1,6 @@
 # Stryke SDK Pilot
 
-Private TypeScript SDK and reference bot for trading Stryke ([https://stryketrade.com](https://stryketrade.com))
+Open-source TypeScript SDK and reference bot for trading Stryke ([https://stryketrade.com](https://stryketrade.com))
 BTC/SOL markets. This is educational software, not investment advice;
 outcomes are not guaranteed. Node.js 22+ is required.
 
@@ -82,7 +82,8 @@ for the short checklist.
 Never put a seed phrase, private key, secret key, or signed transaction in config
 or logs. See the [quickstart](docs/quickstart.md),
 [configuration](docs/configuration.md), [market mechanics](docs/market-mechanics.md),
-and [error recovery](docs/troubleshooting.md).
+[artifact handoff](docs/artifact-handoff.md), and
+[error recovery](docs/troubleshooting.md).
 
 No included strategy guarantees accuracy or profit. The recommended baseline
 is deliberately small and inspectable; validate and calibrate it for your own

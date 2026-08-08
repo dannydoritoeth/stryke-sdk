@@ -11,4 +11,13 @@ describe("reference bot architecture", () => {
     expect(source).toContain('from "@stryke/sdk"');
     expect(source).not.toMatch(/\bfetch\s*\(|new WebSocket|new EventSource|sendRawTransaction|confirmTransaction/);
   });
+
+  it("runs_the_prebuilt_live_artifact_without_building_at_process_start", () => {
+    const packageJson = JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf8")
+    ) as { scripts?: Record<string, string> };
+    expect(packageJson.scripts?.["start:live:built"]).toBe(
+      "node dist/cli.js --profile=live"
+    );
+  });
 });
