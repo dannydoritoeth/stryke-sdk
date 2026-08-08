@@ -9,6 +9,8 @@ import { quote } from "./fixtures.js";
 const history = [{ price: 99, publishTime: 1 }, { price: 100, publishTime: 2 }];
 const market = {
   marketId: "market-1",
+  expiryTs: 1_800_000_000,
+  strikePrice: "100",
   pools: { yes: "10", no: "20", stale: false },
   activation: {
     yes: { realPoolCollateralUnits: "10" },
@@ -16,7 +18,7 @@ const market = {
   },
 } as never;
 const position = (state: PilotPosition["lifecycle"]["state"] = "sellable", overrides: Partial<PilotPosition> = {}): PilotPosition => ({
-  positionId: "position-1", owner: "owner", market: {}, yesShares: "100", noShares: "0",
+  positionId: "position-1", owner: "owner", market: { expiryTs: 1_800_000_000, targetValue: "100" }, yesShares: "100", noShares: "0",
   yesCostBasisCollateralUnits: "100", lifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state, rawStatus: state, rawReason: state, observedAt: new Date().toISOString() }, raw: {}, ...overrides,
 });
 const live = parseReferenceBotConfig({ estimator: "distance_to_strike", readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
@@ -141,6 +143,56 @@ describe("reference bot composed runtime", () => {
       const runtime = adapter({ listPositions: async () => [position(state, { ...amount, actionDeadline: new Date(Date.now() + 60_000).toISOString() })] });
       await expect(runMarketTick({ tick: 2, config: live, adapter: runtime })).resolves.toMatchObject({ action });
     }
+  });
+
+  it("polymarket_bootstrap_allows_a_different_round_to_overlap_with_bounded_exposure", async () => {
+    const candidateExpiry = 1_800_000_300;
+    const config = parseReferenceBotConfig({
+      strategy: "polymarket_early",
+      polymarketEarlyExitPolicy: "hold_to_expiry",
+      readOnlyMode: false,
+      liveTradingEnabled: true,
+      killSwitchEnabled: false,
+    });
+    const candidate = {
+      ...market,
+      marketId: "market-2",
+      expiryTs: candidateExpiry,
+      intervalStartTs: candidateExpiry - 300,
+      reference: { alignmentStatus: "aligned" },
+    } as never;
+    const price = (askBps: number) => ({ tokenId: "token", bidBps: askBps - 100, askBps, spreadBps: 100, observedAtMs: Date.now() });
+    const buyQuote = (side: "yes" | "no", probability: number) => quote({
+      side,
+      amount: config.tradeSizeLamports.toString(),
+      grossAmount: config.tradeSizeLamports.toString(),
+      executableProbabilityBps: probability,
+      economics: {
+        ...quote().economics,
+        grossAmount: config.tradeSizeLamports.toString(),
+        projectedWinningPayout: (config.tradeSizeLamports * 2n).toString(),
+      },
+      closingProtection: { ...quote().closingProtection, closingStartsAt: candidateExpiry - 30, hardLockTs: candidateExpiry },
+    });
+    const runtime = adapter({
+      listPositions: async () => [position("awaiting_resolution")],
+      evaluateEntry: async () => ({
+        market: candidate,
+        estimatorInput: { currentPrice: 101, strikePrice: 100, secondsRemaining: 290, priceHistory: history },
+        buyQuotes: [buyQuote("yes", 4000), buyQuote("no", 6000)],
+        proposedSizeLamports: config.tradeSizeLamports,
+        aggregateExposureLamports: config.tradeSizeLamports,
+        openPositions: 1,
+        dataFresh: true,
+        polymarketPrices: { yes: price(6000), no: price(3800) },
+      }),
+    });
+    await expect(runMarketTick({ tick: 1, config, adapter: runtime, nowSeconds: candidateExpiry - 290 })).resolves.toMatchObject({
+      phase: "entry",
+      action: "buy",
+      marketId: "market-2",
+    });
+    expect(runtime.executeBuy).toHaveBeenCalledTimes(1);
   });
 
   it("runtime_terminal_completion_allows_next_market_entry", async () => {

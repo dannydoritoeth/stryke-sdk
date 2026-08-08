@@ -98,11 +98,11 @@ const runPolymarketFixtureSmoke = async () => {
   let step = 0;
   let marketId = "poly-round-1";
   const price = (bidBps: number, askBps: number) => ({ tokenId: "token", bidBps, askBps, spreadBps: askBps - bidBps, observedAtMs: Date.now() });
-  const market = () => ({ marketId, intervalStartTs: Math.floor(Date.now() / 1_000) - 10, expiryTs: Math.floor(Date.now() / 1_000) + 290, strikePrice: "100", reference: { alignmentStatus: "aligned" }, pools: { yes: "1", no: "1", stale: false }, activation: { yes: { realPoolCollateralUnits: "1" }, no: { realPoolCollateralUnits: "1" } } }) as never;
+  const market = () => ({ marketId, intervalStartTs: Math.floor(Date.now() / 1_000) - 10, expiryTs: Math.floor(Date.now() / 1_000) + 290, strikePrice: "100", reference: { alignmentStatus: "aligned" }, pools: { yes: "1", no: "1", stale: false }, activation: { yes: { realPoolCollateralUnits: "1" }, no: { realPoolCollateralUnits: "1" } } });
   const buyQuote = (side: "yes" | "no", normalizedSideProbabilityBps: number): ExecutableQuote => ({ ...sampleQuote, quoteId: `buy-${side}`, side, amount: "1000000", grossAmount: "1000000", executableProbabilityBps: normalizedSideProbabilityBps, normalizedSideProbabilityBps, economics: { ...sampleQuote.economics, grossAmount: "1000000", projectedWinningPayout: "2000000" } });
   const { expectedShares: _unusedExpectedShares, ...sampleWithoutBuyOutput } = sampleQuote;
   const sellQuote: ExecutableQuote = { ...sampleWithoutBuyOutput, quoteId: "sell-yes", action: "sell", side: "yes", amount: "100", grossAmount: "100", feeAmount: "5", fee: "5", netAmount: "95", sharesIn: "100", sharesOut: "0", expectedNetProceeds: "95", executableProbabilityBps: 4000, normalizedSideProbabilityBps: 4000, expiresAt: new Date(Date.now() + 60_000).toISOString() };
-  const position = { positionId: "position-1", owner: "owner", market: {}, yesShares: "100", noShares: "0", yesCostBasisCollateralUnits: "100", lifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() }, raw: {} } as never;
+  const position = { positionId: "position-1", owner: "owner", market: { expiryTs: market().expiryTs, targetValue: "100" }, yesShares: "100", noShares: "0", yesCostBasisCollateralUnits: "100", lifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() }, raw: {} } as never;
   const adapter = {
     loadCheckpoint: async () => undefined,
     reconcilePending: async () => ({ state: "confirmed", clientActionId: "none" }),
@@ -113,6 +113,8 @@ const runPolymarketFixtureSmoke = async () => {
     executeSell: async () => { await rounds.recordConvergenceExit(market()); return { clientActionId: "sell-poly-round-1" }; },
     executeTerminal: async () => ({ clientActionId: "none" }),
     hasConvergenceExitedRound: (candidate: Parameters<MemoryRoundDecisionStore["hasConvergenceExit"]>[0]) => rounds.hasConvergenceExit(candidate),
+    hasEnteredRound: (candidate: Parameters<MemoryRoundDecisionStore["hasEntry"]>[0]) => rounds.hasEntry(candidate),
+    recordEnteredRound: (candidate: Parameters<MemoryRoundDecisionStore["recordEntry"]>[0]) => rounds.recordEntry(candidate),
   };
   const first = await runReferenceBot({ config, adapter: adapter as never, maximumTicks: 4, wait: async () => {} });
   marketId = "poly-round-2";
@@ -126,10 +128,10 @@ const runPolymarketLateFixtureSmoke = async () => {
   const now = Math.floor(Date.now() / 1_000);
   let step = 0;
   let marketId = "late-round-1";
-  const market = () => ({ marketId, intervalStartTs: now - 270, expiryTs: now + 30, strikePrice: "100", reference: { alignmentStatus: "aligned" }, pools: { yes: "1", no: "1", stale: false }, activation: { yes: { realPoolCollateralUnits: "1" }, no: { realPoolCollateralUnits: "1" } } }) as never;
+  const market = () => ({ marketId, intervalStartTs: now - 270, expiryTs: now + 30, strikePrice: "100", reference: { alignmentStatus: "aligned" }, pools: { yes: "1", no: "1", stale: false }, activation: { yes: { realPoolCollateralUnits: "1" }, no: { realPoolCollateralUnits: "1" } } });
   const price = (askBps: number) => ({ tokenId: "token", bidBps: askBps - 100, askBps, spreadBps: 100, observedAtMs: Date.now() });
   const buyQuote = (side: "yes" | "no"): ExecutableQuote => ({ ...sampleQuote, quoteId: `late-${side}`, side, amount: "1000000", grossAmount: "1000000", economics: { ...sampleQuote.economics, grossAmount: "1000000", projectedWinningPayout: "2000000" }, closingProtection: { ...sampleQuote.closingProtection, closingStartsAt: now + 10, hardLockTs: now + 25 } });
-  const open = { positionId: "late-position", owner: "owner", market: {}, yesShares: "100", noShares: "0", yesCostBasisCollateralUnits: "100", lifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() }, raw: {} } as PilotPosition;
+  const open = { positionId: "late-position", owner: "owner", market: { expiryTs: market().expiryTs, targetValue: "100" }, yesShares: "100", noShares: "0", yesCostBasisCollateralUnits: "100", lifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() }, raw: {} } as PilotPosition;
   const terminal = { ...open, claimableAmount: "200", actionDeadline: new Date(Date.now() + 60_000).toISOString(), lifecycle: { ...open.lifecycle, state: "claimable" as const } } as PilotPosition;
   const adapter = {
     loadCheckpoint: async () => undefined,

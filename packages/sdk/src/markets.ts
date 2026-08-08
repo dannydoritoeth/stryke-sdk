@@ -59,6 +59,7 @@ export type PilotMarket = CanonicalMarketIdentity & {
   pools: { yes: string; no: string; stale: boolean };
   activation?: { yes: PilotActivationSide; no: PilotActivationSide };
   probability: { yesBps: number; noBps: number };
+  minimumTradeCollateralUnits?: string;
   intervalStartTs: number;
   intervalLifecycle: MarketIntervalLifecycle;
   reference: RollingMarketReference;
@@ -280,6 +281,9 @@ export const parsePilotMarket = (
     };
   };
   const odds = record(selectedMarket.odds, "surface.odds");
+  const tradeBounds = selectedMarket.tradeBounds === undefined
+    ? undefined
+    : record(selectedMarket.tradeBounds, "surface.tradeBounds");
   const disabledReasons = tradeability.disabledReasons;
   const strikePrice = text(row.targetValue, "targetValue");
   if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(strikePrice)) {
@@ -364,6 +368,12 @@ export const parsePilotMarket = (
       yesBps: bps(odds.yesBps, "surface.odds.yesBps"),
       noBps: bps(odds.noBps, "surface.odds.noBps"),
     },
+    ...(tradeBounds ? {
+      minimumTradeCollateralUnits: amount(
+        tradeBounds.minimumTradeCollateralUnits,
+        "surface.tradeBounds.minimumTradeCollateralUnits"
+      ),
+    } : {}),
     intervalStartTs,
     intervalLifecycle: intervalLifecycle as MarketIntervalLifecycle,
     reference,
