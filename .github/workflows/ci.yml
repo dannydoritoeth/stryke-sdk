@@ -18,3 +18,4 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm pack -w @stryke/sdk --dry-run
+      - run: npm pack -w @stryke/reference-bot --dry-run

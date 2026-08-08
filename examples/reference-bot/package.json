@@ -1,10 +1,26 @@
 {
   "name": "@stryke/reference-bot",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
+  "main": "./dist/bot.js",
+  "types": "./dist/bot.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/bot.d.ts",
+      "import": "./dist/bot.js"
+    }
+  },
+  "bin": {
+    "stryke-reference-bot": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "wallet-adapter.example.mjs"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build -w @stryke/sdk && npm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run test",
     "start:read-only": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js --read-only",
@@ -26,5 +42,8 @@
   "devDependencies": {
     "@types/pg": "^8.15.5",
     "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
