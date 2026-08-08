@@ -50,6 +50,10 @@ export type ReferenceBotConfig = {
   pythHermesUrl: string;
   checkpointPath: string;
   roundStatePath: string;
+  stateBackend: "file" | "postgres";
+  stateDatabaseUrl?: string;
+  stateNamespace: string;
+  leaseTtlMs: number;
   walletAdapterPath?: string;
 };
 
@@ -98,6 +102,9 @@ export const referenceBotDefaults: ReferenceBotConfig = {
   pythHermesUrl: "https://hermes.pyth.network",
   checkpointPath: ".stryke/reference-bot-action.json",
   roundStatePath: ".stryke/reference-bot-rounds.json",
+  stateBackend: "file",
+  stateNamespace: "default",
+  leaseTtlMs: 30_000,
 };
 
 const configurationError = (name: string): never => {
@@ -201,6 +208,10 @@ export const parseReferenceBotConfig = (
   }
   if (typeof config.checkpointPath !== "string" || !config.checkpointPath) configurationError("checkpointPath");
   if (typeof config.roundStatePath !== "string" || !config.roundStatePath) configurationError("roundStatePath");
+  if (!["file", "postgres"].includes(config.stateBackend)) configurationError("stateBackend");
+  if (typeof config.stateNamespace !== "string" || !config.stateNamespace) configurationError("stateNamespace");
+  config.leaseTtlMs = integer(config.leaseTtlMs, "leaseTtlMs", 5_000, 300_000);
+  if (config.stateBackend === "postgres" && (typeof config.stateDatabaseUrl !== "string" || !config.stateDatabaseUrl)) configurationError("stateDatabaseUrl");
   return config;
 };
 
@@ -273,10 +284,14 @@ export const parseReferenceBotEnv = (
     readOnlyMode, liveTradingEnabled, killSwitchEnabled,
     checkpointPath: profiledEnv.STRYKE_CHECKPOINT_PATH ?? referenceBotDefaults.checkpointPath,
     roundStatePath: profiledEnv.STRYKE_ROUND_STATE_PATH ?? referenceBotDefaults.roundStatePath,
+    stateBackend: (profiledEnv.STRYKE_STATE_BACKEND ?? referenceBotDefaults.stateBackend) as ReferenceBotConfig["stateBackend"],
+    stateNamespace: profiledEnv.STRYKE_STATE_NAMESPACE ?? referenceBotDefaults.stateNamespace,
+    leaseTtlMs: numberEnv(profiledEnv, "STRYKE_LEASE_TTL_MS", referenceBotDefaults.leaseTtlMs),
     pythHermesUrl: profiledEnv.STRYKE_PYTH_HERMES_URL ?? referenceBotDefaults.pythHermesUrl,
     ...(profiledEnv.STRYKE_API_BASE_URL ? { apiBaseUrl: profiledEnv.STRYKE_API_BASE_URL } : {}),
     ...(profiledEnv.STRYKE_SOLANA_RPC_URL ? { solanaRpcUrl: profiledEnv.STRYKE_SOLANA_RPC_URL } : {}),
     ...(profiledEnv.STRYKE_WALLET_ADAPTER_PATH ? { walletAdapterPath: profiledEnv.STRYKE_WALLET_ADAPTER_PATH } : {}),
+    ...(profiledEnv.STRYKE_DATABASE_URL ? { stateDatabaseUrl: profiledEnv.STRYKE_DATABASE_URL } : {}),
   });
   if (activeLive && (!config.apiBaseUrl || !config.solanaRpcUrl || !config.walletAdapterPath)) {
     configurationError("live endpoints and wallet adapter");
@@ -292,6 +307,7 @@ export const publicConfig = (config: ReferenceBotConfig) => ({
   feeFreeActivationLimitLamports: config.feeFreeActivationLimitLamports.toString(),
   feeFreeBufferLamports: config.feeFreeBufferLamports.toString(),
   walletAdapterPath: config.walletAdapterPath ? "[configured]" : undefined,
+  stateDatabaseUrl: config.stateDatabaseUrl ? "[configured]" : undefined,
 });
 
 export const resolveReferenceBotRuntimeBindings = (

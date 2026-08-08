@@ -20,9 +20,11 @@
   },
   "dependencies": {
     "@solana/kit": "^7.0.0",
-    "@stryke/sdk": "0.1.0"
+    "@stryke/sdk": "0.1.0",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
+    "@types/pg": "^8.15.5",
     "vitest": "^3.2.4"
   }
 }

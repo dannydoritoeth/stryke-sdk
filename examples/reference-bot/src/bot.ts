@@ -442,6 +442,7 @@ export * from "./polymarket-client.js";
 export * from "./polymarket-relative-value.js";
 export * from "./round-state.js";
 export * from "./runtime-lease.js";
+export * from "./postgres-state.js";
 export * from "./sdk-runtime.js";
 export * from "./sizing.js";
 export * from "./strategy.js";

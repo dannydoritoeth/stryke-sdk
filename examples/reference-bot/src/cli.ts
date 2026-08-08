@@ -15,10 +15,12 @@ import {
   TransactionsClient,
   subscribeHermes,
   seedHermesHistory,
+  type ActionCheckpointStore,
   type ExecutableQuote,
   type PilotPosition,
 } from "@stryke/sdk";
 import { createSolanaRpc, isTransactionSigner, type TransactionSigner } from "@solana/kit";
+import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -30,6 +32,9 @@ import { loadWalletForLiveTrading } from "./wallet.js";
 import { PolymarketClient } from "./polymarket-client.js";
 import { FileRoundDecisionStore } from "./round-state.js";
 import { MemoryRoundDecisionStore } from "./round-state.js";
+import type { RoundDecisionStore } from "./round-state.js";
+import { PostgresReferenceBotState } from "./postgres-state.js";
+import { requireRuntimeLease } from "./runtime-lease.js";
 
 const compatibility = { sdkVersion: SDK_VERSION, apiVersion: SUPPORTED_API_VERSION, apiSchemaVersion: SUPPORTED_API_SCHEMA_VERSION, programId: SUPPORTED_PROGRAM_ID, programVersion: SUPPORTED_PROGRAM_VERSION };
 
@@ -271,7 +276,15 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
       console.log(JSON.stringify({ event: "reference_bot_preflight_complete", profile }));
       return;
     }
-    const checkpoint = new FileActionCheckpointStore(bindings.checkpointPath);
+    const postgresState = config.stateBackend === "postgres"
+      ? new PostgresReferenceBotState(
+          { connectionString: config.stateDatabaseUrl },
+          config.stateNamespace,
+          config.leaseTtlMs
+        )
+      : undefined;
+    if (postgresState) await postgresState.initialize();
+    const checkpoint: ActionCheckpointStore = postgresState ?? new FileActionCheckpointStore(bindings.checkpointPath);
     let executor: ReviewedTransactionExecutor | undefined;
     if (signer) {
       const transactions = new TransactionsClient(client, rpc);
@@ -282,13 +295,25 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
     const polymarketClient = config.strategy.startsWith("polymarket_")
       ? new PolymarketClient(config.polymarketClobUrl)
       : undefined;
-    const roundDecisionStore = new FileRoundDecisionStore(bindings.roundStatePath);
+    const roundDecisionStore: RoundDecisionStore = postgresState ?? new FileRoundDecisionStore(bindings.roundStatePath);
     const adapter = createSdkRuntimeAdapter({ client, rpc, priceStore, checkpoint, config, roundDecisionStore, ...(polymarketClient ? { polymarketClient } : {}), ...(signer ? { owner: signer.address } : {}), ...(executor ? { executor } : {}) });
     const controller = new AbortController();
     process.once("SIGINT", () => controller.abort());
     process.once("SIGTERM", () => controller.abort());
     const maximumTicks = selectedMaximumTicks();
-    await runReferenceBot({ config, adapter, once: process.argv.includes("--once"), ...(maximumTicks === undefined ? {} : { maximumTicks }), signal: controller.signal });
+    try {
+      const runtimeLease = postgresState && signer
+        ? await requireRuntimeLease(postgresState, {
+            cluster: profile === "live" ? "mainnet-beta" : "devnet",
+            wallet: signer.address.toString(),
+            asset: config.asset,
+            expiryFamily: config.expiryFamily,
+          }, randomUUID())
+        : undefined;
+      await runReferenceBot({ config, adapter, once: process.argv.includes("--once"), ...(maximumTicks === undefined ? {} : { maximumTicks }), signal: controller.signal, ...(runtimeLease ? { runtimeLease } : {}) });
+    } finally {
+      if (postgresState) await postgresState.close();
+    }
   } finally { subscription.close(); }
 };
 
