@@ -12,6 +12,7 @@
     "test:consumer": "vitest run test/external-consumer.test.ts",
     "test:devnet": "vitest run",
     "test:examples": "vitest run examples",
+    "test:postgres-state": "vitest run examples/reference-bot/test/postgres-state.integration.test.ts",
     "test:localnet": "vitest run test/localnet/pilot-lifecycle.test.ts",
     "devnet:bot-matrix": "npm run build && node --env-file=.env scripts/devnet-bot-matrix.mjs",
     "devnet:seed-opposing": "npm run build && node --env-file=.env scripts/devnet-seed-opposing-pool.mjs",

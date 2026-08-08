@@ -110,20 +110,44 @@ export class PostgresReferenceBotState
       [this.namespace, leaseKey, holderId, this.leaseTtlMs]
     );
     if (result.rowCount !== 1) return undefined;
-    return {
-      identity,
-      holderId,
-      assertHeld: async () => {
-        const renewed = await this.pool.query(
+    let lost: unknown;
+    let released = false;
+    let renewing: Promise<void> | undefined;
+    const renew = async () => {
+      if (released) throw new Error("Runtime lease was released");
+      if (lost) throw lost;
+      if (!renewing) {
+        renewing = this.pool.query(
           `update stryke_reference_bot_leases
            set expires_at = now() + ($4 * interval '1 millisecond'), updated_at = now()
            where namespace = $1 and lease_key = $2 and holder_id = $3 and expires_at > now()
            returning holder_id`,
           [this.namespace, leaseKey, holderId, this.leaseTtlMs]
-        );
-        if (renewed.rowCount !== 1) throw new Error("Runtime lease was lost");
-      },
+        ).then((renewed) => {
+          if (renewed.rowCount !== 1) throw new Error("Runtime lease was lost");
+        }).catch((error: unknown) => {
+          lost = error;
+          throw error;
+        }).finally(() => {
+          renewing = undefined;
+        });
+      }
+      await renewing;
+    };
+    const renewalTimer = setInterval(() => {
+      void renew().catch(() => {
+        // The recurring loop observes the stored loss before its next market tick.
+      });
+    }, Math.max(1_000, Math.floor(this.leaseTtlMs / 3)));
+    renewalTimer.unref();
+    return {
+      identity,
+      holderId,
+      assertHeld: renew,
       release: async () => {
+        released = true;
+        clearInterval(renewalTimer);
+        if (renewing) await renewing.catch(() => undefined);
         await this.pool.query(
           "delete from stryke_reference_bot_leases where namespace = $1 and lease_key = $2 and holder_id = $3",
           [this.namespace, leaseKey, holderId]
