@@ -22,23 +22,34 @@ export class PostgresReferenceBotState
   }
 
   async initialize(): Promise<void> {
-    await this.pool.query(`
-      create table if not exists stryke_reference_bot_state (
-        namespace text not null,
-        state_key text not null,
-        value jsonb not null,
-        updated_at timestamptz not null default now(),
-        primary key (namespace, state_key)
-      );
-      create table if not exists stryke_reference_bot_leases (
-        namespace text not null,
-        lease_key text not null,
-        holder_id text not null,
-        expires_at timestamptz not null,
-        updated_at timestamptz not null default now(),
-        primary key (namespace, lease_key)
-      );
-    `);
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtext('stryke_reference_bot_schema_v1'))");
+      await client.query(`
+        create table if not exists stryke_reference_bot_state (
+          namespace text not null,
+          state_key text not null,
+          value jsonb not null,
+          updated_at timestamptz not null default now(),
+          primary key (namespace, state_key)
+        );
+        create table if not exists stryke_reference_bot_leases (
+          namespace text not null,
+          lease_key text not null,
+          holder_id text not null,
+          expires_at timestamptz not null,
+          updated_at timestamptz not null default now(),
+          primary key (namespace, lease_key)
+        );
+      `);
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async load(): Promise<ActionCheckpoint | undefined> {
