@@ -3,10 +3,25 @@ import { MemoryActionCheckpointStore, PYTH_FEED_IDS, PriceStore, SUPPORTED_PROGR
 
 import { runMarketTick } from "../src/bot.js";
 import { parseReferenceBotConfig } from "../src/config.js";
-import { authoritativeActivationFor, createSdkRuntimeAdapter, positionCountsTowardEntryCapacity, shouldFetchPolymarketEntryPrices } from "../src/sdk-runtime.js";
+import { authoritativeActivationFor, authoritativeMinimumForEntry, createSdkRuntimeAdapter, positionCountsTowardEntryCapacity, shouldFetchPolymarketEntryPrices } from "../src/sdk-runtime.js";
 import { quote } from "./fixtures.js";
 
 describe("SDK runtime composition", () => {
+  it("uses_the_dynamic_market_minimum_and_fails_closed_when_unavailable_or_too_small", () => {
+    const market = { marketId: "btc-5m", minimumTradeCollateralUnits: "14000000" } as never;
+    expect(authoritativeMinimumForEntry(market, 14_000_000n)).toBe(14_000_000n);
+    expect(() => authoritativeMinimumForEntry(market, 13_999_999n)).toThrowError(expect.objectContaining({
+      code: "quote_blocked",
+      context: expect.objectContaining({ phase: "configured_size_below_market_minimum" }),
+    }));
+    for (const minimumTradeCollateralUnits of [undefined, "not-lamports"]) {
+      expect(() => authoritativeMinimumForEntry({ ...market, minimumTradeCollateralUnits } as never, 14_000_000n)).toThrowError(expect.objectContaining({
+        code: "quote_blocked",
+        context: expect.objectContaining({ phase: "market_minimum_unavailable" }),
+      }));
+    }
+    expect(authoritativeMinimumForEntry({ ...market, minimumTradeCollateralUnits: "15000000" } as never, 15_000_000n)).toBe(15_000_000n);
+  });
   it("trading_requires_authoritative_activation_state_and_matching_policy", () => {
     expect(() => authoritativeActivationFor({} as never, 10_000n)).toThrowError(expect.objectContaining({ code: "compatibility" }));
     const market = { activation: {
@@ -75,6 +90,7 @@ describe("SDK runtime composition", () => {
                 yes: { activated: false, thresholdCollateralUnits: "10000000000", realPoolCollateralUnits: "10", feeModeForNextBuy: "activation_waived", feeModeForNextSell: "activation_waived" },
                 no: { activated: false, thresholdCollateralUnits: "10000000000", realPoolCollateralUnits: "10", feeModeForNextBuy: "activation_waived", feeModeForNextSell: "activation_waived" },
               },
+              tradeBounds: { minimumTradeCollateralUnits: "1000000" },
               odds: { yesBps: 5000, noBps: 5000 },
             },
           }],

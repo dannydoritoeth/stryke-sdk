@@ -26,6 +26,25 @@ import { polymarketEntryWindow } from "./strategy/entry-window.js";
 export const positionCountsTowardEntryCapacity = (position: PilotPosition): boolean =>
   ["pending_confirmation", "open_position", "sellable", "awaiting_resolution"].includes(position.lifecycle.state);
 
+export const authoritativeMinimumForEntry = (
+  market: PilotMarket,
+  configuredTradeSizeLamports: bigint,
+): bigint => {
+  if (market.minimumTradeCollateralUnits === undefined || !/^\d+$/.test(market.minimumTradeCollateralUnits)) {
+    throw new StrykeSdkError("quote_blocked", "Authoritative market minimum is unavailable", true, { phase: "market_minimum_unavailable", marketId: market.marketId });
+  }
+  const minimumTradeLamports = BigInt(market.minimumTradeCollateralUnits);
+  if (configuredTradeSizeLamports < minimumTradeLamports) {
+    throw new StrykeSdkError("quote_blocked", "Configured trade size is below the authoritative market minimum", false, {
+      phase: "configured_size_below_market_minimum",
+      marketId: market.marketId,
+      configuredTradeSizeLamports: configuredTradeSizeLamports.toString(),
+      minimumTradeLamports: minimumTradeLamports.toString(),
+    });
+  }
+  return minimumTradeLamports;
+};
+
 const canonicalDecimalIdentity = (value: string): string => {
   const match = /^([+-]?)(\d+)(?:\.(\d*))?$/.exec(value.trim());
   if (!match) return value;
@@ -262,6 +281,7 @@ export const createSdkRuntimeAdapter = ({
         config.expiryFamily,
         priceStore.current(config.asset).price
       );
+      const minimumTradeLamports = authoritativeMinimumForEntry(market, config.tradeSizeLamports);
       const portfolio = owner ? await positions.list(owner) : [];
       const activePortfolio = portfolio.filter((position) =>
         position.asset === config.asset &&
@@ -281,6 +301,14 @@ export const createSdkRuntimeAdapter = ({
         activationLimit: config.feeFreeActivationLimitLamports, activationBuffer: config.feeFreeBufferLamports,
       });
       if (proposedSizeLamports <= 0n) throw new StrykeSdkError("quote_blocked", "Buffered fee-free activation capacity is unavailable");
+      if (proposedSizeLamports < minimumTradeLamports) {
+        throw new StrykeSdkError("quote_blocked", "Available risk capacity is below the authoritative market minimum", false, {
+          phase: "available_capacity_below_market_minimum",
+          marketId: market.marketId,
+          proposedSizeLamports: proposedSizeLamports.toString(),
+          minimumTradeLamports: minimumTradeLamports.toString(),
+        });
+      }
       const amount = proposedSizeLamports.toString();
       const [yesQuote, noQuote] = await Promise.all([
         quotes.buy({ market, side: "yes", amount, maximumSlippageBps: config.maximumPriceImpactBps }),
@@ -293,7 +321,7 @@ export const createSdkRuntimeAdapter = ({
         nowSeconds: Math.floor(now() / 1_000),
       });
       const externalPrices = shouldFetchPolymarket ? await polymarketPrices(market) : undefined;
-      return { market, estimatorInput: estimatorInput(market), buyQuotes: [yesQuote, noQuote], proposedSizeLamports, aggregateExposureLamports, openPositions, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}) };
+      return { market, estimatorInput: estimatorInput(market), buyQuotes: [yesQuote, noQuote], proposedSizeLamports, minimumTradeLamports, aggregateExposureLamports, openPositions, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}) };
     },
     executeBuy: (evaluation, quote) => prepareAndExecute(evaluation.market, quote),
     executeSell: (position, exposure, evaluation, reason) => prepareAndExecute(evaluation.market, evaluation.sellQuote, { positionId: position.positionId, sharesBefore: exposure.shares, strategyReason: reason }),

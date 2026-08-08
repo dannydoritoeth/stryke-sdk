@@ -94,6 +94,17 @@ const isTradingLockedError = (error: unknown): boolean =>
 const isQuoteRevalidationError = (error: unknown): boolean =>
   error instanceof StrykeSdkError && error.code === "quote_blocked";
 
+const quoteBlockedPhase = (error: unknown): string | undefined =>
+  error instanceof StrykeSdkError && error.code === "quote_blocked" && typeof error.context?.phase === "string"
+    ? error.context.phase
+    : undefined;
+
+const positionMatchesMarket = (position: PilotPosition, market: PilotMarket): boolean => {
+  const identity = position.market as Readonly<Record<string, unknown>>;
+  return Number(identity.expiryTs) === market.expiryTs &&
+    String(identity.targetValue) === market.strikePrice;
+};
+
 const event = (tick: number, phase: RuntimeEvent["phase"], action: RuntimeEvent["action"], reason: string, extra: Partial<RuntimeEvent> = {}): RuntimeEvent =>
   ({ tick, phase, action, reason, ...extra });
 
@@ -253,7 +264,7 @@ export const runMarketTick = async ({
     return event(tick, "position", "sell", sell.decision.reason, { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions, ...result });
   }
 
-  if (positions.some((position) => !completeStates.has(position.lifecycle.state) && !nonActionableTerminalPositions.has(position.positionId))) {
+  if (!isPolymarketStrategy(config) && positions.some((position) => !completeStates.has(position.lifecycle.state) && !nonActionableTerminalPositions.has(position.positionId))) {
     const locked = positionDecisions.find((decision) => decision.reason === "trading_locked_until_settlement");
     return locked
       ? event(tick, "position", "hold", locked.reason, { positionId: locked.positionId, positionDecisions })
@@ -264,10 +275,13 @@ export const runMarketTick = async ({
   try { evaluation = await adapter.evaluateEntry(); }
   catch (error) {
     if (isTradingLockedError(error)) return event(tick, "entry", "blocked", "trading_locked_until_settlement");
-    if (isQuoteRevalidationError(error)) return event(tick, "entry", "blocked", "market_changed_during_quote");
+    if (isQuoteRevalidationError(error)) return event(tick, "entry", "blocked", quoteBlockedPhase(error) ?? "market_changed_during_quote");
     throw error;
   }
   if (isPolymarketStrategy(config)) {
+    if (positions.some((position) => !completeStates.has(position.lifecycle.state) && positionMatchesMarket(position, evaluation.market))) {
+      return event(tick, "wait", "hold", "position_not_economically_complete", { marketId: evaluation.market.marketId, positionDecisions });
+    }
     if (evaluation.market.reference.alignmentStatus !== "aligned") {
       return event(tick, "entry", "skip", "reference_not_aligned", { marketId: evaluation.market.marketId });
     }

@@ -4,11 +4,13 @@ import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, referenceB
 import { loadWalletForLiveTrading } from "../src/wallet.js";
 
 describe("reference bot config", () => {
-  it("uses_a_conservative_edge_and_exactly_one_active_position", () => {
+  it("uses_a_conservative_edge_and_bounded_overlapping_positions", () => {
     expect(referenceBotDefaults.estimator).toBe("volatility_adjusted_probability");
     expect(referenceBotDefaults.minimumEntryEdgeBps).toBe(500);
-    expect(referenceBotDefaults.maximumOpenPositions).toBe(1);
-    expect(() => parseReferenceBotConfig({ maximumOpenPositions: 2 })).toThrow(/maximumOpenPositions/);
+    expect(referenceBotDefaults.maximumOpenPositions).toBe(3);
+    expect(referenceBotDefaults.tradeSizeLamports).toBe(14_000_000n);
+    expect(referenceBotDefaults.maximumAggregateExposureLamports).toBe(42_000_000n);
+    expect(parseReferenceBotConfig({ maximumOpenPositions: 2 }).maximumOpenPositions).toBe(2);
   });
   it("validates_volatility_controls_and_preserves_expiry_family_lookbacks", () => {
     const config = parseReferenceBotConfig({
@@ -86,7 +88,7 @@ describe("reference bot config", () => {
       ["minimumEntryEdgeBps", 0, 10_000],
       ["maximumPriceImpactBps", 0, 9_999],
       ["minimumSecondsToExpiry", 0, Number.MAX_SAFE_INTEGER],
-      ["maximumOpenPositions", 1, 1],
+      ["maximumOpenPositions", 1, 100],
       ["tickIntervalMs", 1_000, Number.MAX_SAFE_INTEGER],
       ["stopLossBps", 1, 10_000],
       ["takeProfitBps", 1, Number.MAX_SAFE_INTEGER],
@@ -113,7 +115,7 @@ describe("reference bot config", () => {
       expect(() => parseReferenceBotEnv({ STRYKE_TRADE_SIZE_SOL: value })).toThrow("STRYKE_TRADE_SIZE_SOL");
     }
     expect(() => parseReferenceBotEnv({ STRYKE_TRADE_SIZE_SOL: "0.002", STRYKE_MAXIMUM_TRADE_SIZE_SOL: "0.001" })).toThrow("tradeSizeLamports");
-    expect(() => parseReferenceBotEnv({ STRYKE_MAXIMUM_TRADE_SIZE_SOL: "0.002", STRYKE_MAXIMUM_AGGREGATE_EXPOSURE_SOL: "0.001" })).toThrow("maximumAggregateExposureLamports");
+    expect(() => parseReferenceBotEnv({ STRYKE_TRADE_SIZE_SOL: "0.001", STRYKE_MAXIMUM_TRADE_SIZE_SOL: "0.002", STRYKE_MAXIMUM_AGGREGATE_EXPOSURE_SOL: "0.001" })).toThrow("maximumAggregateExposureLamports");
   });
 
   it("projects_connection_and_file_controls_into_the_cli_runtime_consumers", () => {

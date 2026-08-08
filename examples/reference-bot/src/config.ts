@@ -65,15 +65,15 @@ export const referenceBotDefaults: ReferenceBotConfig = {
   expiryFamily: "five_minute",
   strategy: "baseline",
   estimator: "volatility_adjusted_probability",
-  tradeSizeLamports: 1_000_000n,
-  maximumTradeSizeLamports: 10_000_000n,
-  maximumAggregateExposureLamports: 50_000_000n,
+  tradeSizeLamports: 14_000_000n,
+  maximumTradeSizeLamports: 14_000_000n,
+  maximumAggregateExposureLamports: 42_000_000n,
   feeFreeActivationLimitLamports: 10_000_000_000n,
   feeFreeBufferLamports: 500_000_000n,
   minimumEntryEdgeBps: 500,
   maximumPriceImpactBps: 100,
   minimumSecondsToExpiry: 60,
-  maximumOpenPositions: 1,
+  maximumOpenPositions: 3,
   tickIntervalMs: 5_000,
   stopLossBps: 1_000,
   takeProfitBps: 2_000,
@@ -173,7 +173,7 @@ export const parseReferenceBotConfig = (
   config.minimumEntryEdgeBps = integer(config.minimumEntryEdgeBps, "minimumEntryEdgeBps", 0, 10_000);
   config.maximumPriceImpactBps = integer(config.maximumPriceImpactBps, "maximumPriceImpactBps", 0, 9_999);
   config.minimumSecondsToExpiry = integer(config.minimumSecondsToExpiry, "minimumSecondsToExpiry", 0, Number.MAX_SAFE_INTEGER);
-  config.maximumOpenPositions = integer(config.maximumOpenPositions, "maximumOpenPositions", 1, 1);
+  config.maximumOpenPositions = integer(config.maximumOpenPositions, "maximumOpenPositions", 1, 100);
   config.tickIntervalMs = integer(config.tickIntervalMs, "tickIntervalMs", 1_000, Number.MAX_SAFE_INTEGER);
   config.stopLossBps = integer(config.stopLossBps, "stopLossBps", 1, 10_000);
   config.takeProfitBps = integer(config.takeProfitBps, "takeProfitBps", 1, Number.MAX_SAFE_INTEGER);

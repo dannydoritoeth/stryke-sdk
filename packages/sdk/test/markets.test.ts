@@ -82,6 +82,7 @@ const row = (symbol: string, expiryFamily: string, expiryTs: number) => ({
       no: { activated: false, thresholdCollateralUnits: "10000000000", realPoolCollateralUnits: "300", feeModeForNextBuy: "activation_waived", feeModeForNextSell: "activation_waived" },
     },
     odds: { yesBps: 4000, noBps: 6000 },
+    tradeBounds: { minimumTradeCollateralUnits: "14000000" },
   },
 });
 
@@ -233,6 +234,7 @@ describe("pilot market discovery", () => {
         no: { activated: false, realPoolCollateralUnits: "300", thresholdCollateralUnits: "10000000000" },
       },
       probability: { yesBps: 4000, noBps: 6000 },
+      minimumTradeCollateralUnits: "14000000",
       generatedAt: "2026-07-22T00:00:01.000Z",
       lifecycle: {
         schemaVersion: "stryke.pilotLifecycle.v1",

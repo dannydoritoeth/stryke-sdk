@@ -20,7 +20,7 @@ describe("entry decisions", () => {
       { expected: "edge", change: { fairProbability: 0.5 } },
       { expected: "priceImpact", change: { quote: quote({ priceImpactBps: 101 }) } },
       { expected: "time", change: { secondsRemaining: 59 } },
-      { expected: "size", change: { tradeSizeLamports: 11_000_000n } },
+      { expected: "size", change: { tradeSizeLamports: 15_000_000n } },
       { expected: "positions", change: { openPositions: 3 } },
       { expected: "aggregateExposure", change: { aggregateExposureLamports: 50_000_000n } },
       { expected: "fresh", change: { dataFresh: false } },
