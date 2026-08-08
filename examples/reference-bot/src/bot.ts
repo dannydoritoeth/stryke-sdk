@@ -18,6 +18,7 @@ import type { PolymarketExecutablePrice } from "./polymarket-client.js";
 import { selectEmptyMarketBootstrapEntry, selectExecutablePolymarketEntry } from "./strategy/polymarket-entry.js";
 import { polymarketEntryWindow, type PolymarketTimingMode } from "./strategy/entry-window.js";
 import { decidePolymarketEarlyExit } from "./strategy/polymarket-exit.js";
+import { assertRuntimeLeaseHeld, type RuntimeLease } from "./runtime-lease.js";
 
 export type RuntimeAction = "buy" | "sell" | "claim" | "refund";
 
@@ -397,6 +398,7 @@ export const runReferenceBot = async ({
   once = false,
   maximumTicks,
   signal,
+  runtimeLease,
   onEvent = (value: RuntimeEvent) => console.log(JSON.stringify(value)),
   wait = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)),
 }: {
@@ -405,22 +407,28 @@ export const runReferenceBot = async ({
   once?: boolean;
   maximumTicks?: number;
   signal?: AbortSignal;
+  runtimeLease?: RuntimeLease;
   onEvent?: (event: RuntimeEvent) => void;
   wait?: (milliseconds: number) => Promise<void>;
 }): Promise<RuntimeEvent[]> => {
   const events: RuntimeEvent[] = [];
-  for (let tick = 1; !signal?.aborted; tick += 1) {
-    let result: RuntimeEvent;
-    try {
-      result = await runMarketTick({ tick, config, adapter });
-    } catch (error) {
-      if (!(error instanceof StrykeSdkError) || !error.retryable) throw error;
-      result = event(tick, "wait", "blocked", `retryable_${error.code}`);
+  try {
+    for (let tick = 1; !signal?.aborted; tick += 1) {
+      if (runtimeLease) await assertRuntimeLeaseHeld(runtimeLease);
+      let result: RuntimeEvent;
+      try {
+        result = await runMarketTick({ tick, config, adapter });
+      } catch (error) {
+        if (!(error instanceof StrykeSdkError) || !error.retryable) throw error;
+        result = event(tick, "wait", "blocked", `retryable_${error.code}`);
+      }
+      events.push(result);
+      onEvent(result);
+      if (once || signal?.aborted || tick === maximumTicks) break;
+      await wait(config.tickIntervalMs);
     }
-    events.push(result);
-    onEvent(result);
-    if (once || signal?.aborted || tick === maximumTicks) break;
-    await wait(config.tickIntervalMs);
+  } finally {
+    if (runtimeLease) await runtimeLease.release();
   }
   return events;
 };
@@ -433,6 +441,7 @@ export * from "./manage-position.js";
 export * from "./polymarket-client.js";
 export * from "./polymarket-relative-value.js";
 export * from "./round-state.js";
+export * from "./runtime-lease.js";
 export * from "./sdk-runtime.js";
 export * from "./sizing.js";
 export * from "./strategy.js";
