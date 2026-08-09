@@ -376,6 +376,9 @@ export const runMarketTick = async ({
     await adapter.recordEnteredRound?.(evaluation.market);
     return event(tick, "entry", paper ? "paper_buy" : "buy", paper ? `${relative.reason}_paper_simulated` : relative.reason, { marketId: evaluation.market.marketId, details, ...result });
   }
+  if (await adapter.hasEnteredRound?.(evaluation.market)) {
+    return event(tick, "entry", "skip", "same_round_reentry_blocked", { marketId: evaluation.market.marketId });
+  }
   let model: ReturnType<typeof modelEvaluation>;
   try { model = modelEvaluation(evaluation.estimatorInput, config); }
   catch { return event(tick, "entry", "decision_unavailable", "model_inputs_unavailable", { marketId: evaluation.market.marketId }); }
@@ -410,6 +413,7 @@ export const runMarketTick = async ({
     if (isQuoteRevalidationError(error)) return event(tick, "entry", "blocked", "quote_changed_before_submission", { marketId: evaluation.market.marketId, details });
     throw error;
   }
+  await adapter.recordEnteredRound?.(evaluation.market);
   return event(tick, "entry", paper ? "paper_buy" : "buy", paper ? `${decision.reason}_paper_simulated` : decision.reason, { marketId: evaluation.market.marketId, details, ...result });
 };
 

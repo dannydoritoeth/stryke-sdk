@@ -17,8 +17,9 @@ production market data and matched minimum-size YES/NO quotes. Waiting reports
 the market reason and next eligible timestamp where known.
 
 These commands use conservative public defaults. Copy `.env.example` to `.env`
-only when you want to inspect or customize them; the effective non-secret
-configuration is printed on every run.
+only when you want to inspect or customize them; doing so opts into the
+`polymarket_early` example, while the credential-free no-env default is
+`baseline`. The effective non-secret configuration is printed on every run.
 
 The example config uses `https://api.stryketrade.com`. Paper mode uses real data and prints the
 SDK/API/program compatibility fields `sdkVersion`, `apiVersion`,

@@ -1,6 +1,6 @@
 # PRD 02 Implementation Plan: Clean-Install Trading Readiness
 
-Status: Planned; execution starts at the earliest open outcome
+Status: In progress; Phases 1 and the first durable-paper slice are implemented
 
 Linked PRD: [02-clean-install-trading-readiness.md](02-clean-install-trading-readiness.md)
 
@@ -23,7 +23,7 @@ immutable published release
 
 ## Current baseline
 
-Baseline commit: `5cef41de8e6102a604b3ded266767e2255c7f77a`
+Baseline commit: `8664d143c4892ec482ad0e1c4c0584dc874dfe75`
 
 Established:
 
@@ -31,15 +31,17 @@ Established:
 - public paper CLI reaches production API, market and Pyth inputs;
 - API and default configuration agree on a 10,000-lamport minimum;
 - two bounded public-runtime ticks execute without wallet access; and
-- live preflight fails safely at missing wallet configuration.
+- paper and live doctors return stable readiness states;
+- paper mode persists a simulated entry, resumes it after restart, and follows
+  authoritative resolution without loading a signer or submitting; and
+- live doctor fails safely with actionable setup remediation when unconfigured.
 
 Open:
 
 - packages are not proven installable from the public registry;
-- paper mode does not prove a durable simulated trade lifecycle;
-- bounded onboarding can finish while the market is unaligned or outside its
-  strategy window, before matched quotes are observed;
-- there is no single doctor result distinguishing ready, waiting and blocked;
+- production observation has not yet captured a naturally eligible simulated
+  entry and terminal lifecycle;
+- paper reset/export controls and shared Postgres paper state remain open;
 - live readiness still requires manual configuration knowledge; and
 - no immutable release has complete clean-room outcome evidence.
 

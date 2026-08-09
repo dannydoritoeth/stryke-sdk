@@ -60,7 +60,8 @@ Mainnet execution remains protected by every configured safety gate.
 
 Before the first signed run, follow the [quickstart wallet steps](docs/quickstart.md#2-create-and-fund-a-dedicated-trading-wallet) to create a dedicated keypair, fund its public address, and set its file path in `.env`. Devnet compatibility remains available through `npm run start:devnet -w @stryke/reference-bot` with devnet API and RPC values.
 
-Use `STRYKE_STRATEGY=polymarket_early` for the default early strategy. For the
+The credential-free default is `baseline`. Opt in to the external-reference
+early strategy with `STRYKE_STRATEGY=polymarket_early`. For the
 pre-fee strategy, set `STRYKE_STRATEGY=polymarket_late` and
 `STRYKE_POLY_EXIT_POLICY=hold_to_expiry`. Both support aligned `5m`, `15m`,
 and `1h` rounds; native 1m and degraded-reference rounds are skipped. Early can

@@ -91,7 +91,10 @@ export const classifyDoctorError = (profile: ReferenceBotProfile, error: unknown
     const waiting = error.code === "source_unavailable" || error.code === "source_stale" || (
       error.code === "quote_blocked" && !["market_minimum_unavailable", "configured_size_below_market_minimum", "paired_quote_mismatch"].includes(phase ?? "")
     );
-    return result(profile, waiting ? "WAITING_FOR_MARKET" : "BLOCKED", phase ?? error.code, waiting ? "The setup is healthy but the required market data is temporarily unavailable; retry or keep paper mode running." : error.message);
+    const configurationRemediation = profile === "live" && error.code === "configuration"
+      ? `Copy .env.example to .env, inspect every value, and configure the dedicated live wallet. ${error.message}`
+      : error.message;
+    return result(profile, waiting ? "WAITING_FOR_MARKET" : "BLOCKED", phase ?? error.code, waiting ? "The setup is healthy but the required market data is temporarily unavailable; retry or keep paper mode running." : configurationRemediation);
   }
   return result(profile, "BLOCKED", "unexpected_error", error instanceof Error ? error.message : "Reference bot readiness failed");
 };
