@@ -72,6 +72,9 @@ an eligible empty position account, verifies that account disappears, and only
 then evaluates the next market. If `close_all` contains multiple chunks, the
 bot executes the chunk whose authoritative market identity matches the selected
 position; later ticks process the remaining positions exactly once.
+If no current market exists during startup, the continuous command reports a
+waiting preflight state and continues into its retrying loop. `doctor` remains
+bounded and reports `WAITING_FOR_MARKET` instead.
 
 Cleanup is not a substitute for settlement. A non-winning position follows
 `refundable -> refund -> cleanup_available -> close` only when the production
