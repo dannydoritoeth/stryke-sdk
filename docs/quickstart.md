@@ -45,9 +45,10 @@ then run `npm run start:live -w @stryke/reference-bot`. It uses the same
 continuous loop with signed mainnet transactions. A trade occurs only when the
 estimator and all safety checks pass.
 
-The example currently uses 0.014 SOL, but the bot does not treat that value as
-permanent. It reads the authoritative minimum for each market and fails closed
-before quoting when the configured size is too small or the minimum is absent.
+The example currently uses the production on-chain minimum of 0.00001 SOL
+(10,000 lamports), but the bot does not treat that value as permanent. It reads
+the authoritative minimum for each market and fails closed before quoting when
+the configured size is too small or the minimum is absent.
 The example permits three unresolved positions so consecutive five-minute
 rounds can overlap, while durable round state still permits only one entry per
 market identity.
