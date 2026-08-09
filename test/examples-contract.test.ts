@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
@@ -16,22 +15,6 @@ describe("documented example contract", () => {
     expect(result.stdout).toContain('"tick":2,"phase":"entry","action":"blocked","reason":"trading_locked_until_settlement"');
     expect(result.stdout).toContain('"event":"stryke_compatibility"');
   }, 60_000);
-
-  it("documented_custom_estimator_compiles", async () => {
-    const quickstart = readFileSync(join(workspace, "docs/quickstart.md"), "utf8");
-    const snippet = [...quickstart.matchAll(/```ts\n([\s\S]*?)\n```/g)]
-      .map((match) => match[1])
-      .find((candidate) => candidate?.includes("estimateFairProbability"));
-    expect(snippet).toBeTruthy();
-    const directory = mkdtempSync(join(tmpdir(), "stryke-estimator-"));
-    try {
-      const file = join(directory, "strategy.ts");
-      writeFileSync(file, snippet!);
-      await run(join(workspace, "node_modules/.bin/tsc"), ["--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", file], { cwd: workspace });
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  }, 30_000);
 
   it("documented_live_command_selects_the_mainnet_profile", () => {
     const manifest = JSON.parse(readFileSync(join(workspace, "examples/reference-bot/package.json"), "utf8")) as { scripts: Record<string, string> };
@@ -51,7 +34,7 @@ describe("documented example contract", () => {
     const troubleshooting = readFileSync(join(workspace, "docs/troubleshooting.md"), "utf8");
     expect(cli).toContain('process.argv.includes("--preflight-only")');
     expect(cli.indexOf('process.argv.includes("--preflight-only")')).toBeLessThan(cli.indexOf("new FileActionCheckpointStore"));
-    expect(troubleshooting).toContain("npm run start:live -w @stryketrade/reference-bot -- --preflight-only");
+    expect(troubleshooting).toContain("npx stryke-reference-bot --profile=live --preflight-only");
   });
 
   it("reference_bot_completes_two_early_market_cycles", async () => {

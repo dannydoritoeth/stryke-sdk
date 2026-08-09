@@ -1,8 +1,10 @@
 # Configuration
 
-Copy `.env.example` to `.env`. It contains the complete minimum-size recommended
-baseline. `start:paper`, `start:devnet`, and `start:live` select the safety
-profile; missing or invalid input fails before wallet or transaction work.
+No `.env` file is required for the recommended `baseline` paper or live path.
+Set environment variables only when overriding a default. The source checkout's
+`.env.example` shows every option and intentionally demonstrates the optional
+`polymarket_early` strategy. Missing or invalid input fails before wallet or
+transaction work.
 
 | Environment variable | Unit / values |
 | --- | --- |

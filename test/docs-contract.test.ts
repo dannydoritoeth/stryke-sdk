@@ -10,8 +10,7 @@ const quickstart = read("docs/quickstart.md");
 const mechanics = read("docs/market-mechanics.md");
 const configuration = read("docs/configuration.md");
 const troubleshooting = read("docs/troubleshooting.md");
-const artifactHandoff = read("docs/artifact-handoff.md");
-const publicDocs = [readme, quickstart, mechanics, configuration, troubleshooting, artifactHandoff].join("\n");
+const publicDocs = [readme, sdkReadme, quickstart, mechanics, configuration, troubleshooting].join("\n");
 
 describe("pilot documentation contract", () => {
   it("readme_links_quickstart_and_market_mechanics", () => {
@@ -21,13 +20,13 @@ describe("pilot documentation contract", () => {
 
   it("sdk_readme_gives_a_minimal_copyable_developer_path", () => {
     for (const phrase of [
-      "npm run build -w @stryketrade/sdk",
+      "npm install @stryketrade/sdk",
       "StrykeClient.connect",
       "MarketsClient",
       "QuotesClient",
       "TransactionsClient",
       "PositionsClient",
-      "start:paper",
+      "stryke-reference-bot --profile=paper",
       "mainnet",
     ]) {
       expect(sdkReadme).toContain(phrase);
@@ -36,15 +35,15 @@ describe("pilot documentation contract", () => {
 
   it("quickstart_uses_btc_5m_and_labels_1m_experimental", () => {
     expect(quickstart).toMatch(/BTC five-minute.*canonical onboarding/is);
-    expect(quickstart).toMatch(/one-minute live strategy performance is experimental/i);
+    expect(quickstart).toMatch(/one-minute live automation is\s+experimental/i);
   });
 
   it("quickstart_creates_funds_and_protects_a_dedicated_trading_wallet", () => {
     expect(quickstart).toContain("solana-keygen new --outfile ../stryke-trading-wallet.json");
     expect(quickstart).toContain("solana-keygen pubkey ../stryke-trading-wallet.json");
-    expect(quickstart).toContain("STRYKE_WALLET_KEYPAIR_PATH=../stryke-trading-wallet.json");
+    expect(quickstart).toContain("STRYKE_WALLET_KEYPAIR_PATH=\"$PWD/../stryke-trading-wallet.json\"");
     expect(quickstart).toMatch(/JSON file contains.*private key material/is);
-    expect(quickstart).toMatch(/never commit, share.*personal wallet/is);
+    expect(quickstart).toMatch(/never commit or share.*personal wallet/is);
   });
 
   it("startup_failures_have_ai_readable_remediation", () => {
@@ -77,9 +76,8 @@ describe("pilot documentation contract", () => {
   it("docs_show_read_only_live_and_kill_switch_precedence", () => {
     expect(configuration).toMatch(/readOnlyMode.*Overrides live enablement/);
     expect(configuration).toMatch(/killSwitchEnabled.*Overrides live enablement/);
-    expect(readme).toContain("npm run start:paper -w @stryketrade/reference-bot");
-    expect(readme).toContain("npm run start:devnet -w @stryketrade/reference-bot");
-    expect(readme).toContain("npm run start:live -w @stryketrade/reference-bot");
+    expect(readme).toContain("npx stryke-reference-bot --profile=paper");
+    expect(readme).toContain("npx stryke-reference-bot --profile=live");
     expect(readme).toMatch(/mainnet.*safety gate/is);
   });
 
@@ -87,22 +85,16 @@ describe("pilot documentation contract", () => {
     for (const field of ["sdkVersion", "apiVersion", "apiSchemaVersion", "programId", "programVersion"]) expect(quickstart).toContain(`\`${field}\``);
   });
 
-  it("artifact_handoff_traces_clean_commit_digests_install_and_portable_state", () => {
-    expect(readme).toContain("[artifact handoff](docs/artifact-handoff.md)");
-    for (const phrase of [
-      "npm run artifact:pack",
-      "stryke.releaseArtifacts.v1",
-      "git rev-parse HEAD",
-      "sha512sum",
-      "npm install ./stryke-sdk-0.1.0.tgz ./stryke-reference-bot-0.1.0.tgz",
-      "npx stryke-reference-bot",
-      "optional Postgres",
-      "separate operator decisions",
-    ]) expect(artifactHandoff).toContain(phrase);
-    expect(artifactHandoff).toMatch(/File state is\s+the default/);
+  it("readme_prioritizes_public_paper_then_live_onboarding", () => {
+    expect(readme).toContain("npm install @stryketrade/sdk @stryketrade/reference-bot");
+    expect(readme).toContain("npx stryke-reference-bot doctor --profile=paper");
+    expect(readme).toContain("npx stryke-reference-bot --profile=paper");
+    expect(readme).toContain("npx stryke-reference-bot doctor --profile=live");
+    expect(readme).toContain("npx stryke-reference-bot --profile=live");
+    expect(readme.indexOf("--profile=paper")).toBeLessThan(readme.indexOf("--profile=live"));
   });
 
   it("public_docs_do_not_leak_private_plans_paths_or_operations", () => {
-    expect(publicDocs).not.toMatch(/stryke\.fun|PRD\s*\d+|docs\/prds|internal runbook|production credential/i);
+    expect(publicDocs).not.toMatch(/stryke\.fun|PRD\s*\d+|docs\/prds|internal runbook|production credential|candidate evidence|historical evidence/i);
   });
 });

@@ -22,15 +22,6 @@ position. The simulator holds to authoritative resolution and uses the entry
 quote's projected winning payout for its clearly labelled terminal result.
 That assumption is not a guaranteed fill, return, or profit.
 
-Deployments that require an independently checksummed handoff can instead use
-the two immutable release tarballs described in `docs/artifact-handoff.md`.
-The installed commands are the same:
-
-```bash
-npx stryke-reference-bot doctor --profile=paper
-npx stryke-reference-bot --profile=paper --ticks=2
-```
-
 Doctor exits `0` for ready, `2` for healthy market waiting, and `1` for a
 blocked setup. Its final `reference_bot_doctor` JSON line includes the stable
 status, reason, remediation, market identity, configured and authoritative
@@ -56,7 +47,8 @@ If the API's dedicated stale-cleanup status is not yet `eligible`, it reports
 transaction; zero shares alone do not prove cleanup eligibility.
 
 To perform cleanup without allowing a new market entry, use the bounded
-recovery command after live doctor passes:
+recovery command. It may run lifecycle recovery below the new-entry funding
+reserve:
 
 ```bash
 npx stryke-reference-bot recover-rent --profile=live

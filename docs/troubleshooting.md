@@ -5,7 +5,7 @@
 Run paper doctor without credentials or an environment file:
 
 ```bash
-npm run doctor:paper -w @stryketrade/reference-bot
+npx stryke-reference-bot doctor --profile=paper
 ```
 
 The final `reference_bot_doctor` event uses schema
@@ -14,11 +14,11 @@ The final `reference_bot_doctor` event uses schema
 waiting for the reported alignment or timing condition; exit `1` means
 `BLOCKED` and its remediation must be applied before trading.
 
-Live doctor uses `.env`, validates the wallet, RPC and funding path, and never
-signs or submits:
+Live doctor uses the configured wallet paths, validates RPC and funding, and
+never signs or submits:
 
 ```bash
-npm run doctor:live -w @stryketrade/reference-bot
+npx stryke-reference-bot doctor --profile=live
 ```
 
 ## Startup preflight
@@ -44,7 +44,7 @@ To check the configured mainnet API, Pyth feed, wallet, RPC, and funding without
 entering the trading loop or signing, run:
 
 ```bash
-npm run start:live -w @stryketrade/reference-bot -- --preflight-only
+npx stryke-reference-bot --profile=live --preflight-only
 ```
 
 Catch `StrykeSdkError`, inspect `code` and `retryable`, and log only its bounded
