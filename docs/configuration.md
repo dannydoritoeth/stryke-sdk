@@ -61,6 +61,10 @@ and devnet remains available for compatible test deployments. The checkpoint def
 `.stryke/reference-bot-action.json`.
 Confirmed convergence exits are stored separately in
 `.stryke/reference-bot-rounds.json` so restart cannot re-enter the same round.
+Paper positions are stored in the derived
+`<STRYKE_ROUND_STATE_PATH>.paper-ledger.json` file. This versioned ledger uses
+owner-only file permissions and records quote identity, simulated cost and
+projected payout; paper mode never loads a signer or submits a transaction.
 `STRYKE_PYTH_HERMES_URL` may select the supplied Hermes endpoint; otherwise the
 public endpoint is used. It is validated with the rest of the typed config and
 printed in the non-secret effective configuration.

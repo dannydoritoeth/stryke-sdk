@@ -39,6 +39,7 @@ import type { RoundDecisionStore } from "./round-state.js";
 import { PostgresReferenceBotState } from "./postgres-state.js";
 import { requireRuntimeLease } from "./runtime-lease.js";
 import { classifyDoctorError, classifyDoctorEvaluation, emitDoctorResult } from "./doctor.js";
+import { createPaperRuntimeAdapter, FilePaperLedger } from "./paper-ledger.js";
 
 const compatibility = { sdkVersion: SDK_VERSION, apiVersion: SUPPORTED_API_VERSION, apiSchemaVersion: SUPPORTED_API_SCHEMA_VERSION, programId: SUPPORTED_PROGRAM_ID, programVersion: SUPPORTED_PROGRAM_VERSION };
 
@@ -310,7 +311,10 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
       ? new PolymarketClient(config.polymarketClobUrl)
       : undefined;
     const roundDecisionStore: RoundDecisionStore = postgresState ?? new FileRoundDecisionStore(bindings.roundStatePath);
-    const adapter = createSdkRuntimeAdapter({ client, rpc, priceStore, checkpoint, config, roundDecisionStore, ...(polymarketClient ? { polymarketClient } : {}), ...(signer ? { owner: signer.address } : {}), ...(executor ? { executor } : {}) });
+    const sdkAdapter = createSdkRuntimeAdapter({ client, rpc, priceStore, checkpoint, config, roundDecisionStore, ...(polymarketClient ? { polymarketClient } : {}), ...(signer ? { owner: signer.address } : {}), ...(executor ? { executor } : {}) });
+    const adapter = profile === "paper"
+      ? createPaperRuntimeAdapter(sdkAdapter, new FilePaperLedger(`${bindings.roundStatePath}.paper-ledger.json`))
+      : sdkAdapter;
     if (doctorMode) {
       try {
         emitDoctorResult(classifyDoctorEvaluation({ profile, config, evaluation: await adapter.evaluateEntry() }));

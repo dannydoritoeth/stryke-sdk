@@ -20,7 +20,7 @@ import { polymarketEntryWindow, type PolymarketTimingMode } from "./strategy/ent
 import { decidePolymarketEarlyExit } from "./strategy/polymarket-exit.js";
 import { assertRuntimeLeaseHeld, type RuntimeLease } from "./runtime-lease.js";
 
-export type RuntimeAction = "buy" | "sell" | "claim" | "refund";
+export type RuntimeAction = "buy" | "sell" | "claim" | "refund" | "paper_buy" | "paper_hold" | "paper_sell" | "paper_claim" | "paper_refund";
 
 export type RuntimeEvent = {
   tick: number;
@@ -64,6 +64,7 @@ export type EntryEvaluation = {
 export type RuntimeExecution = { clientActionId?: string; signature?: string };
 
 export interface ReferenceBotRuntimeAdapter {
+  executionMode?: "paper" | "live";
   loadCheckpoint(): Promise<ActionCheckpoint | undefined>;
   reconcilePending(checkpoint: ActionCheckpoint): Promise<{ state: string; clientActionId: string; signature?: string }>;
   listPositions(): Promise<PilotPosition[]>;
@@ -75,6 +76,7 @@ export interface ReferenceBotRuntimeAdapter {
   hasConvergenceExitedRound?(market: PilotMarket): Promise<boolean>;
   hasEnteredRound?(market: PilotMarket): Promise<boolean>;
   recordEnteredRound?(market: PilotMarket): Promise<void>;
+  loadMarketByIdentity?(identity: { expiryTs: number; strikePrice: string }): Promise<PilotMarket>;
 }
 
 const terminalStates = new Set(["claimable", "refundable"]);
@@ -140,6 +142,8 @@ export const runMarketTick = async ({
   adapter: ReferenceBotRuntimeAdapter;
   nowSeconds?: number;
 }): Promise<RuntimeEvent> => {
+  const paper = adapter.executionMode === "paper";
+  const decisionConfig = paper ? { ...config, readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false } : config;
   const checkpoint = await adapter.loadCheckpoint();
   if (checkpoint) {
     const reconciled = await adapter.reconcilePending(checkpoint);
@@ -238,11 +242,11 @@ export const runMarketTick = async ({
 
   const terminal = terminalCandidates[0];
   if (terminal) {
-    if (config.readOnlyMode || !config.liveTradingEnabled || config.killSwitchEnabled) {
+    if (!paper && (config.readOnlyMode || !config.liveTradingEnabled || config.killSwitchEnabled)) {
       return event(tick, "position", terminal.action, "terminal_dry_run", { positionId: terminal.position.positionId, positionDecisions });
     }
     const result = await adapter.executeTerminal(terminal.position, terminal.action);
-    return event(tick, "position", terminal.action, "terminal_confirmed", { positionId: terminal.position.positionId, positionDecisions, ...result });
+    return event(tick, "position", paper ? `paper_${terminal.action}` : terminal.action, paper ? "paper_terminal_simulated" : "terminal_confirmed", { positionId: terminal.position.positionId, positionDecisions, ...result });
   }
 
   sellCandidates.sort((a, b) => {
@@ -251,7 +255,7 @@ export const runMarketTick = async ({
   });
   const sell = sellCandidates[0];
   if (sell) {
-    if (config.readOnlyMode || !config.liveTradingEnabled || config.killSwitchEnabled) {
+    if (!paper && (config.readOnlyMode || !config.liveTradingEnabled || config.killSwitchEnabled)) {
       return event(tick, "position", "sell", `${sell.decision.reason}_dry_run`, { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions });
     }
     let result: RuntimeExecution;
@@ -261,8 +265,11 @@ export const runMarketTick = async ({
       if (isQuoteRevalidationError(error)) return event(tick, "position", "hold", "quote_changed_before_submission", { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions });
       throw error;
     }
-    return event(tick, "position", "sell", sell.decision.reason, { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions, ...result });
+    return event(tick, "position", paper ? "paper_sell" : "sell", paper ? `${sell.decision.reason}_paper_simulated` : sell.decision.reason, { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions, ...result });
   }
+
+  const awaitingPaper = paper && positions.find((position) => position.lifecycle.state === "awaiting_resolution");
+  if (awaitingPaper) return event(tick, "position", "paper_hold", "paper_hold_to_expiry", { positionId: awaitingPaper.positionId, positionDecisions });
 
   if (!isPolymarketStrategy(config) && positions.some((position) => !completeStates.has(position.lifecycle.state) && !nonActionableTerminalPositions.has(position.positionId))) {
     const locked = positionDecisions.find((decision) => decision.reason === "trading_locked_until_settlement");
@@ -322,10 +329,10 @@ export const runMarketTick = async ({
         entryWindowOpensAt: window.opensAt, entryWindowClosesAt: window.closesAt,
       };
       if (!bootstrap.passes) return event(tick, "entry", "skip", bootstrap.reason, { marketId: evaluation.market.marketId, details });
-      const nativeSafety = decideBestEntry({ fairProbability: bootstrap.side === "yes" ? 1 : 0, quotes: evaluation.buyQuotes, config: { ...config, minimumEntryEdgeBps: 0 }, secondsRemaining: evaluation.estimatorInput.secondsRemaining, tradeSizeLamports: evaluation.proposedSizeLamports, aggregateExposureLamports: evaluation.aggregateExposureLamports, openPositions: evaluation.openPositions, dataFresh: evaluation.dataFresh });
+      const nativeSafety = decideBestEntry({ fairProbability: bootstrap.side === "yes" ? 1 : 0, quotes: evaluation.buyQuotes, config: { ...decisionConfig, minimumEntryEdgeBps: 0 }, secondsRemaining: evaluation.estimatorInput.secondsRemaining, tradeSizeLamports: evaluation.proposedSizeLamports, aggregateExposureLamports: evaluation.aggregateExposureLamports, openPositions: evaluation.openPositions, dataFresh: evaluation.dataFresh });
       const failedSafety = Object.entries(nativeSafety.safetyChecks).find(([key, passed]) => !passed && !["edge", "time", "feeFreeOpen"].includes(key));
       if (failedSafety) return event(tick, "entry", "blocked", failedSafety[0], { marketId: evaluation.market.marketId, details });
-      if (config.readOnlyMode || !config.liveTradingEnabled) return event(tick, "entry", "dry_run", config.readOnlyMode ? "read_only" : "live_off", { marketId: evaluation.market.marketId, details });
+      if (!paper && (config.readOnlyMode || !config.liveTradingEnabled)) return event(tick, "entry", "dry_run", config.readOnlyMode ? "read_only" : "live_off", { marketId: evaluation.market.marketId, details });
       let result: RuntimeExecution;
       try { result = await adapter.executeBuy(evaluation, bootstrap.quote); }
       catch (error) {
@@ -334,7 +341,7 @@ export const runMarketTick = async ({
         throw error;
       }
       await adapter.recordEnteredRound?.(evaluation.market);
-      return event(tick, "entry", "buy", bootstrap.reason, { marketId: evaluation.market.marketId, details, ...result });
+      return event(tick, "entry", paper ? "paper_buy" : "buy", paper ? `${bootstrap.reason}_paper_simulated` : bootstrap.reason, { marketId: evaluation.market.marketId, details, ...result });
     }
     const relative = selectExecutablePolymarketEntry({
       quotes: evaluation.buyQuotes, prices: evaluation.polymarketPrices,
@@ -355,10 +362,10 @@ export const runMarketTick = async ({
       entryWindowOpensAt: window.opensAt, entryWindowClosesAt: window.closesAt,
     };
     if (!relative.passes) return event(tick, "entry", "skip", relative.reason, { marketId: evaluation.market.marketId, details });
-    const nativeSafety = decideBestEntry({ fairProbability: relative.side === "yes" ? 1 : 0, quotes: evaluation.buyQuotes, config: { ...config, minimumEntryEdgeBps: 0 }, secondsRemaining: evaluation.estimatorInput.secondsRemaining, tradeSizeLamports: evaluation.proposedSizeLamports, aggregateExposureLamports: evaluation.aggregateExposureLamports, openPositions: evaluation.openPositions, dataFresh: evaluation.dataFresh });
+    const nativeSafety = decideBestEntry({ fairProbability: relative.side === "yes" ? 1 : 0, quotes: evaluation.buyQuotes, config: { ...decisionConfig, minimumEntryEdgeBps: 0 }, secondsRemaining: evaluation.estimatorInput.secondsRemaining, tradeSizeLamports: evaluation.proposedSizeLamports, aggregateExposureLamports: evaluation.aggregateExposureLamports, openPositions: evaluation.openPositions, dataFresh: evaluation.dataFresh });
     const failedSafety = Object.entries(nativeSafety.safetyChecks).find(([key, passed]) => !passed && !["edge", "time", "feeFreeOpen"].includes(key));
     if (failedSafety) return event(tick, "entry", "blocked", failedSafety[0], { marketId: evaluation.market.marketId, details });
-    if (config.readOnlyMode || !config.liveTradingEnabled) return event(tick, "entry", "dry_run", config.readOnlyMode ? "read_only" : "live_off", { marketId: evaluation.market.marketId, details });
+    if (!paper && (config.readOnlyMode || !config.liveTradingEnabled)) return event(tick, "entry", "dry_run", config.readOnlyMode ? "read_only" : "live_off", { marketId: evaluation.market.marketId, details });
     let result: RuntimeExecution;
     try { result = await adapter.executeBuy(evaluation, relative.quote); }
     catch (error) {
@@ -367,14 +374,14 @@ export const runMarketTick = async ({
       throw error;
     }
     await adapter.recordEnteredRound?.(evaluation.market);
-    return event(tick, "entry", "buy", relative.reason, { marketId: evaluation.market.marketId, details, ...result });
+    return event(tick, "entry", paper ? "paper_buy" : "buy", paper ? `${relative.reason}_paper_simulated` : relative.reason, { marketId: evaluation.market.marketId, details, ...result });
   }
   let model: ReturnType<typeof modelEvaluation>;
   try { model = modelEvaluation(evaluation.estimatorInput, config); }
   catch { return event(tick, "entry", "decision_unavailable", "model_inputs_unavailable", { marketId: evaluation.market.marketId }); }
   const fairProbability = model.fairProbability;
   const decision: BestEntryDecision = decideBestEntry({
-    fairProbability, quotes: evaluation.buyQuotes, config,
+    fairProbability, quotes: evaluation.buyQuotes, config: decisionConfig,
     secondsRemaining: evaluation.estimatorInput.secondsRemaining,
     tradeSizeLamports: evaluation.proposedSizeLamports,
     aggregateExposureLamports: evaluation.aggregateExposureLamports,
@@ -403,7 +410,7 @@ export const runMarketTick = async ({
     if (isQuoteRevalidationError(error)) return event(tick, "entry", "blocked", "quote_changed_before_submission", { marketId: evaluation.market.marketId, details });
     throw error;
   }
-  return event(tick, "entry", "buy", decision.reason, { marketId: evaluation.market.marketId, details, ...result });
+  return event(tick, "entry", paper ? "paper_buy" : "buy", paper ? `${decision.reason}_paper_simulated` : decision.reason, { marketId: evaluation.market.marketId, details, ...result });
 };
 
 export const runReferenceBot = async ({
