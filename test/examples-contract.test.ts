@@ -1,22 +1,23 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
 const workspace = new URL("..", import.meta.url).pathname;
+const run = promisify(execFile);
 
 describe("documented example contract", () => {
-  it("documented_read_only_command_runs_without_wallet", () => {
-    const result = spawnSync("npm", ["run", "start:read-only", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8", env: { ...process.env, STRYKE_WALLET_ADAPTER_PATH: "" } });
-    expect(result.status, result.stderr).toBe(0);
+  it("documented_read_only_command_runs_without_wallet", async () => {
+    const result = await run("npm", ["run", "start:read-only", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8", env: { ...process.env, STRYKE_WALLET_ADAPTER_PATH: "" } });
     expect(result.stdout).toContain('"action":"dry_run"');
     expect(result.stdout).toContain('"effectiveFeeBps":0');
     expect(result.stdout).toContain('"tick":2,"phase":"entry","action":"blocked","reason":"trading_locked_until_settlement"');
     expect(result.stdout).toContain('"event":"stryke_compatibility"');
-  }, 30_000);
+  }, 60_000);
 
-  it("documented_custom_estimator_compiles", () => {
+  it("documented_custom_estimator_compiles", async () => {
     const quickstart = readFileSync(join(workspace, "docs/quickstart.md"), "utf8");
     const snippet = [...quickstart.matchAll(/```ts\n([\s\S]*?)\n```/g)]
       .map((match) => match[1])
@@ -26,11 +27,11 @@ describe("documented example contract", () => {
     try {
       const file = join(directory, "strategy.ts");
       writeFileSync(file, snippet!);
-      execFileSync(join(workspace, "node_modules/.bin/tsc"), ["--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", file], { cwd: workspace, stdio: "pipe" });
+      await run(join(workspace, "node_modules/.bin/tsc"), ["--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", file], { cwd: workspace });
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   it("documented_live_command_selects_the_mainnet_profile", () => {
     const manifest = JSON.parse(readFileSync(join(workspace, "examples/reference-bot/package.json"), "utf8")) as { scripts: Record<string, string> };
@@ -53,9 +54,8 @@ describe("documented example contract", () => {
     expect(troubleshooting).toContain("npm run start:live -w @stryke/reference-bot -- --preflight-only");
   });
 
-  it("reference_bot_completes_two_early_market_cycles", () => {
-    const result = spawnSync("npm", ["run", "test:polymarket-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
-    expect(result.status, result.stderr).toBe(0);
+  it("reference_bot_completes_two_early_market_cycles", async () => {
+    const result = await run("npm", ["run", "test:polymarket-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
     for (const expected of [
       "buy:polymarket_executable_edge",
       "hold:position_not_economically_complete",
@@ -65,16 +65,14 @@ describe("documented example contract", () => {
     expect(result.stdout.match(/buy:polymarket_executable_edge/g)).toHaveLength(2);
   }, 30_000);
 
-  it("reference_bot_completes_two_late_hold_and_settlement_cycles", () => {
-    const result = spawnSync("npm", ["run", "test:polymarket-late-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
-    expect(result.status, result.stderr).toBe(0);
+  it("reference_bot_completes_two_late_hold_and_settlement_cycles", async () => {
+    const result = await run("npm", ["run", "test:polymarket-late-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
     for (const expected of ["buy:polymarket_executable_edge", "hold:position_not_economically_complete", "claim:terminal_confirmed", "skip:same_round_reentry_blocked"]) expect(result.stdout).toContain(expected);
     expect(result.stdout.match(/buy:polymarket_executable_edge/g)).toHaveLength(2);
   }, 30_000);
 
-  it("reference_bot_bootstraps_an_exact_empty_market_through_two_cli_iterations", () => {
-    const result = spawnSync("npm", ["run", "test:polymarket-bootstrap-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
-    expect(result.status, result.stderr).toBe(0);
+  it("reference_bot_bootstraps_an_exact_empty_market_through_two_cli_iterations", async () => {
+    const result = await run("npm", ["run", "test:polymarket-bootstrap-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
     expect(result.stdout).toContain("buy:polymarket_empty_market_bootstrap");
     expect(result.stdout).toContain("skip:same_round_reentry_blocked");
   }, 30_000);

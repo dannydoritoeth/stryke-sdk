@@ -246,6 +246,16 @@ describe("pilot market discovery", () => {
     });
   });
 
+  it("accepts_an_empty_trade_bounds_object_without_inventing_a_market_minimum", () => {
+    const value = row("BTC", "five_minute", 1_800_000_000);
+    const parsed = parsePilotMarket({
+      ...value,
+      selectedMarket: { ...value.selectedMarket, tradeBounds: {} },
+    }, false);
+
+    expect(parsed.minimumTradeCollateralUnits).toBeUndefined();
+  });
+
   it("normalizes_upcoming_open_trading_closed_resolvable_and_terminal_states", () => {
     const states: PilotMarketLifecycleState[] = [
       "upcoming",

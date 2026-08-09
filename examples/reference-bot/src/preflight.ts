@@ -8,6 +8,7 @@ import type { ReferenceBotProfile } from "./config.js";
 export type PreflightCheck =
   | "environment"
   | "api"
+  | "market"
   | "pyth"
   | "pyth_history"
   | "wallet"
@@ -42,7 +43,7 @@ export const requireRootEnvFile = (profile: ReferenceBotProfile): void => {
     emitPreflight(profile, "environment", "failed", "Repository-root .env file is missing.", remediation);
     throw new StrykeSdkError("configuration", remediation);
   }
-  emitPreflight(profile, "environment", "passed", "Loaded repository-root .env configuration.");
+  emitPreflight(profile, "environment", "passed", "Found repository-root .env; validating its configuration.");
 };
 
 export const runPreflightCheck = async <T>(
