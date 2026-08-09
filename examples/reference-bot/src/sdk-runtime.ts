@@ -221,6 +221,7 @@ export const createSdkRuntimeAdapter = ({
     return executionResult(result);
   };
   return {
+    loadMarketByIdentity: (identity) => markets.byIdentity(config.asset, { expiryFamily: config.expiryFamily, expiryTs: identity.expiryTs, targetValue: identity.strikePrice }),
     loadCheckpoint: () => checkpoint.load(),
     reconcilePending: async (pending) => {
       if (pending.materialization) {

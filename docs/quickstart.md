@@ -23,7 +23,15 @@ configuration is printed on every run.
 The example config uses `https://api.stryketrade.com`. Paper mode uses real data and prints the
 SDK/API/program compatibility fields `sdkVersion`, `apiVersion`,
 `apiSchemaVersion`, `programId`, and `programVersion`. It never loads a wallet
-or submits. This bounded first run observes two loop iterations and exits;
+or submits. When the strategy selects an executable production buy quote, the
+bot records an explicitly simulated fill in a versioned local ledger, restores
+it after restart, holds it to authoritative market resolution, and reports
+`paper_buy`, `paper_hold`, and `paper_claim`/`paper_refund` events. Winning
+payout is the entry quote's projected payout; it is a simulation assumption,
+not evidence of a live fill or profit. The ledger is stored beside round state
+at `<STRYKE_ROUND_STATE_PATH>.paper-ledger.json` with owner-only file modes.
+
+This bounded first run observes two loop iterations and exits;
 remove `-- --ticks=2` for continuous paper operation. Installation normally
 takes under a minute on a warm network. The volatility estimator can still
 wait for its configured Pyth history window after preflight succeeds.

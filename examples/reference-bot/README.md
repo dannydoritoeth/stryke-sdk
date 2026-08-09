@@ -13,6 +13,14 @@ npm run start:paper -w @stryke/reference-bot -- --ticks=2
 
 Copy `.env.example` to `.env` only to customize those defaults.
 
+Paper execution consumes real production market, oracle, reference, and
+executable quote data but never loads a signer or calls a live transaction
+method. Selected buys are persisted as simulated positions at
+`<STRYKE_ROUND_STATE_PATH>.paper-ledger.json`; restart resumes the same
+position. The simulator holds to authoritative resolution and uses the entry
+quote's projected winning payout for its clearly labelled terminal result.
+That assumption is not a guaranteed fill, return, or profit.
+
 The package is not published to npm. After installing the two immutable
 release tarballs described in `docs/artifact-handoff.md`, its installed binary
 can instead be checked and run as:
