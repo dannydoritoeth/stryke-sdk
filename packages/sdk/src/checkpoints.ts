@@ -9,7 +9,7 @@ export type ActionCheckpoint = {
   state: PilotActionState;
   signature?: string;
   materialization?: {
-    action: "buy" | "sell" | "claim" | "refund";
+    action: "buy" | "sell" | "claim" | "refund" | "close";
     asset: "BTC" | "SOL";
     expiryFamily: "one_minute" | "five_minute" | "fifteen_minute" | "hourly";
     expiryTs: number;
@@ -18,6 +18,7 @@ export type ActionCheckpoint = {
     positionId?: string;
     sharesBefore?: string;
     strategyReason?: string;
+    lastValidBlockHeight?: string;
   };
 };
 

@@ -5,6 +5,7 @@ import * as sdk from "../src/index.js";
 describe("public SDK exports", () => {
   it("exports only the documented compatibility foundation", () => {
     expect(Object.keys(sdk).sort()).toEqual([
+      "CleanupClient",
       "FileActionCheckpointStore",
       "MarketsClient",
       "MemoryActionCheckpointStore",
@@ -39,6 +40,7 @@ describe("public SDK exports", () => {
       "parsePilotMarketLifecycle",
       "parsePilotPosition",
       "parsePilotPositionLifecycle",
+      "positionCleanupAvailable",
       "positionIfWinPayout",
       "positionSideExposures",
       "seedHermesHistory",

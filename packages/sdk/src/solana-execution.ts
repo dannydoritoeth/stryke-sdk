@@ -2,6 +2,8 @@ import {
   addSignersToInstruction,
   compileTransaction,
   getBase64EncodedWireTransaction,
+  getBase58Decoder,
+  getTransactionDecoder,
   getTransactionEncoder,
   signTransactionMessageWithSigners,
   setTransactionMessageFeePayerSigner,
@@ -16,6 +18,11 @@ import {
 import { StrykeSdkError } from "./errors.js";
 import type { ConfirmationResult, ReviewedExecutionAdapter } from "./execution.js";
 import type { MaterializedPilotTransaction } from "./transactions.js";
+import type { MaterializedCleanupTransaction } from "./cleanup.js";
+
+type MaterializedSolanaTransaction =
+  | MaterializedPilotTransaction
+  | MaterializedCleanupTransaction;
 
 type RpcRequest<T> = { send(): Promise<T> };
 
@@ -49,7 +56,7 @@ export type SolanaExecutionAdapterOptions = {
 };
 
 const withSigner = (
-  transaction: MaterializedPilotTransaction,
+  transaction: MaterializedSolanaTransaction,
   signer: TransactionSigner
 ): TransactionMessage & TransactionMessageWithFeePayer & TransactionMessageWithSigners => {
   if (
@@ -71,7 +78,7 @@ const withSigner = (
 };
 
 const unsignedWireTransaction = (
-  transaction: MaterializedPilotTransaction,
+  transaction: MaterializedSolanaTransaction,
   signer: TransactionSigner
 ) => getBase64EncodedWireTransaction(compileTransaction(withSigner(transaction, signer)));
 
@@ -86,7 +93,7 @@ export class SolanaReviewedExecutionAdapter implements ReviewedExecutionAdapter 
     return this.options.rpc.getBlockHeight({ commitment: "confirmed" }).send();
   }
 
-  async simulate(transaction: MaterializedPilotTransaction) {
+  async simulate(transaction: MaterializedSolanaTransaction) {
     const result = await this.options.rpc
       .simulateTransaction(unsignedWireTransaction(transaction, this.options.signer), {
         commitment: "confirmed",
@@ -99,11 +106,20 @@ export class SolanaReviewedExecutionAdapter implements ReviewedExecutionAdapter 
       : ({ ok: false, reason: "Solana transaction simulation failed" } as const);
   }
 
-  async sign(transaction: MaterializedPilotTransaction): Promise<Uint8Array> {
+  async sign(transaction: MaterializedSolanaTransaction): Promise<Uint8Array> {
     const signed = await signTransactionMessageWithSigners(
       withSigner(transaction, this.options.signer)
     );
     return Uint8Array.from(getTransactionEncoder().encode(signed));
+  }
+
+  signatureFor(signedTransaction: Uint8Array): string {
+    const decoded = getTransactionDecoder().decode(signedTransaction);
+    const signatureBytes = Object.values(decoded.signatures)[0];
+    if (!signatureBytes) {
+      throw new StrykeSdkError("validation", "Signed transaction has no fee-payer signature");
+    }
+    return getBase58Decoder().decode(signatureBytes);
   }
 
   async submit(signedTransaction: Uint8Array): Promise<string> {

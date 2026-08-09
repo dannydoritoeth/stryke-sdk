@@ -28,8 +28,16 @@ export type PilotPosition = {
   claimableAmount?: string;
   refundableAmount?: string;
   actionDeadline?: string;
+  cleanup?: PilotPositionCleanup;
   lifecycle: PilotLifecycleEvidence<PilotPositionLifecycleState>;
   raw: Readonly<Record<string, unknown>>;
+};
+
+export type PilotPositionCleanup = {
+  rentRecipient: string;
+  selfCloseAvailable: boolean;
+  action: "close_position";
+  cleanupEligibleAt: string;
 };
 
 export type PilotPositionPoolState = {
@@ -194,6 +202,23 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
     throw new StrykeSdkError("compatibility", "Position economic version is unsupported");
   }
   const parsedValuation = valuation(row.valuation);
+  let cleanup: PilotPositionCleanup | undefined;
+  if (row.cleanup !== undefined) {
+    const cleanupRow = record(row.cleanup, "cleanup");
+    const staleCleanup = record(cleanupRow.staleCleanup, "cleanup.staleCleanup");
+    const cleanupEligibleAt = text(staleCleanup.cleanupEligibleAt, "cleanup.staleCleanup.cleanupEligibleAt");
+    if (
+      typeof cleanupRow.selfCloseAvailable !== "boolean" ||
+      staleCleanup.action !== "close_position" ||
+      !Number.isFinite(Date.parse(cleanupEligibleAt))
+    ) throw new StrykeSdkError("api_response", "Position cleanup metadata is invalid");
+    cleanup = {
+      rentRecipient: text(cleanupRow.rentRecipient, "cleanup.rentRecipient"),
+      selfCloseAvailable: cleanupRow.selfCloseAvailable,
+      action: "close_position",
+      cleanupEligibleAt,
+    };
+  }
   if (
     (lifecycle.state === "open_position" || lifecycle.state === "sellable") &&
     (economicVersion !== 2 || parsedValuation === undefined)
@@ -232,10 +257,17 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
     ...(claimableAmount === undefined ? {} : { claimableAmount }),
     ...(refundableAmount === undefined ? {} : { refundableAmount }),
     ...(typeof actionDeadline === "string" ? { actionDeadline } : {}),
+    ...(cleanup === undefined ? {} : { cleanup }),
     lifecycle,
     raw: row,
   };
 };
+
+export const positionCleanupAvailable = (position: PilotPosition): boolean =>
+  position.cleanup?.selfCloseAvailable === true &&
+  position.cleanup.rentRecipient === position.owner &&
+  BigInt(position.yesShares) === 0n &&
+  BigInt(position.noShares) === 0n;
 
 export const positionIfWinPayout = (
   position: PilotPosition,

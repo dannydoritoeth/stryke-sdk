@@ -84,6 +84,35 @@ The example permits three unresolved positions so consecutive five-minute
 rounds can overlap, while durable round state still permits only one entry per
 market identity.
 
+Selling, claiming, or refunding may leave an empty wallet-owned position
+account. In live mode the bot treats the API's `cleanup_available` state as part
+of lifecycle completion: it verifies the same-owner `close_all` plan,
+simulates, signs, confirms, and restart-reconciles the rent recovery before
+another entry. Paper mode cannot sign this action.
+
+The plan separates wallet-recoverable position rent from fees. A first trade
+may also fund shared market-series or strike-market initialization accounts;
+those costs are not presented as wallet-recoverable unless production
+explicitly includes them in a future authoritative cleanup plan.
+
+For a terminal non-winning position, the two recovery paths remain separate:
+
+```text
+API state refundable -> refund collateral -> zero shares
+zero shares + cleanup_available -> close position account -> recover rent
+```
+
+There is no generic reclaim operation for being the first wallet to initialize
+a shared market. While the market is open, use an executable `sell`; `refund`
+is unavailable until the API declares the terminal refundable state, and
+`claim` is only for a resolved winner.
+
+For a cleanup-only maintenance run that cannot open another trade:
+
+```bash
+npx stryke-reference-bot recover-rent --profile=live
+```
+
 Unavailable/stale data blocks decisions. There is no alternate-price or
 inferred-market fallback.
 
