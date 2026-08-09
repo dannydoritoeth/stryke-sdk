@@ -89,6 +89,8 @@ account. In live mode the bot treats the API's `cleanup_available` state as part
 of lifecycle completion: it verifies the same-owner `close_all` plan,
 simulates, signs, confirms, and restart-reconciles the rent recovery before
 another entry. Paper mode cannot sign this action.
+If the authoritative `cleanupEligibleAt` is still in the future, the bot waits
+and reports that timestamp instead of submitting early or opening another trade.
 
 The plan separates wallet-recoverable position rent from fees. A first trade
 may also fund shared market-series or strike-market initialization accounts;

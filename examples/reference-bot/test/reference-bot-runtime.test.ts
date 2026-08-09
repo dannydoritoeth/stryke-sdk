@@ -44,7 +44,7 @@ describe("reference bot composed runtime", () => {
         rentRecipient: "owner",
         selfCloseAvailable: true,
         action: "close_position",
-        cleanupEligibleAt: new Date().toISOString(),
+        cleanupEligibleAt: "2020-01-01T00:00:00.000Z",
       },
     });
     const executeCleanup = vi.fn(async () => ({
@@ -61,6 +61,32 @@ describe("reference bot composed runtime", () => {
       details: { recoverableLamports: "2088000", estimatedNetworkFeeLamports: "5000" },
     });
     expect(executeCleanup).toHaveBeenCalledOnce();
+    expect(runtime.evaluateEntry).not.toHaveBeenCalled();
+  });
+
+  it("waits_for_authoritative_cleanup_time_without_evaluating_an_entry", async () => {
+    const cleanupPosition = position("expired_unclaimed", {
+      yesShares: "0",
+      noShares: "0",
+      cleanup: {
+        rentRecipient: "owner",
+        selfCloseAvailable: true,
+        action: "close_position",
+        cleanupEligibleAt: "2030-01-01T00:00:00.000Z",
+      },
+    });
+    const runtime = adapter({ listPositions: async () => [cleanupPosition] });
+    await expect(runMarketTick({
+      tick: 1,
+      config: live,
+      adapter: runtime,
+      nowSeconds: Date.parse("2029-12-31T23:59:59.000Z") / 1_000,
+    })).resolves.toMatchObject({
+      phase: "wait",
+      action: "hold",
+      reason: "cleanup_not_yet_eligible",
+      details: { cleanupEligibleAt: "2030-01-01T00:00:00.000Z" },
+    });
     expect(runtime.evaluateEntry).not.toHaveBeenCalled();
   });
 
@@ -83,7 +109,7 @@ describe("reference bot composed runtime", () => {
         rentRecipient: "owner",
         selfCloseAvailable: true,
         action: "close_position",
-        cleanupEligibleAt: new Date().toISOString(),
+        cleanupEligibleAt: "2020-01-01T00:00:00.000Z",
       },
     });
     let tick = 0;

@@ -28,7 +28,7 @@ export {
   parsePilotMarketLifecycle,
   parsePilotPositionLifecycle,
 } from "./lifecycle.js";
-export { PositionsClient, parsePilotPosition, positionCleanupAvailable, positionIfWinPayout, positionSideExposures, terminalActionFor } from "./positions.js";
+export { PositionsClient, parsePilotPosition, positionCleanupAvailable, positionCleanupPending, positionIfWinPayout, positionSideExposures, terminalActionFor } from "./positions.js";
 export type { PilotPosition, PilotPositionCleanup, PilotPositionPoolState, PilotPositionSideExposure, PositionTerminalAction } from "./positions.js";
 export { CleanupClient } from "./cleanup.js";
 export type { CleanupPlan, MaterializedCleanupTransaction } from "./cleanup.js";

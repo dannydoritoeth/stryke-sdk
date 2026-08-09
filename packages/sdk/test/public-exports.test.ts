@@ -41,6 +41,7 @@ describe("public SDK exports", () => {
       "parsePilotPosition",
       "parsePilotPositionLifecycle",
       "positionCleanupAvailable",
+      "positionCleanupPending",
       "positionIfWinPayout",
       "positionSideExposures",
       "seedHermesHistory",

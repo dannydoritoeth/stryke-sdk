@@ -4,6 +4,7 @@ import {
   PositionsClient,
   parsePilotPosition,
   positionCleanupAvailable,
+  positionCleanupPending,
   terminalActionFor,
   type PilotMarket,
   type PilotPositionLifecycleState,
@@ -80,10 +81,29 @@ describe("pilot positions", () => {
       cleanup,
     }));
     expect(positionCleanupAvailable(parsed)).toBe(true);
+    expect(positionCleanupPending(parsed)).toBe(true);
     expect(positionCleanupAvailable({
       ...parsed,
       cleanup: { ...parsed.cleanup!, rentRecipient: "11111111111111111111111111111111" },
     })).toBe(false);
+  });
+
+  it("does not expose cleanup before the authoritative eligibility time", () => {
+    const parsed = parsePilotPosition(row("expired_unclaimed", {
+      yesShares: "0",
+      noShares: "0",
+      cleanup: {
+        rentRecipient: "HYDrCb45WNbMzLjKqQByKduksFCasUfgLNpkA7xvcxf7",
+        selfCloseAvailable: true,
+        staleCleanup: {
+          action: "close_position",
+          cleanupEligibleAt: "2026-07-22T00:01:00.000Z",
+        },
+      },
+    }));
+    expect(positionCleanupPending(parsed)).toBe(true);
+    expect(positionCleanupAvailable(parsed, Date.parse("2026-07-22T00:00:59.999Z"))).toBe(false);
+    expect(positionCleanupAvailable(parsed, Date.parse("2026-07-22T00:01:00.000Z"))).toBe(true);
   });
 
   it("normalizes_pending_open_sellable_awaiting_resolution_and_terminal_states", () => {
