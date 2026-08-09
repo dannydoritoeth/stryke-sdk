@@ -75,6 +75,7 @@ path; funding and the explicit live command remain deliberate operator actions.
 | OUT-09 | Safe restart | Paper and live profiles reconcile durable state before making another economic decision; restart cannot duplicate an action or round entry. |
 | OUT-10 | Actionable diagnostics | Every wait, skip, block and action names its phase, stable reason, market identity and remediation or next eligible time where applicable. |
 | OUT-11 | Immutable handoff | Clean-room and release evidence identify the exact reviewed commit/tag and published package versions. |
+| OUT-12 | Rent-complete live lifecycle | Live operation discovers empty wallet-owned position accounts, reports recoverable and non-recoverable initialization costs separately, and can reclaim eligible rent to the same signer without requiring the web frontend. |
 
 ## Product requirements
 
@@ -92,11 +93,18 @@ path; funding and the explicit live command remain deliberate operator actions.
 | READY-10 | A generated or minimal configuration path must expose required choices while retaining advanced documented overrides. |
 | READY-11 | Public runtime evidence must cover two eligible iterations, a complete paper lifecycle, restart during pending/open state, and recovery from a documented dependency failure. |
 | READY-12 | Configuration, consumer, package, SDK, bot, documentation, boundary and production-smoke gates must pass against one candidate commit. |
+| READY-13 | The SDK validates and materializes the API-authoritative portfolio `close_all` plan; the live bot composes discovery, reviewed submission, confirmation, durable restart reconciliation and exactly-once cleanup while paper mode remains unable to sign. |
 
 ## Safety invariants
 
 - Paper mode cannot import a wallet adapter, sign, simulate through a signer, or
   submit a transaction regardless of environment configuration.
+- Cleanup may close only API-authoritative empty wallet-owned position accounts;
+  signer, fee payer and rent recipient must equal the configured live owner.
+  Shared program accounts must never be described as wallet-recoverable.
+- Collateral refund and account-rent cleanup are separate ordered actions:
+  refund requires authoritative refundable state/amount/reason/deadline, then
+  cleanup requires zero shares and authoritative same-owner close eligibility.
 - Missing, stale, degraded, mismatched or incoherent authoritative inputs fail
   closed for that decision; the UX may wait but must not fabricate data.
 - The SDK and bot never substitute a remembered minimum for a missing market

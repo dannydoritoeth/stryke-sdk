@@ -42,6 +42,30 @@ devnet endpoints. Advanced overrides are documented in the SDK repository's
 `docs/configuration.md`. Never put a private key or seed phrase directly in an
 environment variable.
 
+An API-authoritative `cleanup_available` position is part of the live
+lifecycle. Before another entry, the bot validates the portfolio `close_all`
+plan, simulates and signs it, confirms it, and reconciles disappearance of the
+empty position account through the durable checkpoint. The successful event is
+`close:wallet_rent_recovered`; read-only mode reports `cleanup_dry_run`, and
+paper mode cannot load or sign cleanup. This reclaims wallet-owned position
+rent only—not shared market initialization costs.
+
+To perform cleanup without allowing a new market entry, use the bounded
+recovery command after live doctor passes:
+
+```bash
+npx stryke-reference-bot recover-rent --profile=live
+```
+
+It submits at most the currently prepared cleanup chunk and exits. If nothing
+is eligible it reports `no_cleanup_available`; it never evaluates an entry.
+
+Cleanup is not a substitute for settlement. A non-winning position follows
+`refundable -> refund -> cleanup_available -> close` only when the production
+API authoritatively supplies the refundable state, amount, reason and deadline.
+While a market is open, `sell` is the only economic exit; `claim` remains for a
+resolved winner.
+
 One local process needs no database:
 
 ```text

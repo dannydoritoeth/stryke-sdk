@@ -36,6 +36,73 @@ const adapter = (overrides: Partial<ReferenceBotRuntimeAdapter> = {}): Reference
 });
 
 describe("reference bot composed runtime", () => {
+  it("live runtime prioritizes eligible wallet rent cleanup and reports the recovery", async () => {
+    const cleanupPosition = position("expired_unclaimed", {
+      yesShares: "0",
+      noShares: "0",
+      cleanup: {
+        rentRecipient: "owner",
+        selfCloseAvailable: true,
+        action: "close_position",
+        cleanupEligibleAt: new Date().toISOString(),
+      },
+    });
+    const executeCleanup = vi.fn(async () => ({
+      clientActionId: "cleanup-1",
+      signature: "cleanup-signature",
+      recoverableLamports: "2088000",
+      estimatedNetworkFeeLamports: "5000",
+    }));
+    const runtime = adapter({ listPositions: async () => [cleanupPosition], executeCleanup });
+    await expect(runMarketTick({ tick: 1, config: live, adapter: runtime })).resolves.toMatchObject({
+      phase: "position",
+      action: "close",
+      reason: "wallet_rent_recovered",
+      details: { recoverableLamports: "2088000", estimatedNetworkFeeLamports: "5000" },
+    });
+    expect(executeCleanup).toHaveBeenCalledOnce();
+    expect(runtime.evaluateEntry).not.toHaveBeenCalled();
+  });
+
+  it("non_winner_refunds_before_a_later_zero_share_rent_cleanup", async () => {
+    const refundable = position("refundable", {
+      refundableAmount: "100",
+      actionDeadline: new Date(Date.now() + 60_000).toISOString(),
+      lifecycle: {
+        schemaVersion: "stryke.pilotLifecycle.v1",
+        state: "refundable",
+        rawStatus: "refundable",
+        rawReason: "market_zero_winner_refund",
+        observedAt: new Date().toISOString(),
+      },
+    });
+    const cleanupPosition = position("expired_unclaimed", {
+      yesShares: "0",
+      noShares: "0",
+      cleanup: {
+        rentRecipient: "owner",
+        selfCloseAvailable: true,
+        action: "close_position",
+        cleanupEligibleAt: new Date().toISOString(),
+      },
+    });
+    let tick = 0;
+    const runtime = adapter({
+      listPositions: async () => [tick++ === 0 ? refundable : cleanupPosition],
+      executeCleanup: vi.fn(async () => ({ clientActionId: "cleanup-1" })),
+    });
+    await expect(runMarketTick({ tick: 1, config: live, adapter: runtime })).resolves.toMatchObject({
+      action: "refund",
+      reason: "terminal_confirmed",
+    });
+    await expect(runMarketTick({ tick: 2, config: live, adapter: runtime })).resolves.toMatchObject({
+      action: "close",
+      reason: "wallet_rent_recovered",
+    });
+    expect(runtime.executeTerminal).toHaveBeenCalledWith(refundable, "refund");
+    expect(runtime.executeCleanup).toHaveBeenCalledWith(cleanupPosition);
+  });
+
   it("runtime_reconciles_before_manage_or_entry", async () => {
     const calls: string[] = [];
     const runtime = adapter({

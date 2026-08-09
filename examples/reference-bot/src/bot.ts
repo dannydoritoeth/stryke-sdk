@@ -1,5 +1,6 @@
 import {
   positionSideExposures,
+  positionCleanupAvailable,
   terminalActionFor,
   type ActionCheckpoint,
   type ExecutableQuote,
@@ -20,7 +21,7 @@ import { polymarketEntryWindow, type PolymarketTimingMode } from "./strategy/ent
 import { decidePolymarketEarlyExit } from "./strategy/polymarket-exit.js";
 import { assertRuntimeLeaseHeld, type RuntimeLease } from "./runtime-lease.js";
 
-export type RuntimeAction = "buy" | "sell" | "claim" | "refund" | "paper_buy" | "paper_hold" | "paper_sell" | "paper_claim" | "paper_refund" | "paper_loss";
+export type RuntimeAction = "buy" | "sell" | "claim" | "refund" | "close" | "paper_buy" | "paper_hold" | "paper_sell" | "paper_claim" | "paper_refund" | "paper_loss";
 
 export type RuntimeEvent = {
   tick: number;
@@ -34,7 +35,7 @@ export type RuntimeEvent = {
   details?: Readonly<Record<string, string | number | boolean>>;
   positionDecisions?: readonly {
     positionId: string;
-    action: "sell" | "hold" | "claim" | "refund" | "decision_unavailable";
+    action: "sell" | "hold" | "claim" | "refund" | "close" | "decision_unavailable";
     reason: string;
     details?: Readonly<Record<string, string | number | boolean>>;
   }[];
@@ -61,7 +62,7 @@ export type EntryEvaluation = {
   polymarketPrices?: Readonly<Record<"yes" | "no", PolymarketExecutablePrice>>;
 };
 
-export type RuntimeExecution = { clientActionId?: string; signature?: string };
+export type RuntimeExecution = { clientActionId?: string; signature?: string; recoverableLamports?: string; estimatedNetworkFeeLamports?: string };
 
 export interface ReferenceBotRuntimeAdapter {
   executionMode?: "paper" | "live";
@@ -73,6 +74,7 @@ export interface ReferenceBotRuntimeAdapter {
   executeBuy(evaluation: EntryEvaluation, quote: ExecutableQuote): Promise<RuntimeExecution>;
   executeSell(position: PilotPosition, exposure: PilotPositionSideExposure, evaluation: PositionEvaluation, reason: string): Promise<RuntimeExecution>;
   executeTerminal(position: PilotPosition, action: PositionTerminalAction): Promise<RuntimeExecution>;
+  executeCleanup?(position: PilotPosition): Promise<RuntimeExecution>;
   hasConvergenceExitedRound?(market: PilotMarket): Promise<boolean>;
   hasEnteredRound?(market: PilotMarket): Promise<boolean>;
   recordEnteredRound?(market: PilotMarket): Promise<void>;
@@ -163,6 +165,7 @@ export const runMarketTick = async ({
   }
   const nonActionableTerminalPositions = new Set<string>();
   const terminalCandidates: Array<{ position: PilotPosition; action: PositionTerminalAction }> = [];
+  const cleanupCandidates: PilotPosition[] = [];
   const sellCandidates: Array<{
     position: PilotPosition;
     exposure: PilotPositionSideExposure;
@@ -172,11 +175,16 @@ export const runMarketTick = async ({
   }> = [];
   const positionDecisions: Array<{
     positionId: string;
-    action: "sell" | "hold" | "claim" | "refund" | "decision_unavailable";
+    action: "sell" | "hold" | "claim" | "refund" | "close" | "decision_unavailable";
     reason: string;
     details?: Readonly<Record<string, string | number | boolean>>;
   }> = [];
   for (const position of positions) {
+    if (!paper && positionCleanupAvailable(position)) {
+      cleanupCandidates.push(position);
+      positionDecisions.push({ positionId: position.positionId, action: "close", reason: "wallet_rent_recovery_available" });
+      continue;
+    }
     if (terminalStates.has(position.lifecycle.state)) {
       let action: PositionTerminalAction;
       try { action = terminalActionFor(position); }
@@ -254,6 +262,32 @@ export const runMarketTick = async ({
     }
     const result = await adapter.executeTerminal(terminal.position, terminal.action);
     return event(tick, "position", paper ? `paper_${terminal.action}` : terminal.action, paper ? "paper_terminal_simulated" : "terminal_confirmed", { positionId: terminal.position.positionId, positionDecisions, ...result });
+  }
+
+  const cleanup = cleanupCandidates[0];
+  if (cleanup) {
+    if (config.readOnlyMode || !config.liveTradingEnabled || config.killSwitchEnabled) {
+      return event(tick, "position", "close", "cleanup_dry_run", {
+        positionId: cleanup.positionId,
+        positionDecisions,
+      });
+    }
+    if (!adapter.executeCleanup) {
+      return event(tick, "position", "blocked", "cleanup_adapter_unavailable", {
+        positionId: cleanup.positionId,
+        positionDecisions,
+      });
+    }
+    const result = await adapter.executeCleanup(cleanup);
+    return event(tick, "position", "close", "wallet_rent_recovered", {
+      positionId: cleanup.positionId,
+      details: {
+        ...(result.recoverableLamports ? { recoverableLamports: result.recoverableLamports } : {}),
+        ...(result.estimatedNetworkFeeLamports ? { estimatedNetworkFeeLamports: result.estimatedNetworkFeeLamports } : {}),
+      },
+      positionDecisions,
+      ...result,
+    });
   }
 
   sellCandidates.sort((a, b) => {

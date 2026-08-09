@@ -4,6 +4,7 @@ import {
   FileActionCheckpointStore,
   MarketsClient,
   PositionsClient,
+  positionCleanupAvailable,
   PriceStore,
   ReviewedTransactionExecutor,
   SDK_VERSION,
@@ -208,6 +209,10 @@ const selectedMaximumTicks = (): number | undefined => {
 
 const runSdkBot = async (profile: ReferenceBotProfile) => {
   const doctorMode = process.argv.includes("doctor");
+  const cleanupOnly = process.argv.includes("recover-rent");
+  if (cleanupOnly && profile === "paper") {
+    throw new StrykeSdkError("configuration", "recover-rent requires --profile=devnet or --profile=live");
+  }
   if (profile === "devnet" && !doctorMode) requireRootEnvFile(profile);
   let config: ReturnType<typeof parseReferenceBotEnv>;
   try {
@@ -301,17 +306,48 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
     if (postgresState) await postgresState.initialize();
     const checkpoint: ActionCheckpointStore = postgresState ?? new FileActionCheckpointStore(bindings.checkpointPath);
     let executor: ReviewedTransactionExecutor | undefined;
+    let cleanupExecutionAdapter: SolanaReviewedExecutionAdapter | undefined;
     if (signer) {
       const transactions = new TransactionsClient(client, rpc);
       const positions = new PositionsClient(client);
       const executionAdapter = new SolanaReviewedExecutionAdapter({ rpc, signer, refresh: async ({ clientActionId }) => ({ action: await transactions.reconcile(clientActionId), positions: await positions.list(signer.address) }) });
+      cleanupExecutionAdapter = executionAdapter;
       executor = new ReviewedTransactionExecutor(transactions, checkpoint, executionAdapter);
     }
     const polymarketClient = config.strategy.startsWith("polymarket_")
       ? new PolymarketClient(config.polymarketClobUrl)
       : undefined;
     const roundDecisionStore: RoundDecisionStore = postgresState ?? new FileRoundDecisionStore(bindings.roundStatePath);
-    const sdkAdapter = createSdkRuntimeAdapter({ client, rpc, priceStore, checkpoint, config, roundDecisionStore, ...(polymarketClient ? { polymarketClient } : {}), ...(signer ? { owner: signer.address } : {}), ...(executor ? { executor } : {}) });
+    const sdkAdapter = createSdkRuntimeAdapter({ client, rpc, priceStore, checkpoint, config, roundDecisionStore, ...(polymarketClient ? { polymarketClient } : {}), ...(signer ? { owner: signer.address } : {}), ...(executor ? { executor } : {}), ...(cleanupExecutionAdapter ? { cleanupExecutionAdapter } : {}) });
+    if (cleanupOnly) {
+      try {
+        const eligible = (await sdkAdapter.listPositions()).find(positionCleanupAvailable);
+        if (!eligible) {
+          console.log(JSON.stringify({
+            event: "reference_bot_rent_recovery",
+            profile,
+            action: "skip",
+            reason: "no_cleanup_available",
+          }));
+          return;
+        }
+        if (!sdkAdapter.executeCleanup) {
+          throw new StrykeSdkError("configuration", "Live cleanup execution adapter is unavailable");
+        }
+        const result = await sdkAdapter.executeCleanup(eligible);
+        console.log(JSON.stringify({
+          event: "reference_bot_rent_recovery",
+          profile,
+          action: "close",
+          reason: "wallet_rent_recovered",
+          positionId: eligible.positionId,
+          ...result,
+        }));
+        return;
+      } finally {
+        if (postgresState) await postgresState.close();
+      }
+    }
     const adapter = profile === "paper"
       ? createPaperRuntimeAdapter(sdkAdapter, new FilePaperLedger(`${bindings.roundStatePath}.paper-ledger.json`))
       : sdkAdapter;

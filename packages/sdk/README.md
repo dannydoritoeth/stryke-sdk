@@ -71,6 +71,23 @@ Simulate before wallet approval, then submit, confirm, and reconcile the same
 stable action ID. Use `PositionsClient` and its API-authoritative terminal
 action to claim or refund; do not infer settlement locally.
 
+There are two distinct non-winning recovery operations. When the API marks a
+position `refundable` with a positive authoritative amount and a valid
+underfunded or zero-winner reason/deadline, `terminalActionFor(position)`
+returns `refund`; prepare it with `TransactionsClient.prepareTerminal`. The SDK
+never infers collateral refund eligibility from market conditions.
+
+After economic exposure is zero, a wallet-owned position account can separately
+expose `cleanup_available`. Check `positionCleanupAvailable(position)`, then call
+`new CleanupClient(client, rpc).prepareAll(owner, "SOL")`. Review and execute
+each returned transaction through the same dedicated owner signer. The client
+accepts only `close_user_position` instructions from the compatible program and
+requires signer, fee payer, rent recipient, and requested owner to agree.
+
+The cleanup plan reports recoverable position rent and estimated network fees
+separately. It does not describe shared market-series or strike-market
+initialization rent as wallet-recoverable.
+
 For the fastest safe introduction, run the bundled read-only bot:
 
 ```bash

@@ -104,7 +104,7 @@ entry, loss of state or unsafe fallback.
 
 ## Phase 4: Minimal live transition
 
-Targets: `OUT-07`, `OUT-08`; `READY-09`, `READY-10`.
+Targets: `OUT-07`, `OUT-08`, `OUT-12`; `READY-09`, `READY-10`, `READY-13`.
 
 Deliverables:
 
@@ -117,10 +117,17 @@ Deliverables:
    neither may submit.
 5. Keep advanced controls available without making them prerequisites for the
    conservative path.
+6. Discover API-authoritative `cleanup_available` positions and reclaim their
+   wallet-owned account rent through the same reviewed, durable lifecycle;
+   report shared market initialization cost separately.
 
 Gate: an independent user who completed paper setup reaches
 `READY_FOR_LIVE` with only the documented wallet/funding additions and zero
 undocumented assistance.
+
+The earliest open cell is the composed live lifecycle: recovery remains open
+until the installed public bot confirms cleanup and a restart observes the
+account absent without submitting a duplicate close.
 
 ## Phase 5: Publication and clean-room release
 

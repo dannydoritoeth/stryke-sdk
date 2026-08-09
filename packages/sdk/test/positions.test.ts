@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   PositionsClient,
   parsePilotPosition,
+  positionCleanupAvailable,
   terminalActionFor,
   type PilotMarket,
   type PilotPositionLifecycleState,
@@ -64,6 +65,27 @@ const market = {
 } as PilotMarket;
 
 describe("pilot positions", () => {
+  it("accepts only same-owner zero-share cleanup availability", () => {
+    const cleanup = {
+      rentRecipient: "HYDrCb45WNbMzLjKqQByKduksFCasUfgLNpkA7xvcxf7",
+      selfCloseAvailable: true,
+      staleCleanup: {
+        action: "close_position",
+        cleanupEligibleAt: "2026-07-22T00:00:00.000Z",
+      },
+    };
+    const parsed = parsePilotPosition(row("expired_unclaimed", {
+      yesShares: "0",
+      noShares: "0",
+      cleanup,
+    }));
+    expect(positionCleanupAvailable(parsed)).toBe(true);
+    expect(positionCleanupAvailable({
+      ...parsed,
+      cleanup: { ...parsed.cleanup!, rentRecipient: "11111111111111111111111111111111" },
+    })).toBe(false);
+  });
+
   it("normalizes_pending_open_sellable_awaiting_resolution_and_terminal_states", () => {
     const states: PilotPositionLifecycleState[] = [
       "pending_confirmation",

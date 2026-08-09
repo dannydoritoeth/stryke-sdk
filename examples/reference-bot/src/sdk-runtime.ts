@@ -1,8 +1,10 @@
 import {
+  CleanupClient,
   MarketsClient,
   PositionsClient,
   QuotesClient,
   StrykeSdkError,
+  positionCleanupAvailable,
   TransactionsClient,
   createPilotIntentHash,
   createTerminalIntentHash,
@@ -13,6 +15,7 @@ import {
   type PilotPositionSideExposure,
   type PriceStore,
   type ReviewedTransactionExecutor,
+  type SolanaReviewedExecutionAdapter,
   type StrykeClient,
 } from "@stryketrade/sdk";
 
@@ -108,6 +111,7 @@ export const createSdkRuntimeAdapter = ({
   config,
   owner,
   executor,
+  cleanupExecutionAdapter,
   now = Date.now,
   polymarketClient,
   roundDecisionStore,
@@ -119,6 +123,7 @@ export const createSdkRuntimeAdapter = ({
   config: ReferenceBotConfig;
   owner?: string;
   executor?: ReviewedTransactionExecutor;
+  cleanupExecutionAdapter?: SolanaReviewedExecutionAdapter;
   now?: () => number;
   polymarketClient?: PolymarketClient;
   roundDecisionStore?: RoundDecisionStore;
@@ -127,6 +132,7 @@ export const createSdkRuntimeAdapter = ({
   const positions = new PositionsClient(client);
   const quotes = new QuotesClient(client, now);
   const transactions = new TransactionsClient(client, rpc, now);
+  const cleanup = new CleanupClient(client, rpc);
   const requireLive = () => {
     if (!owner || !executor) throw new StrykeSdkError("configuration", "Live execution adapter is unavailable");
     return { owner, executor };
@@ -253,10 +259,23 @@ export const createSdkRuntimeAdapter = ({
           ? exposureShares > 0n
           : materialization.action === "sell"
             ? !matching || !["open_position", "sellable"].includes(matching.lifecycle.state) || exposureShares < BigInt(materialization.sharesBefore ?? "0")
+            : materialization.action === "close"
+              ? !matching || !positionCleanupAvailable(matching)
             : !matching || (
                 exposureShares === 0n &&
                 ["claimed", "refunded", "expired_unclaimed", "lost"].includes(matching.lifecycle.state)
               );
+        if (!observed && materialization.action === "close" && pending.signature && materialization.lastValidBlockHeight && cleanupExecutionAdapter) {
+          const confirmation = await cleanupExecutionAdapter.confirm({
+            signature: pending.signature,
+            lastValidBlockHeight: BigInt(materialization.lastValidBlockHeight),
+          });
+          if (confirmation.state === "failed" || confirmation.state === "expired") {
+            await checkpoint.clear(pending.clientActionId);
+            return { state: confirmation.state, clientActionId: pending.clientActionId, signature: pending.signature };
+          }
+          return { state: confirmation.state === "confirmed" ? "materializing" : "submitted", clientActionId: pending.clientActionId, signature: pending.signature };
+        }
         if (!observed) return { state: "materializing", clientActionId: pending.clientActionId, ...(pending.signature ? { signature: pending.signature } : {}) };
         if (materialization.action === "sell" && materialization.strategyReason === "polymarket_convergence" && roundDecisionStore) {
           await roundDecisionStore.recordConvergenceExit({ marketId: materialization.marketId ?? String(matching?.market.tokenMint ?? materialization.targetValue), expiryTs: materialization.expiryTs, strikePrice: materialization.targetValue });
@@ -349,6 +368,114 @@ export const createSdkRuntimeAdapter = ({
       const result = await live.executor.execute(await transactions.prepareTerminal({ owner: live.owner, position, action, clientActionId, intentHash }));
       await saveMaterialization({ result, intentHash, action, market: { expiryTs: Number(position.market.expiryTs), targetValue: String(position.market.targetValue) }, positionId: position.positionId });
       return executionResult(result);
+    },
+    executeCleanup: async (position) => {
+      const live = requireLive();
+      if (!cleanupExecutionAdapter) {
+        throw new StrykeSdkError("configuration", "Live cleanup execution adapter is unavailable");
+      }
+      if (!positionCleanupAvailable(position)) {
+        throw new StrykeSdkError("position_state", "Position rent cleanup is unavailable");
+      }
+      const plan = await cleanup.prepareAll(live.owner);
+      const prepared = plan.transactions[0];
+      if (!prepared) {
+        throw new StrykeSdkError("position_state", "No wallet-owned cleanup transaction was prepared");
+      }
+      const materialization = {
+        action: "close" as const,
+        asset: config.asset,
+        expiryFamily: config.expiryFamily,
+        expiryTs: Number(position.market.expiryTs),
+        targetValue: String(position.market.targetValue),
+        positionId: position.positionId,
+        lastValidBlockHeight: prepared.lastValidBlockHeight.toString(),
+      };
+      await checkpoint.save({
+        clientActionId: prepared.clientActionId,
+        intentHash: prepared.intentHash,
+        state: "not_submitted",
+        materialization,
+      });
+      if ((await cleanupExecutionAdapter.getBlockHeight()) > prepared.lastValidBlockHeight) {
+        await checkpoint.clear(prepared.clientActionId);
+        throw new StrykeSdkError("blockhash_expired", "Prepared cleanup blockhash expired");
+      }
+      const simulation = await cleanupExecutionAdapter.simulate(prepared);
+      if (!simulation.ok) {
+        await checkpoint.clear(prepared.clientActionId);
+        throw new StrykeSdkError("simulation_failed", simulation.reason);
+      }
+      let signed: Uint8Array;
+      try {
+        signed = await cleanupExecutionAdapter.sign(prepared);
+      } catch {
+        await checkpoint.clear(prepared.clientActionId);
+        throw new StrykeSdkError("wallet_rejected", "Wallet rejected cleanup signing");
+      }
+      const expectedSignature = cleanupExecutionAdapter.signatureFor(signed);
+      await checkpoint.save({
+        clientActionId: prepared.clientActionId,
+        intentHash: prepared.intentHash,
+        signature: expectedSignature,
+        state: "unknown",
+        materialization,
+      });
+      let signature: string;
+      try {
+        signature = await cleanupExecutionAdapter.submit(signed);
+        if (signature !== expectedSignature) {
+          throw new StrykeSdkError("intent_mismatch", "Submitted cleanup signature changed");
+        }
+      } catch {
+        await checkpoint.save({
+          clientActionId: prepared.clientActionId,
+          intentHash: prepared.intentHash,
+          signature: expectedSignature,
+          state: "unknown",
+          materialization,
+        });
+        throw new StrykeSdkError("submission_failed", "Cleanup submission outcome is unknown");
+      }
+      await checkpoint.save({
+        clientActionId: prepared.clientActionId,
+        intentHash: prepared.intentHash,
+        signature,
+        state: "submitted",
+        materialization,
+      });
+      const confirmation = await cleanupExecutionAdapter.confirm({
+        signature,
+        lastValidBlockHeight: prepared.lastValidBlockHeight,
+      });
+      if (confirmation.state !== "confirmed") {
+        if (confirmation.state === "failed" || confirmation.state === "expired") {
+          await checkpoint.clear(prepared.clientActionId);
+        }
+        throw new StrykeSdkError(
+          confirmation.state === "expired" ? "blockhash_expired" : "confirmation_unknown",
+          `Cleanup confirmation ended in ${confirmation.state}`,
+          confirmation.state === "unknown"
+        );
+      }
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const matching = (await positions.list(live.owner)).find((candidate) =>
+          candidate.positionId === position.positionId
+        );
+        if (!matching || !positionCleanupAvailable(matching)) {
+          await checkpoint.clear(prepared.clientActionId);
+          return {
+            clientActionId: prepared.clientActionId,
+            signature,
+            recoverableLamports: prepared.review.recoverableLamports,
+            estimatedNetworkFeeLamports: prepared.review.estimatedNetworkFeeLamports,
+          };
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      throw new StrykeSdkError("source_stale", "Confirmed cleanup is awaiting portfolio refresh", true, {
+        clientActionId: prepared.clientActionId,
+      });
     },
   };
 };
