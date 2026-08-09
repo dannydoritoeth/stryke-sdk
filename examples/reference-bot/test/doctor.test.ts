@@ -48,6 +48,14 @@ describe("reference bot doctor", () => {
     expect(classifyDoctorError("paper", new StrykeSdkError("quote_blocked", "missing", true, { phase: "market_minimum_unavailable" })).status).toBe("BLOCKED");
   });
 
+  it("directs_an_unconfigured_live_user_to_the_example_environment", () => {
+    expect(classifyDoctorError("live", new StrykeSdkError("configuration", "Invalid reference bot config: STRYKE_ASSET"))).toMatchObject({
+      status: "BLOCKED",
+      reason: "configuration",
+      remediation: expect.stringContaining("Copy .env.example to .env"),
+    });
+  });
+
   it("uses_stable_exit_codes", () => {
     expect(doctorExitCode("READY_FOR_PAPER")).toBe(0);
     expect(doctorExitCode("READY_FOR_LIVE")).toBe(0);

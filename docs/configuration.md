@@ -8,7 +8,7 @@ profile; missing or invalid input fails before wallet or transaction work.
 | --- | --- |
 | `STRYKE_ASSET` | `BTC`, `SOL` |
 | `STRYKE_EXPIRY_FAMILY` | `one_minute`, `five_minute`, `fifteen_minute`, `hourly` |
-| `STRYKE_STRATEGY` | `polymarket_early` (example default), `polymarket_late`, or `baseline` |
+| `STRYKE_STRATEGY` | `baseline` (no-env default), `polymarket_early` (`.env.example`), or `polymarket_late` |
 | `STRYKE_ESTIMATOR` | Baseline model: `volatility_adjusted_probability` (default), `distance_to_strike`, or `distance_momentum`; ignored by Polymarket strategies |
 | `STRYKE_TRADE_SIZE_SOL` | positive decimal, maximum 9 decimals |
 | `STRYKE_MAXIMUM_TRADE_SIZE_SOL` | positive decimal; ≥ trade size |

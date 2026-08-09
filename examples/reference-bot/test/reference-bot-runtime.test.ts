@@ -340,6 +340,28 @@ describe("reference bot composed runtime", () => {
     expect(actions).toEqual(["buy", "claim", "buy"]);
   });
 
+  it("baseline_records_entry_and_blocks_same_market_reentry_after_terminal_completion", async () => {
+    let portfolioTick = 0;
+    let entered = false;
+    let buyCalls = 0;
+    const runtime = adapter({
+      listPositions: async () => {
+        portfolioTick += 1;
+        if (portfolioTick === 1) return [];
+        if (portfolioTick === 2) return [position("claimable", { claimableAmount: "10", actionDeadline: new Date(Date.now() + 60_000).toISOString() })];
+        return [position("claimed")];
+      },
+      hasEnteredRound: async () => entered,
+      recordEnteredRound: async () => { entered = true; },
+      executeBuy: async () => { buyCalls += 1; return { clientActionId: "buy" }; },
+    });
+
+    const events = await runReferenceBot({ config: live, adapter: runtime, maximumTicks: 3, wait: async () => {} });
+    expect(events.map(({ action }) => action)).toEqual(["buy", "claim", "skip"]);
+    expect(events[2]).toMatchObject({ reason: "same_round_reentry_blocked", marketId: "market-1" });
+    expect(buyCalls).toBe(1);
+  });
+
   it("entry_event_records_both_model_quote_fee_pool_and_size_inputs", async () => {
     const result = await runMarketTick({ tick: 1, config: live, adapter: adapter() });
     expect(result.details).toMatchObject({

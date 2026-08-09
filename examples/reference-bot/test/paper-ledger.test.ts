@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -77,5 +77,7 @@ describe("durable paper runtime", () => {
 
     const stored = await new FilePaperLedger(ledgerPath).load();
     expect(stored.positions.map(({ state }) => state)).toEqual(["claimed", "open"]);
+    expect((await stat(directory)).mode & 0o777).toBe(0o700);
+    expect((await stat(ledgerPath)).mode & 0o777).toBe(0o600);
   });
 });
