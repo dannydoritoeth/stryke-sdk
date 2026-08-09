@@ -125,6 +125,7 @@ export const createSdkRuntimeAdapter = ({
   now = Date.now,
   polymarketClient,
   roundDecisionStore,
+  entryFundingStatus,
 }: {
   client: StrykeClient;
   rpc: LatestBlockhashRpc;
@@ -137,6 +138,7 @@ export const createSdkRuntimeAdapter = ({
   now?: () => number;
   polymarketClient?: PolymarketClient;
   roundDecisionStore?: RoundDecisionStore;
+  entryFundingStatus?: () => Promise<{ available: boolean; balanceLamports: string; requiredLamports: string }>;
 }): ReferenceBotRuntimeAdapter => {
   const markets = new MarketsClient(client);
   const positions = new PositionsClient(client);
@@ -237,6 +239,7 @@ export const createSdkRuntimeAdapter = ({
     return executionResult(result);
   };
   return {
+    ...(entryFundingStatus ? { entryFundingStatus } : {}),
     loadMarketByIdentity: (identity) => markets.byIdentity(config.asset, { expiryFamily: config.expiryFamily, expiryTs: identity.expiryTs, targetValue: identity.strikePrice }),
     resolvePaperOutcome: async (identity) => {
       const observations = priceStore.history(config.asset).slice().sort((left, right) => left.publishTime - right.publishTime);

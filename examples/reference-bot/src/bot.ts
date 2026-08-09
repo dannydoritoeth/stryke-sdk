@@ -76,6 +76,7 @@ export interface ReferenceBotRuntimeAdapter {
   executeSell(position: PilotPosition, exposure: PilotPositionSideExposure, evaluation: PositionEvaluation, reason: string): Promise<RuntimeExecution>;
   executeTerminal(position: PilotPosition, action: PositionTerminalAction): Promise<RuntimeExecution>;
   executeCleanup?(position: PilotPosition): Promise<RuntimeExecution>;
+  entryFundingStatus?(): Promise<{ available: boolean; balanceLamports: string; requiredLamports: string }>;
   hasConvergenceExitedRound?(market: PilotMarket): Promise<boolean>;
   hasEnteredRound?(market: PilotMarket): Promise<boolean>;
   recordEnteredRound?(market: PilotMarket): Promise<void>;
@@ -360,6 +361,16 @@ export const runMarketTick = async ({
     return locked
       ? event(tick, "position", "hold", locked.reason, { positionId: locked.positionId, positionDecisions })
       : event(tick, "wait", "hold", "position_not_economically_complete", { positionDecisions });
+  }
+
+  const funding = await adapter.entryFundingStatus?.();
+  if (funding && !funding.available) {
+    return event(tick, "entry", "blocked", "insufficient_funding", {
+      details: {
+        balanceLamports: funding.balanceLamports,
+        requiredLamports: funding.requiredLamports,
+      },
+    });
   }
 
   let evaluation: EntryEvaluation;
