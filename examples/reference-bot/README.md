@@ -4,8 +4,7 @@ Runnable reference bot built exclusively on the public `@stryketrade/sdk` contra
 It defaults to paper mode, file-backed restart state, live trading disabled,
 and the kill switch enabled.
 
-After the first npm release is published, install the public packages and use
-the conservative defaults directly:
+Install the public packages and use the conservative defaults directly:
 
 ```bash
 npm install @stryketrade/sdk @stryketrade/reference-bot
@@ -37,9 +36,11 @@ blocked setup. Its final `reference_bot_doctor` JSON line includes the stable
 status, reason, remediation, market identity, configured and authoritative
 minimums, and matched quote IDs when available.
 
-Live and devnet profiles require the explicit controls documented in the SDK
-repository's `docs/configuration.md`, including a wallet adapter. Never put a
-private key or seed phrase in environment variables.
+Live inherits paper's conservative public controls and requires a dedicated
+wallet adapter/keypair plus funding. Devnet additionally requires explicit
+devnet endpoints. Advanced overrides are documented in the SDK repository's
+`docs/configuration.md`. Never put a private key or seed phrase directly in an
+environment variable.
 
 One local process needs no database:
 

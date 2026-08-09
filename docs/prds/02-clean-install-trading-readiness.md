@@ -55,6 +55,11 @@ The developer does not need to edit source, infer market identifiers, discover
 undocumented environment variables, install from a repository checkout, or
 understand all advanced controls before using conservative defaults.
 
+Live inherits the paper profile's conservative API, mainnet RPC, market,
+strategy, minimum-size, exposure, and risk controls. The wallet adapter and its
+external keypair path are the only new configuration inputs on the minimal
+path; funding and the explicit live command remain deliberate operator actions.
+
 ## Outcome measures
 
 | ID | Outcome | Required measure |

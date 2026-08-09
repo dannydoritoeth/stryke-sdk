@@ -23,11 +23,13 @@ immutable published release
 
 ## Current baseline
 
-Baseline commit: `8664d143c4892ec482ad0e1c4c0584dc874dfe75`
+Baseline commit: `7ee7688292a00a29f891b70f7b4eb3634adba4fb` (`npm-v0.1.0`)
 
 Established:
 
 - clean repository install, build, typecheck, consumer and boundary checks;
+- public `@stryketrade/sdk@0.1.0` and
+  `@stryketrade/reference-bot@0.1.0` registry installation;
 - public paper CLI reaches production API, market and Pyth inputs;
 - API and default configuration agree on a 10,000-lamport minimum;
 - two bounded public-runtime ticks execute without wallet access; and
@@ -38,7 +40,6 @@ Established:
 
 Open:
 
-- packages are not proven installable from the public registry;
 - production observation has not yet captured a naturally eligible simulated
   entry and terminal lifecycle;
 - paper reset/export controls and shared Postgres paper state remain open;
