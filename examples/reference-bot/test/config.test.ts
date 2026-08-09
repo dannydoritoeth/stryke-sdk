@@ -8,8 +8,8 @@ describe("reference bot config", () => {
     expect(referenceBotDefaults.estimator).toBe("volatility_adjusted_probability");
     expect(referenceBotDefaults.minimumEntryEdgeBps).toBe(500);
     expect(referenceBotDefaults.maximumOpenPositions).toBe(3);
-    expect(referenceBotDefaults.tradeSizeLamports).toBe(14_000_000n);
-    expect(referenceBotDefaults.maximumAggregateExposureLamports).toBe(42_000_000n);
+    expect(referenceBotDefaults.tradeSizeLamports).toBe(10_000n);
+    expect(referenceBotDefaults.maximumAggregateExposureLamports).toBe(30_000n);
     expect(parseReferenceBotConfig({ maximumOpenPositions: 2 }).maximumOpenPositions).toBe(2);
   });
   it("validates_volatility_controls_and_preserves_expiry_family_lookbacks", () => {
