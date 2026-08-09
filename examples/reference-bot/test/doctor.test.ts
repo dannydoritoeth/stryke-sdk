@@ -54,6 +54,8 @@ describe("reference bot doctor", () => {
       reason: "configuration",
       remediation: expect.stringContaining("Configure STRYKE_WALLET_ADAPTER_PATH"),
     });
+    const funding = classifyDoctorError("live", new StrykeSdkError("configuration", "Fund wallet example with enough mainnet SOL, then retry."));
+    expect(funding.remediation).toBe("Fund wallet example with enough mainnet SOL, then retry.");
   });
 
   it("uses_stable_exit_codes", () => {
