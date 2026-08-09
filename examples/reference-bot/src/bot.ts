@@ -197,7 +197,9 @@ export const runMarketTick = async ({
           details: {
             cleanupEligibleAt: position.cleanup!.cleanupEligibleAt,
             cleanupEligibilityStatus: position.cleanup!.eligibilityStatus,
-            marketSettlementStatus: position.cleanup!.marketSettlementStatus,
+            ...(position.cleanup!.marketSettlementStatus
+              ? { marketSettlementStatus: position.cleanup!.marketSettlementStatus }
+              : {}),
             ...(position.cleanup!.blockedReason
               ? { blockedReason: position.cleanup!.blockedReason }
               : {}),
@@ -320,7 +322,9 @@ export const runMarketTick = async ({
       details: {
         cleanupEligibleAt: waitingCleanup.cleanup!.cleanupEligibleAt,
         cleanupEligibilityStatus: waitingCleanup.cleanup!.eligibilityStatus,
-        marketSettlementStatus: waitingCleanup.cleanup!.marketSettlementStatus,
+        ...(waitingCleanup.cleanup!.marketSettlementStatus
+          ? { marketSettlementStatus: waitingCleanup.cleanup!.marketSettlementStatus }
+          : {}),
         ...(waitingCleanup.cleanup!.blockedReason
           ? { blockedReason: waitingCleanup.cleanup!.blockedReason }
           : {}),

@@ -164,6 +164,30 @@ describe("pilot positions", () => {
     });
   });
 
+  it("accepts non-actionable closed cleanup history without inventing eligibility", () => {
+    const parsed = parsePilotPosition(row("expired_unclaimed", {
+      yesShares: "0",
+      noShares: "0",
+      forceClose: { expiryAt: deadline, status: "closed" },
+      cleanup: {
+        rentRecipient: "HYDrCb45WNbMzLjKqQByKduksFCasUfgLNpkA7xvcxf7",
+        selfCloseAvailable: false,
+        staleCleanup: {
+          status: "not_eligible",
+          cleanupEligibleAt: "2026-07-22T00:00:00.000Z",
+        },
+      },
+    }));
+    expect(positionCleanupPending(parsed)).toBe(false);
+    expect(positionCleanupAvailable(parsed, Date.parse("2026-07-23T00:00:00.000Z"))).toBe(false);
+    expect(parsed.cleanup).toMatchObject({
+      eligibilityStatus: "not_eligible",
+      marketSettlementStatus: "closed",
+      selfCloseAvailable: false,
+    });
+    expect(parsed.cleanup).not.toHaveProperty("action");
+  });
+
   it("normalizes_pending_open_sellable_awaiting_resolution_and_terminal_states", () => {
     const states: PilotPositionLifecycleState[] = [
       "pending_confirmation",
