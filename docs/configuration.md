@@ -16,7 +16,7 @@ profile; missing or invalid input fails before wallet or transaction work.
 | `STRYKE_MINIMUM_ENTRY_EDGE_BPS` | integer `0..10000` |
 | `STRYKE_MAXIMUM_PRICE_IMPACT_BPS` | integer `0..9999` |
 | `STRYKE_MINIMUM_SECONDS_TO_EXPIRY` | non-negative integer seconds |
-| `STRYKE_MAXIMUM_OPEN_POSITIONS` | exactly `1` for the MVP runtime |
+| `STRYKE_MAXIMUM_OPEN_POSITIONS` | integer `1..100`; default `3` so unresolved consecutive rounds may overlap |
 | `STRYKE_TICK_INTERVAL_MS` | integer ≥ `1000` |
 | `STRYKE_STOP_LOSS_BPS` | integer `1..10000`; equality exits |
 | `STRYKE_TAKE_PROFIT_BPS` | positive integer; equality exits |

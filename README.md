@@ -37,10 +37,12 @@ not a guaranteed profitable strategy.
 ```bash
 npm ci
 cp .env.example .env
-npm run start:paper -w @stryke/reference-bot
+npm run start:paper -w @stryke/reference-bot -- --ticks=2
 ```
 
-Open `.env` to inspect the minimum-size strategy and risk settings. Paper mode reads real markets,
+Open `.env` to inspect the minimum-size strategy and risk settings. The bounded
+command observes two complete loop iterations and exits. Remove `-- --ticks=2`
+only when you want the continuous process. Paper mode reads real markets,
 Pyth prices, and quotes but never loads a wallet or submits a transaction.
 
 ```bash

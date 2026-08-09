@@ -8,13 +8,16 @@ and SOL 1m/5m/15m/1h are supported. One-minute live strategy performance is expe
 ```bash
 npm ci
 cp .env.example .env
-npm run start:paper -w @stryke/reference-bot
+npm run start:paper -w @stryke/reference-bot -- --ticks=2
 ```
 
 The example config uses `https://api.stryketrade.com`. Paper mode uses real data and prints the
 SDK/API/program compatibility fields `sdkVersion`, `apiVersion`,
 `apiSchemaVersion`, `programId`, and `programVersion`. It never loads a wallet
-or submits.
+or submits. This bounded first run observes two loop iterations and exits;
+remove `-- --ticks=2` for continuous paper operation. Installation normally
+takes under a minute on a warm network. The volatility estimator can still
+wait for its configured Pyth history window after preflight succeeds.
 
 ## 2. Create and fund a dedicated trading wallet
 

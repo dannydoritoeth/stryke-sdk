@@ -368,7 +368,7 @@ export const parsePilotMarket = (
       yesBps: bps(odds.yesBps, "surface.odds.yesBps"),
       noBps: bps(odds.noBps, "surface.odds.noBps"),
     },
-    ...(tradeBounds ? {
+    ...(tradeBounds?.minimumTradeCollateralUnits !== undefined ? {
       minimumTradeCollateralUnits: amount(
         tradeBounds.minimumTradeCollateralUnits,
         "surface.tradeBounds.minimumTradeCollateralUnits"

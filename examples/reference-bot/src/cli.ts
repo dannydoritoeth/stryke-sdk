@@ -2,6 +2,7 @@
 
 import {
   FileActionCheckpointStore,
+  MarketsClient,
   PositionsClient,
   PriceStore,
   ReviewedTransactionExecutor,
@@ -223,6 +224,13 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
     "Connected to a compatible Stryke API.",
     "Check STRYKE_API_BASE_URL and confirm the Stryke API is healthy and compatible.",
     () => StrykeClient.connect({ apiBaseUrl: bindings.apiBaseUrl! })
+  );
+  await runPreflightCheck(
+    profile,
+    "market",
+    `Validated a current ${config.asset} ${config.expiryFamily} market response.`,
+    "Check that the Stryke API market contract is compatible with this SDK release.",
+    () => new MarketsClient(client).current(config.asset, config.expiryFamily)
   );
   const lookbackSeconds = config.historyLookbackSeconds[config.expiryFamily];
   const priceStore = new PriceStore({ maximumHistoryPoints: config.priceHistoryMaxPoints, historyWindowMs: (lookbackSeconds + 60) * 1_000 });

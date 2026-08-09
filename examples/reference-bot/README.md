@@ -4,9 +4,17 @@ Runnable reference bot built exclusively on the public `@stryke/sdk` contract.
 It defaults to paper mode, file-backed restart state, live trading disabled,
 and the kill switch enabled.
 
+From the source workspace, copy the repository configuration and use the
+workspace script:
+
 ```bash
-npx @stryke/reference-bot --profile=paper --ticks=2
+cp .env.example .env
+npm run start:paper -w @stryke/reference-bot -- --ticks=2
 ```
+
+The package is not published to npm. After installing the two immutable
+release tarballs described in `docs/artifact-handoff.md`, its installed binary
+can instead be run as `npx stryke-reference-bot --profile=paper --ticks=2`.
 
 Live and devnet profiles require the explicit controls documented in the SDK
 repository's `docs/configuration.md`, including a wallet adapter. Never put a
