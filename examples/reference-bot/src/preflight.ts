@@ -87,5 +87,34 @@ export const runPreflightCheck = async <T>(
   throw new StrykeSdkError("configuration", `${detail} ${remediation}`);
 };
 
+export const runContinuousMarketPreflight = async <T>(
+  profile: ReferenceBotProfile,
+  operation: () => Promise<T>
+): Promise<"passed" | "waiting"> => {
+  const message = "Validated a current market response.";
+  emitPreflight(profile, "market", "checking", message);
+  try {
+    await operation();
+    emitPreflight(profile, "market", "passed", message);
+    return "passed";
+  } catch (error) {
+    if (error instanceof StrykeSdkError && error.retryable) {
+      emitPreflight(
+        profile,
+        "market",
+        "skipped",
+        `Current market is temporarily unavailable; the continuous runtime will retry (${error.code}).`
+      );
+      return "waiting";
+    }
+    const detail = error instanceof Error ? error.message : "Invalid market response";
+    const remediation = "Check that the Stryke API market contract is compatible with this SDK release.";
+    emitPreflight(profile, "market", "failed", detail, remediation);
+    throw error instanceof StrykeSdkError
+      ? error
+      : new StrykeSdkError("configuration", `${detail} ${remediation}`);
+  }
+};
+
 export const requiredExecutionBalance = (maximumTradeSizeLamports: bigint): bigint =>
   maximumTradeSizeLamports + EXECUTION_BUFFER_LAMPORTS;

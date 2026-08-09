@@ -99,6 +99,9 @@ The continuous live process performs this lifecycle automatically before its
 next entry. It matches each selected position to its authoritative cleanup
 chunk and retains the durable checkpoint until the closed position account has
 disappeared from the portfolio.
+A retryable current-market absence at startup does not terminate the continuous
+process: preflight reports that it is waiting, and normal ticks retry until a
+market becomes available. Compatibility and configuration failures still stop.
 
 The plan separates wallet-recoverable position rent from fees. A first trade
 may also fund shared market-series or strike-market initialization accounts;

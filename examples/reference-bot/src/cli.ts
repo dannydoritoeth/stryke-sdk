@@ -31,7 +31,7 @@ import { pathToFileURL } from "node:url";
 
 import { runReferenceBot } from "./bot.js";
 import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, resolveReferenceBotRuntimeBindings, type ReferenceBotProfile } from "./config.js";
-import { emitPreflight, requireRootEnvFile, requiredExecutionBalance, runPreflightCheck } from "./preflight.js";
+import { emitPreflight, requireRootEnvFile, requiredExecutionBalance, runContinuousMarketPreflight, runPreflightCheck } from "./preflight.js";
 import { createSdkRuntimeAdapter } from "./sdk-runtime.js";
 import { loadWalletForLiveTrading } from "./wallet.js";
 import { PolymarketClient } from "./polymarket-client.js";
@@ -234,13 +234,18 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
     "Check STRYKE_API_BASE_URL and confirm the Stryke API is healthy and compatible.",
     () => StrykeClient.connect({ apiBaseUrl: bindings.apiBaseUrl! })
   );
-  await runPreflightCheck(
-    profile,
-    "market",
-    `Validated a current ${config.asset} ${config.expiryFamily} market response.`,
-    "Check that the Stryke API market contract is compatible with this SDK release.",
-    () => new MarketsClient(client).current(config.asset, config.expiryFamily)
-  );
+  const marketOperation = () => new MarketsClient(client).current(config.asset, config.expiryFamily);
+  if (doctorMode) {
+    await runPreflightCheck(
+      profile,
+      "market",
+      `Validated a current ${config.asset} ${config.expiryFamily} market response.`,
+      "Check that the Stryke API market contract is compatible with this SDK release.",
+      marketOperation
+    );
+  } else {
+    await runContinuousMarketPreflight(profile, marketOperation);
+  }
   const lookbackSeconds = config.historyLookbackSeconds[config.expiryFamily];
   const priceStore = new PriceStore({ maximumHistoryPoints: config.priceHistoryMaxPoints, historyWindowMs: (lookbackSeconds + 60) * 1_000 });
   const pythEndpoint = bindings.pythHermesUrl;

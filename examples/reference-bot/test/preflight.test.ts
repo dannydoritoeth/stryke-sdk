@@ -2,17 +2,47 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { StrykeSdkError } from "@stryketrade/sdk";
 
 import {
   EXECUTION_BUFFER_LAMPORTS,
   emitPreflight,
   requiredExecutionBalance,
   requireRootEnvFile,
+  runContinuousMarketPreflight,
   runPreflightCheck,
 } from "../src/preflight.js";
 
 describe("reference bot startup preflight", () => {
   afterEach(() => vi.restoreAllMocks());
+
+  it("continuous runtime treats retryable startup market absence as waiting", async () => {
+    const output: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((line) => output.push(String(line)));
+    await expect(runContinuousMarketPreflight("live", async () => {
+      throw new StrykeSdkError(
+        "source_unavailable",
+        "Requested pilot market is unavailable",
+        true
+      );
+    })).resolves.toBe("waiting");
+    expect(output.map((line) => JSON.parse(line))).toContainEqual(expect.objectContaining({
+      event: "reference_bot_preflight",
+      check: "market",
+      status: "skipped",
+      message: expect.stringContaining("continuous runtime will retry"),
+    }));
+  });
+
+  it("continuous runtime still blocks incompatible startup market responses", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    await expect(runContinuousMarketPreflight("live", async () => {
+      throw new StrykeSdkError(
+        "compatibility",
+        "Unsupported market contract"
+      );
+    })).rejects.toMatchObject({ code: "compatibility" });
+  });
 
   it("cli_missing_env_prints_copy_command_before_startup", () => {
     const root = mkdtempSync(join(tmpdir(), "stryke-missing-env-"));
