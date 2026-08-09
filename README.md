@@ -36,12 +36,14 @@ not a guaranteed profitable strategy.
 
 ```bash
 npm ci
-cp .env.example .env
+npm run doctor:paper -w @stryke/reference-bot
 npm run start:paper -w @stryke/reference-bot -- --ticks=2
 ```
 
-Open `.env` to inspect the minimum-size strategy and risk settings. The bounded
-command observes two complete loop iterations and exits. Remove `-- --ticks=2`
+Doctor reports whether setup is ready, waiting for an eligible market, or
+blocked. The bounded command observes two complete loop iterations and exits.
+Copy `.env.example` to `.env` only to inspect or customize the conservative
+public defaults. Remove `-- --ticks=2`
 only when you want the continuous process. Paper mode reads real markets,
 Pyth prices, and quotes but never loads a wallet or submits a transaction.
 

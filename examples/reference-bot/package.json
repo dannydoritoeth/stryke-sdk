@@ -29,6 +29,8 @@
     "start:devnet": "npm run build -w @stryke/sdk && npm run build && node --env-file-if-exists=../../.env dist/cli.js --profile=devnet",
     "start:live": "npm run build -w @stryke/sdk && npm run build && node --env-file-if-exists=../../.env dist/cli.js --profile=live",
     "start:live:built": "node dist/cli.js --profile=live",
+    "doctor:paper": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js doctor --profile=paper",
+    "doctor:live": "npm run build -w @stryke/sdk && npm run build && node --env-file-if-exists=../../.env dist/cli.js doctor --profile=live",
     "test:polymarket-fixture": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js --fixture-polymarket",
     "test:polymarket-bootstrap-fixture": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js --fixture-polymarket-bootstrap",
     "test:polymarket-late-fixture": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js --fixture-polymarket-late",

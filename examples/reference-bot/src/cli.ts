@@ -38,6 +38,7 @@ import { MemoryRoundDecisionStore } from "./round-state.js";
 import type { RoundDecisionStore } from "./round-state.js";
 import { PostgresReferenceBotState } from "./postgres-state.js";
 import { requireRuntimeLease } from "./runtime-lease.js";
+import { classifyDoctorError, classifyDoctorEvaluation, emitDoctorResult } from "./doctor.js";
 
 const compatibility = { sdkVersion: SDK_VERSION, apiVersion: SUPPORTED_API_VERSION, apiSchemaVersion: SUPPORTED_API_SCHEMA_VERSION, programId: SUPPORTED_PROGRAM_ID, programVersion: SUPPORTED_PROGRAM_VERSION };
 
@@ -205,7 +206,8 @@ const selectedMaximumTicks = (): number | undefined => {
 };
 
 const runSdkBot = async (profile: ReferenceBotProfile) => {
-  if (profile !== "live") requireRootEnvFile(profile);
+  const doctorMode = process.argv.includes("doctor");
+  if (profile === "devnet" && !doctorMode) requireRootEnvFile(profile);
   let config: ReturnType<typeof parseReferenceBotEnv>;
   try {
     config = parseReferenceBotEnv(process.env, profile);
@@ -309,6 +311,14 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
       : undefined;
     const roundDecisionStore: RoundDecisionStore = postgresState ?? new FileRoundDecisionStore(bindings.roundStatePath);
     const adapter = createSdkRuntimeAdapter({ client, rpc, priceStore, checkpoint, config, roundDecisionStore, ...(polymarketClient ? { polymarketClient } : {}), ...(signer ? { owner: signer.address } : {}), ...(executor ? { executor } : {}) });
+    if (doctorMode) {
+      try {
+        emitDoctorResult(classifyDoctorEvaluation({ profile, config, evaluation: await adapter.evaluateEntry() }));
+      } catch (error) {
+        emitDoctorResult(classifyDoctorError(profile, error));
+      }
+      return;
+    }
     const controller = new AbortController();
     process.once("SIGINT", () => controller.abort());
     process.once("SIGTERM", () => controller.abort());
@@ -337,7 +347,13 @@ try {
   else if (process.argv.includes("--live") || process.argv.includes("--live-data")) await runSdkBot(process.argv.includes("--live") ? "live" : "paper");
   else await runFixtureSmoke();
 } catch (error) {
+  if (process.argv.includes("doctor")) {
+    let profile: ReferenceBotProfile = "paper";
+    try { profile = selectedProfile(); } catch { /* report the original configuration failure */ }
+    emitDoctorResult(classifyDoctorError(profile, error));
+  } else {
   const failure = error instanceof StrykeSdkError ? { code: error.code, message: error.message, retryable: error.retryable } : { code: "configuration", message: error instanceof Error ? error.message : "Reference bot startup failed", retryable: false };
   console.error(JSON.stringify({ event: "reference_bot_error", ...failure }));
   process.exitCode = 1;
+  }
 }

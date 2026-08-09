@@ -16,7 +16,7 @@ describe("external reference-bot consumer", () => {
         schemaVersion: string;
         commit: string;
         packages: Array<{ name: string; file: string; sha512: string; npmIntegrity: string }>;
-        verification: { cleanRoomInstall: string; referenceBotTicks: number };
+        verification: { cleanRoomInstall: string; referenceBotTicks: number; doctorInvocation: string };
       };
       expect(manifest.schemaVersion).toBe("stryke.releaseArtifacts.v1");
       expect(manifest.commit).toMatch(/^[0-9a-f]{40}$/);
@@ -26,7 +26,7 @@ describe("external reference-bot consumer", () => {
         expect(entry.npmIntegrity).toMatch(/^sha512-/);
         expect(await readFile(join(output, entry.file))).not.toHaveLength(0);
       }
-      expect(manifest.verification).toEqual({ cleanRoomInstall: "passed", referenceBotTicks: 2 });
+      expect(manifest.verification).toEqual({ cleanRoomInstall: "passed", referenceBotTicks: 2, doctorInvocation: "passed" });
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

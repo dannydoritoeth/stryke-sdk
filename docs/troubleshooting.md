@@ -1,5 +1,26 @@
 # Typed Error Recovery
 
+## Readiness doctor
+
+Run paper doctor without credentials or an environment file:
+
+```bash
+npm run doctor:paper -w @stryke/reference-bot
+```
+
+The final `reference_bot_doctor` event uses schema
+`stryke.referenceBotDoctor.v1`. Exit `0` means `READY_FOR_PAPER` or
+`READY_FOR_LIVE`; exit `2` means `WAITING_FOR_MARKET`, which is healthy setup
+waiting for the reported alignment or timing condition; exit `1` means
+`BLOCKED` and its remediation must be applied before trading.
+
+Live doctor uses `.env`, validates the wallet, RPC and funding path, and never
+signs or submits:
+
+```bash
+npm run doctor:live -w @stryke/reference-bot
+```
+
 ## Startup preflight
 
 Read the first `reference_bot_preflight` line whose `status` is `failed`, apply
