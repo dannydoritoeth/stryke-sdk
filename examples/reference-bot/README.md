@@ -66,6 +66,13 @@ It submits at most the currently prepared cleanup chunk and exits. If nothing
 is eligible it reports `no_cleanup_available`, `cleanup_not_yet_eligible`, or
 `cleanup_awaiting_market_settlement`; it never evaluates an entry.
 
+The normal continuous live command needs no separate cleanup invocation. On
+every tick it reconciles any durable checkpoint, processes claim/refund, closes
+an eligible empty position account, verifies that account disappears, and only
+then evaluates the next market. If `close_all` contains multiple chunks, the
+bot executes the chunk whose authoritative market identity matches the selected
+position; later ticks process the remaining positions exactly once.
+
 Cleanup is not a substitute for settlement. A non-winning position follows
 `refundable -> refund -> cleanup_available -> close` only when the production
 API authoritatively supplies the refundable state, amount, reason and deadline.

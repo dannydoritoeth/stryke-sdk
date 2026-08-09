@@ -94,7 +94,9 @@ export type MaterializedCleanupTransaction = {
     cluster: string;
     programId: string;
     owner: string;
-    market: Record<string, unknown>;
+    market: {
+      cleanupItems: Array<{ id: string; market: Readonly<Record<string, unknown>> }>;
+    };
     action: "close";
     recoverableLamports: string;
     estimatedNetworkFeeLamports: string;
@@ -155,8 +157,26 @@ export class CleanupClient {
       );
     }
 
+    const itemIds = response.items.map((item) => item.id);
+    if (
+      new Set(itemIds).size !== itemIds.length ||
+      response.items.some((item) =>
+        item.action !== "close" ||
+        !Number.isSafeInteger(item.chunkIndex) ||
+        item.chunkIndex < 0 ||
+        item.chunkIndex >= response.chunks.length
+      )
+    ) {
+      throw new StrykeSdkError(
+        "intent_mismatch",
+        "Cleanup items do not match the reviewed close plan"
+      );
+    }
+    const itemsById = new Map(response.items.map((item) => [item.id, item]));
+
     const transactions: MaterializedCleanupTransaction[] = [];
     for (const chunk of response.chunks) {
+      const cleanupItems = chunk.itemIds.map((id) => itemsById.get(id));
       const recoverable = units(
         chunk.rentQuote.userRecoverableLamports,
         "userRecoverableLamports"
@@ -207,6 +227,8 @@ export class CleanupClient {
         recoverable <= 0n ||
         quotedItemTotal !== recoverable ||
         positionAddresses.length === 0 ||
+        cleanupItems.some((item) => item === undefined || item.chunkIndex !== chunk.index) ||
+        new Set(chunk.itemIds).size !== chunk.itemIds.length ||
         new Set(positionAddresses).size !== positionAddresses.length ||
         chunk.instructions.length !== positionAddresses.length ||
         contract.feePayer !== owner ||
@@ -255,7 +277,12 @@ export class CleanupClient {
           cluster: this.client.capabilities.cluster,
           programId: contract.programId,
           owner,
-          market: { cleanupItemIds: chunk.itemIds },
+          market: {
+            cleanupItems: cleanupItems.map((item) => ({
+              id: item!.id,
+              market: item!.market,
+            })),
+          },
           action: "close",
           recoverableLamports: recoverable.toString(),
           estimatedNetworkFeeLamports: networkFee.toString(),

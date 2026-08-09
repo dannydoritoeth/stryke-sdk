@@ -95,6 +95,10 @@ It also requires the API's market settlement status to be `settled`. A
 `not_settled` position reports `cleanup_awaiting_market_settlement`; the bot
 does not submit a closure that the program would reject for outstanding
 liability.
+The continuous live process performs this lifecycle automatically before its
+next entry. It matches each selected position to its authoritative cleanup
+chunk and retains the durable checkpoint until the closed position account has
+disappeared from the portfolio.
 
 The plan separates wallet-recoverable position rent from fees. A first trade
 may also fund shared market-series or strike-market initialization accounts;

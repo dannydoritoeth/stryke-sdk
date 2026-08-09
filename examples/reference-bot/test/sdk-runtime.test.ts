@@ -3,10 +3,37 @@ import { MemoryActionCheckpointStore, PYTH_FEED_IDS, PriceStore, SUPPORTED_PROGR
 
 import { runMarketTick } from "../src/bot.js";
 import { parseReferenceBotConfig } from "../src/config.js";
-import { authoritativeActivationFor, authoritativeMinimumForEntry, createSdkRuntimeAdapter, positionCountsTowardEntryCapacity, shouldFetchPolymarketEntryPrices } from "../src/sdk-runtime.js";
+import { authoritativeActivationFor, authoritativeMinimumForEntry, cleanupTransactionMatchesPosition, createSdkRuntimeAdapter, positionCountsTowardEntryCapacity, shouldFetchPolymarketEntryPrices } from "../src/sdk-runtime.js";
 import { quote } from "./fixtures.js";
 
 describe("SDK runtime composition", () => {
+  it("selects only the cleanup chunk whose authoritative market matches the position", () => {
+    const transaction = {
+      review: {
+        market: {
+          cleanupItems: [{
+            id: "close:series-2:strike-2:SOL",
+            market: {
+              marketSeries: "series-2",
+              strikeMarket: "strike-2",
+              expiryTs: 1_800_000_300,
+              targetValue: "70001.00000000",
+            },
+          }],
+        },
+      },
+    } as never;
+    expect(cleanupTransactionMatchesPosition(transaction, {
+      marketSeries: "series-2",
+      strikeMarket: "strike-2",
+      market: { expiryTs: 1_800_000_300, targetValue: "70001" },
+    } as never)).toBe(true);
+    expect(cleanupTransactionMatchesPosition(transaction, {
+      marketSeries: "series-1",
+      strikeMarket: "strike-1",
+      market: { expiryTs: 1_800_000_000, targetValue: "70000" },
+    } as never)).toBe(false);
+  });
   it("resolves an uninitialized paper market from expiry-crossing Pyth observations", async () => {
     const now = 1_900_000_100_000;
     const expiryTs = 1_900_000_000;
@@ -181,6 +208,75 @@ describe("SDK runtime composition", () => {
     const config = parseReferenceBotConfig({ asset: "BTC", expiryFamily: "five_minute" });
     const adapter = createSdkRuntimeAdapter({ client: client as never, rpc: {} as never, priceStore: new PriceStore(), checkpoint, config, owner: "owner" });
     await expect(adapter.reconcilePending((await checkpoint.load())!)).resolves.toMatchObject({ state: "confirmed" });
+    expect(await checkpoint.load()).toBeUndefined();
+  });
+
+  it("confirmed_cleanup_restart_waits_for_position_account_disappearance", async () => {
+    const checkpoint = new MemoryActionCheckpointStore();
+    await checkpoint.save({
+      clientActionId: "cleanup-1",
+      intentHash: "cleanup-intent-1",
+      state: "confirmed",
+      signature: "cleanup-signature-1",
+      materialization: {
+        action: "close",
+        asset: "BTC",
+        expiryFamily: "five_minute",
+        expiryTs: 1_800_000_000,
+        targetValue: "70000",
+        positionId: "position-1",
+        lastValidBlockHeight: "123",
+      },
+    });
+    let accountExists = true;
+    const client = { requestJson: async () => ({
+      owner: "owner",
+      positions: accountExists ? [{
+        owner: "owner",
+        tokenSymbol: "BTC",
+        tokenMint: "So11111111111111111111111111111111111111112",
+        source: "pyth_oracle",
+        collateral: { mint: "11111111111111111111111111111111" },
+        expiryFamily: "five_minute",
+        expiryTs: 1_800_000_000,
+        targetValue: "70000",
+        yesShares: "0",
+        noShares: "0",
+        forceClose: { expiryAt: "2020-01-01T00:00:00.000Z", status: "settled" },
+        cleanup: {
+          rentRecipient: "owner",
+          selfCloseAvailable: false,
+          staleCleanup: {
+            action: "close_position",
+            cleanupEligibleAt: "2020-01-01T00:00:00.000Z",
+          },
+        },
+        pilotLifecycle: {
+          schemaVersion: "stryke.pilotLifecycle.v1",
+          state: "expired_unclaimed",
+          rawStatus: "closed_pending_index",
+          rawReason: "cleanup_index_pending",
+          observedAt: new Date().toISOString(),
+        },
+      }] : [],
+      metadata: { stale: false, generatedAt: new Date().toISOString() },
+    }) };
+    const runtime = createSdkRuntimeAdapter({
+      client: client as never,
+      rpc: {} as never,
+      priceStore: new PriceStore(),
+      checkpoint,
+      config: parseReferenceBotConfig({ asset: "BTC", expiryFamily: "five_minute" }),
+      owner: "owner",
+    });
+    await expect(runtime.reconcilePending((await checkpoint.load())!)).resolves.toMatchObject({
+      state: "materializing",
+    });
+    expect(await checkpoint.load()).toBeDefined();
+    accountExists = false;
+    await expect(runtime.reconcilePending((await checkpoint.load())!)).resolves.toMatchObject({
+      state: "confirmed",
+    });
     expect(await checkpoint.load()).toBeUndefined();
   });
 

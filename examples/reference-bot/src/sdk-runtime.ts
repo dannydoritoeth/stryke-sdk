@@ -98,6 +98,16 @@ const marketMatchesPosition = (market: PilotMarket, position: PilotPosition): bo
     identity.expiryTs === market.expiryTs && sameTargetIdentity(identity.targetValue, market.strikePrice);
 };
 
+export const cleanupTransactionMatchesPosition = (
+  transaction: Awaited<ReturnType<CleanupClient["prepareAll"]>>["transactions"][number],
+  position: PilotPosition
+): boolean => transaction.review.market.cleanupItems.some(({ market }) =>
+  market.marketSeries === position.marketSeries &&
+  market.strikeMarket === position.strikeMarket &&
+  Number(market.expiryTs) === Number(position.market.expiryTs) &&
+  sameTargetIdentity(market.targetValue, position.market.targetValue)
+);
+
 const executionResult = (value: unknown): RuntimeExecution => {
   const row = value as { clientActionId?: string; signature?: string };
   return { ...(row.clientActionId ? { clientActionId: row.clientActionId } : {}), ...(row.signature ? { signature: row.signature } : {}) };
@@ -260,7 +270,7 @@ export const createSdkRuntimeAdapter = ({
           : materialization.action === "sell"
             ? !matching || !["open_position", "sellable"].includes(matching.lifecycle.state) || exposureShares < BigInt(materialization.sharesBefore ?? "0")
             : materialization.action === "close"
-              ? !matching || !positionCleanupAvailable(matching)
+              ? !matching
             : !matching || (
                 exposureShares === 0n &&
                 ["claimed", "refunded", "expired_unclaimed", "lost"].includes(matching.lifecycle.state)
@@ -378,9 +388,14 @@ export const createSdkRuntimeAdapter = ({
         throw new StrykeSdkError("position_state", "Position rent cleanup is unavailable");
       }
       const plan = await cleanup.prepareAll(live.owner);
-      const prepared = plan.transactions[0];
+      const prepared = plan.transactions.find((transaction) =>
+        cleanupTransactionMatchesPosition(transaction, position)
+      );
       if (!prepared) {
-        throw new StrykeSdkError("position_state", "No wallet-owned cleanup transaction was prepared");
+        throw new StrykeSdkError(
+          "intent_mismatch",
+          "No wallet-owned cleanup transaction matches the selected position"
+        );
       }
       const materialization = {
         action: "close" as const,
@@ -462,7 +477,7 @@ export const createSdkRuntimeAdapter = ({
         const matching = (await positions.list(live.owner)).find((candidate) =>
           candidate.positionId === position.positionId
         );
-        if (!matching || !positionCleanupAvailable(matching)) {
+        if (!matching) {
           await checkpoint.clear(prepared.clientActionId);
           return {
             clientActionId: prepared.clientActionId,
