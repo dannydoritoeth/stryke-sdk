@@ -35,7 +35,9 @@ describe("external SDK consumer", () => {
           cwd: directory,
           encoding: "utf8",
         })
-      ).toBe("0.1.9");
+      ).toBe(JSON.parse(
+        await readFile(join(root, "packages", "sdk", "package.json"), "utf8")
+      ).version);
       const installed = JSON.parse(
         await readFile(
           join(directory, "node_modules", "@stryketrade", "sdk", "package.json"),

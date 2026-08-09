@@ -293,10 +293,14 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
         const remediation = profile === "devnet"
           ? `Run \`solana airdrop 2 ${signer.address} --url devnet\`, then retry.`
           : `Fund wallet ${signer.address} with enough mainnet SOL for fees and the configured trade cap, then retry.`;
-        emitPreflight(profile, "funding", "failed", `Wallet ${signer.address} has ${balance} lamports; at least ${minimumBalance} are required.`, remediation);
-        throw new StrykeSdkError("configuration", remediation);
+        if (doctorMode || process.argv.includes("--preflight-only")) {
+          emitPreflight(profile, "funding", "failed", `Wallet ${signer.address} has ${balance} lamports; at least ${minimumBalance} are required.`, remediation);
+          throw new StrykeSdkError("configuration", remediation);
+        }
+        emitPreflight(profile, "funding", "skipped", `Wallet ${signer.address} has ${balance} lamports; lifecycle reconciliation will run, but new entries remain blocked until the balance reaches ${minimumBalance}.`, remediation);
+      } else {
+        emitPreflight(profile, "funding", "passed", `Wallet ${signer.address} has enough SOL for the configured trade cap and execution buffer.`);
       }
-      emitPreflight(profile, "funding", "passed", `Wallet ${signer.address} has enough SOL for the configured trade cap and execution buffer.`);
     }
     if (process.argv.includes("--preflight-only")) {
       console.log(JSON.stringify({ event: "reference_bot_preflight_complete", profile }));
@@ -324,7 +328,25 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
       ? new PolymarketClient(config.polymarketClobUrl)
       : undefined;
     const roundDecisionStore: RoundDecisionStore = postgresState ?? new FileRoundDecisionStore(bindings.roundStatePath);
-    const sdkAdapter = createSdkRuntimeAdapter({ client, rpc, priceStore, checkpoint, config, roundDecisionStore, ...(polymarketClient ? { polymarketClient } : {}), ...(signer ? { owner: signer.address } : {}), ...(executor ? { executor } : {}), ...(cleanupExecutionAdapter ? { cleanupExecutionAdapter } : {}) });
+    const sdkAdapter = createSdkRuntimeAdapter({
+      client,
+      rpc,
+      priceStore,
+      checkpoint,
+      config,
+      roundDecisionStore,
+      ...(polymarketClient ? { polymarketClient } : {}),
+      ...(signer ? {
+        owner: signer.address,
+        entryFundingStatus: async () => {
+          const balance = (await rpc.getBalance(signer.address, { commitment: "confirmed" }).send()).value;
+          const required = requiredExecutionBalance(config.maximumTradeSizeLamports);
+          return { available: balance >= required, balanceLamports: balance.toString(), requiredLamports: required.toString() };
+        },
+      } : {}),
+      ...(executor ? { executor } : {}),
+      ...(cleanupExecutionAdapter ? { cleanupExecutionAdapter } : {}),
+    });
     if (cleanupOnly) {
       try {
         const positions = await sdkAdapter.listPositions();

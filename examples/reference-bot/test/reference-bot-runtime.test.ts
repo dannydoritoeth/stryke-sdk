@@ -36,6 +36,47 @@ const adapter = (overrides: Partial<ReferenceBotRuntimeAdapter> = {}): Reference
 });
 
 describe("reference bot composed runtime", () => {
+  it("reconciles lifecycle before blocking an underfunded new entry", async () => {
+    const executeCleanup = vi.fn(async () => ({ clientActionId: "cleanup-1" }));
+    const cleanupPosition = position("expired_unclaimed", {
+      yesShares: "0",
+      noShares: "0",
+      cleanup: {
+        rentRecipient: "owner",
+        selfCloseAvailable: true,
+        action: "close_position",
+        cleanupEligibleAt: "2020-01-01T00:00:00.000Z",
+        eligibilityStatus: "eligible",
+        marketSettlementStatus: "settled",
+      },
+    });
+    const underfunded = vi.fn(async () => ({
+      available: false,
+      balanceLamports: "4127080",
+      requiredLamports: "10010000",
+    }));
+    const runtime = adapter({
+      listPositions: vi.fn()
+        .mockResolvedValueOnce([cleanupPosition])
+        .mockResolvedValueOnce([]),
+      executeCleanup,
+      entryFundingStatus: underfunded,
+    });
+
+    await expect(runMarketTick({ tick: 1, config: live, adapter: runtime })).resolves.toMatchObject({
+      action: "close",
+      reason: "wallet_rent_recovered",
+    });
+    expect(underfunded).not.toHaveBeenCalled();
+    await expect(runMarketTick({ tick: 2, config: live, adapter: runtime })).resolves.toMatchObject({
+      phase: "entry",
+      action: "blocked",
+      reason: "insufficient_funding",
+      details: { balanceLamports: "4127080", requiredLamports: "10010000" },
+    });
+    expect(runtime.evaluateEntry).not.toHaveBeenCalled();
+  });
+
   it("live runtime prioritizes eligible wallet rent cleanup and reports the recovery", async () => {
     const cleanupPosition = position("expired_unclaimed", {
       yesShares: "0",
