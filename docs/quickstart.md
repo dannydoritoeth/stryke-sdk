@@ -91,10 +91,10 @@ simulates, signs, confirms, and restart-reconciles the rent recovery before
 another entry. Paper mode cannot sign this action.
 If the authoritative `cleanupEligibleAt` is still in the future, the bot waits
 and reports that timestamp instead of submitting early or opening another trade.
-It also requires the API's market settlement status to be `settled`. A
-`not_settled` position reports `cleanup_awaiting_market_settlement`; the bot
-does not submit a closure that the program would reject for outstanding
-liability.
+It also requires the API's dedicated stale-cleanup status to be `eligible`. An
+`awaiting_resolution` cleanup reports
+`cleanup_awaiting_authoritative_eligibility`; the bot does not infer cleanup
+from zero shares or the separate `forceClose` settlement status.
 The continuous live process performs this lifecycle automatically before its
 next entry. It matches each selected position to its authoritative cleanup
 chunk and retains the durable checkpoint until the closed position account has

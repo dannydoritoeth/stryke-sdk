@@ -45,6 +45,7 @@ describe("reference bot composed runtime", () => {
         selfCloseAvailable: true,
         action: "close_position",
         cleanupEligibleAt: "2020-01-01T00:00:00.000Z",
+        eligibilityStatus: "eligible",
         marketSettlementStatus: "settled",
       },
     });
@@ -74,6 +75,7 @@ describe("reference bot composed runtime", () => {
         selfCloseAvailable: true,
         action: "close_position",
         cleanupEligibleAt: "2030-01-01T00:00:00.000Z",
+        eligibilityStatus: "eligible",
         marketSettlementStatus: "settled",
       },
     });
@@ -92,7 +94,7 @@ describe("reference bot composed runtime", () => {
     expect(runtime.evaluateEntry).not.toHaveBeenCalled();
   });
 
-  it("waits_for_market_settlement_without_simulating_cleanup_or_evaluating_entry", async () => {
+  it("waits_for_authoritative_cleanup_eligibility_without_simulating_or_evaluating_entry", async () => {
     const cleanupPosition = position("expired_unclaimed", {
       yesShares: "0",
       noShares: "0",
@@ -101,6 +103,7 @@ describe("reference bot composed runtime", () => {
         selfCloseAvailable: true,
         action: "close_position",
         cleanupEligibleAt: "2020-01-01T00:00:00.000Z",
+        eligibilityStatus: "awaiting_resolution",
         marketSettlementStatus: "not_settled",
         blockedReason: "market_not_settled",
       },
@@ -113,8 +116,9 @@ describe("reference bot composed runtime", () => {
     await expect(runMarketTick({ tick: 1, config: live, adapter: runtime })).resolves.toMatchObject({
       phase: "wait",
       action: "hold",
-      reason: "cleanup_awaiting_market_settlement",
+      reason: "cleanup_awaiting_authoritative_eligibility",
       details: {
+        cleanupEligibilityStatus: "awaiting_resolution",
         marketSettlementStatus: "not_settled",
         blockedReason: "market_not_settled",
       },
@@ -143,6 +147,7 @@ describe("reference bot composed runtime", () => {
         selfCloseAvailable: true,
         action: "close_position",
         cleanupEligibleAt: "2020-01-01T00:00:00.000Z",
+        eligibilityStatus: "eligible",
         marketSettlementStatus: "settled",
       },
     });
@@ -222,6 +227,7 @@ describe("reference bot composed runtime", () => {
         selfCloseAvailable: true,
         action: "close_position",
         cleanupEligibleAt: "2020-01-01T00:00:00.000Z",
+        eligibilityStatus: "eligible",
         marketSettlementStatus: "settled",
       },
     });

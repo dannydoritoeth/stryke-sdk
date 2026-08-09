@@ -191,11 +191,12 @@ export const runMarketTick = async ({
         positionDecisions.push({
           positionId: position.positionId,
           action: "hold",
-          reason: position.cleanup!.marketSettlementStatus === "not_settled"
-            ? "cleanup_awaiting_market_settlement"
+          reason: position.cleanup!.eligibilityStatus !== "eligible"
+            ? "cleanup_awaiting_authoritative_eligibility"
             : "cleanup_not_yet_eligible",
           details: {
             cleanupEligibleAt: position.cleanup!.cleanupEligibleAt,
+            cleanupEligibilityStatus: position.cleanup!.eligibilityStatus,
             marketSettlementStatus: position.cleanup!.marketSettlementStatus,
             ...(position.cleanup!.blockedReason
               ? { blockedReason: position.cleanup!.blockedReason }
@@ -312,12 +313,13 @@ export const runMarketTick = async ({
 
   const waitingCleanup = cleanupWaiting[0];
   if (waitingCleanup) {
-    return event(tick, "wait", "hold", waitingCleanup.cleanup!.marketSettlementStatus === "not_settled"
-      ? "cleanup_awaiting_market_settlement"
+    return event(tick, "wait", "hold", waitingCleanup.cleanup!.eligibilityStatus !== "eligible"
+      ? "cleanup_awaiting_authoritative_eligibility"
       : "cleanup_not_yet_eligible", {
       positionId: waitingCleanup.positionId,
       details: {
         cleanupEligibleAt: waitingCleanup.cleanup!.cleanupEligibleAt,
+        cleanupEligibilityStatus: waitingCleanup.cleanup!.eligibilityStatus,
         marketSettlementStatus: waitingCleanup.cleanup!.marketSettlementStatus,
         ...(waitingCleanup.cleanup!.blockedReason
           ? { blockedReason: waitingCleanup.cleanup!.blockedReason }

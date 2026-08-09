@@ -337,13 +337,14 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
             event: "reference_bot_rent_recovery",
             profile,
             action: "skip",
-            reason: pending?.cleanup?.marketSettlementStatus === "not_settled"
-              ? "cleanup_awaiting_market_settlement"
-              : pending
-                ? "cleanup_not_yet_eligible"
-                : "no_cleanup_available",
+            reason: pending
+              ? pending.cleanup?.eligibilityStatus !== "eligible"
+                ? "cleanup_awaiting_authoritative_eligibility"
+                : "cleanup_not_yet_eligible"
+              : "no_cleanup_available",
             ...(pending?.cleanup ? {
               cleanupEligibleAt: pending.cleanup.cleanupEligibleAt,
+              cleanupEligibilityStatus: pending.cleanup.eligibilityStatus,
               marketSettlementStatus: pending.cleanup.marketSettlementStatus,
               ...(pending.cleanup.blockedReason
                 ? { blockedReason: pending.cleanup.blockedReason }
