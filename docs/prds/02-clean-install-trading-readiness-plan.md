@@ -155,6 +155,7 @@ versions. Otherwise the release status remains open.
 | Unit | Doctor classification, paper fill rules, ledger transitions, config boundaries. |
 | SDK contract | Market minimum, reference identity, quote pairing, lifecycle and compatibility parsing. |
 | Composition | Ordered reconcile -> manage -> settle -> evaluate -> simulate flow over multiple ticks. |
+| Continuous live composition | Recurring runtime proves four entries and three account recoveries across sell, refund and claim paths; cleanup selects the matching API chunk and blocks re-entry until account disappearance. |
 | Restart | File and supported shared-state backends with pending/open paper state. |
 | External consumer | Fresh SDK import and installed bot invocation outside the workspace. |
 | Production smoke | Public CLI sees current production inputs, matched quotes and strategy diagnostics without signing. |

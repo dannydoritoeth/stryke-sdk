@@ -76,6 +76,7 @@ path; funding and the explicit live command remain deliberate operator actions.
 | OUT-10 | Actionable diagnostics | Every wait, skip, block and action names its phase, stable reason, market identity and remediation or next eligible time where applicable. |
 | OUT-11 | Immutable handoff | Clean-room and release evidence identify the exact reviewed commit/tag and published package versions. |
 | OUT-12 | Rent-complete live lifecycle | Live operation discovers empty wallet-owned position accounts, reports recoverable and non-recoverable initialization costs separately, and can reclaim eligible rent to the same signer without requiring the web frontend. |
+| OUT-13 | Continuous recovered trading | The recurring live runtime can repeat entry, exit or terminal processing, position-account cleanup, and next-round entry without a manual restart or cleanup command. |
 
 ## Product requirements
 
@@ -94,6 +95,7 @@ path; funding and the explicit live command remain deliberate operator actions.
 | READY-11 | Public runtime evidence must cover two eligible iterations, a complete paper lifecycle, restart during pending/open state, and recovery from a documented dependency failure. |
 | READY-12 | Configuration, consumer, package, SDK, bot, documentation, boundary and production-smoke gates must pass against one candidate commit. |
 | READY-13 | The SDK validates and materializes the API-authoritative portfolio `close_all` plan; the live bot composes discovery, reviewed submission, confirmation, durable restart reconciliation and exactly-once cleanup while paper mode remains unable to sign. |
+| READY-14 | Cleanup execution selects the authoritative chunk matching the chosen position, proves account disappearance before clearing its checkpoint, and permits re-entry only after all earlier lifecycle work is complete. The composed recurring runtime test must cover at least three recoveries and four entries across sell, refund and claim paths. |
 
 ## Safety invariants
 
@@ -170,6 +172,14 @@ submitting.
 A missing wallet, wrong cluster, insufficient balance, active kill switch,
 stale quote or incompatible market produces one precise blocker and no signing.
 
+### F. Continuous live lifecycle
+
+The recurring live command enters a round, exits or processes its authoritative
+terminal action, waits for market settlement where required, reclaims the
+empty position account, and proceeds to later rounds. Release evidence covers
+at least three cleanup-to-re-entry transitions, including sell, refund and
+claim paths, without invoking the separate recovery command between rounds.
+
 ## Release gates
 
 Release readiness is a matrix, not a single green test:
@@ -185,6 +195,7 @@ Release readiness is a matrix, not a single green test:
 | Boundary/security | No private dependency, external path, wallet material or secret leakage. |
 | Documentation | Commands copied verbatim by a context-free evaluator with zero undocumented assistance. |
 | Publication | Exact candidate commit, package versions, digests and immutable tag recorded. |
+| Continuous live lifecycle | Public recurring runtime orders entry, sell/claim/refund, settlement wait, matching cleanup chunk, confirmed account disappearance and next-round entry across multiple rounds. |
 
 No gate can be satisfied by a helper existing, a fixture-only test, another
 repository's evidence, or a run against an unidentified moving branch.

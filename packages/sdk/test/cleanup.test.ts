@@ -49,7 +49,17 @@ const response = (recipient = owner) => ({
       cluster: "mainnet-beta",
     },
   }],
-  items: [{ id: "close:item", action: "close", market: {}, chunkIndex: 0 }],
+  items: [{
+    id: "close:item",
+    action: "close",
+    market: {
+      expiryTs: 1_800_000_000,
+      targetValue: "70000",
+      marketSeries: "series-1",
+      strikeMarket: "strike-1",
+    },
+    chunkIndex: 0,
+  }],
   metadata: { stale: false, environment: { solanaCluster: "mainnet-beta" } },
 });
 
@@ -75,7 +85,12 @@ describe("wallet rent cleanup", () => {
       owner,
       totalRecoverableLamports: "2088000",
       totalEstimatedNetworkFeeLamports: "5000",
-      transactions: [{ review: { action: "close", owner, positionAddresses: [position] } }],
+      transactions: [{ review: {
+        action: "close",
+        owner,
+        positionAddresses: [position],
+        market: { cleanupItems: [{ id: "close:item", market: { marketSeries: "series-1" } }] },
+      } }],
     });
   });
 
@@ -88,6 +103,14 @@ describe("wallet rent cleanup", () => {
   it("fails closed when the recoverable total is not backed by item quotes", async () => {
     const mismatched = response();
     mismatched.chunks[0]!.rentQuote.userRecoverableLamports = "2088001";
+    await expect(
+      new CleanupClient(client(mismatched) as never, rpc).prepareAll(owner)
+    ).rejects.toMatchObject({ code: "intent_mismatch" });
+  });
+
+  it("fails closed when a chunk references an item assigned to another chunk", async () => {
+    const mismatched = response();
+    mismatched.items[0]!.chunkIndex = 1;
     await expect(
       new CleanupClient(client(mismatched) as never, rpc).prepareAll(owner)
     ).rejects.toMatchObject({ code: "intent_mismatch" });

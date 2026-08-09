@@ -163,6 +163,136 @@ describe("reference bot composed runtime", () => {
     expect(runtime.executeCleanup).toHaveBeenCalledWith(cleanupPosition);
   });
 
+  it("continuously_places_recovers_and_reenters_across_multiple_rounds", async () => {
+    type Stage = "empty" | "open" | "refundable" | "claimable" | "cleanup";
+    let stage: Stage = "empty";
+    let round = 1;
+    const entered: number[] = [];
+    const recovered: number[] = [];
+    const roundMarket = () => ({
+      ...market,
+      marketId: `market-${round}`,
+      expiryTs: 1_800_000_000 + round * 300,
+      strikePrice: String(100 + round),
+    });
+    const activePosition = () => position(
+      stage === "refundable" ? "refundable" : stage === "claimable" ? "claimable" : "sellable",
+      {
+        positionId: `position-${round}`,
+        market: {
+          expiryTs: roundMarket().expiryTs,
+          targetValue: roundMarket().strikePrice,
+        },
+        ...(stage === "refundable" ? {
+          refundableAmount: "100",
+          actionDeadline: "2030-01-01T00:00:00.000Z",
+          lifecycle: {
+            schemaVersion: "stryke.pilotLifecycle.v1" as const,
+            state: "refundable" as const,
+            rawStatus: "refundable",
+            rawReason: "market_zero_winner_refund",
+            observedAt: new Date().toISOString(),
+          },
+        } : {}),
+        ...(stage === "claimable" ? {
+          claimableAmount: "200",
+          actionDeadline: "2030-01-01T00:00:00.000Z",
+          lifecycle: {
+            schemaVersion: "stryke.pilotLifecycle.v1" as const,
+            state: "claimable" as const,
+            rawStatus: "claimable",
+            rawReason: "resolved_winner",
+            observedAt: new Date().toISOString(),
+          },
+        } : {}),
+      }
+    );
+    const cleanupPosition = () => position("expired_unclaimed", {
+      positionId: `position-${round}`,
+      yesShares: "0",
+      noShares: "0",
+      marketSeries: `series-${round}`,
+      strikeMarket: `strike-${round}`,
+      market: {
+        expiryTs: roundMarket().expiryTs,
+        targetValue: roundMarket().strikePrice,
+      },
+      cleanup: {
+        rentRecipient: "owner",
+        selfCloseAvailable: true,
+        action: "close_position",
+        cleanupEligibleAt: "2020-01-01T00:00:00.000Z",
+        marketSettlementStatus: "settled",
+      },
+    });
+    const runtime = adapter({
+      listPositions: vi.fn(async () =>
+        stage === "empty" ? [] : stage === "cleanup" ? [cleanupPosition()] : [activePosition()]
+      ),
+      evaluateEntry: vi.fn(async () => ({
+        market: roundMarket(),
+        estimatorInput: {
+          currentPrice: 102 + round,
+          strikePrice: 100 + round,
+          secondsRemaining: 120,
+          priceHistory: history,
+        },
+        buyQuotes: [
+          quote({ side: "yes", amount: live.tradeSizeLamports.toString(), executableProbabilityBps: 4000 }),
+          quote({ side: "no", amount: live.tradeSizeLamports.toString(), executableProbabilityBps: 6000 }),
+        ],
+        proposedSizeLamports: live.tradeSizeLamports,
+        aggregateExposureLamports: 0n,
+        openPositions: 0,
+        dataFresh: true,
+      })),
+      executeBuy: vi.fn(async () => {
+        entered.push(round);
+        stage = round === 2 ? "refundable" : round === 3 ? "claimable" : "open";
+        return { clientActionId: `buy-${round}`, signature: `buy-signature-${round}` };
+      }),
+      executeSell: vi.fn(async () => {
+        stage = "cleanup";
+        return { clientActionId: `sell-${round}`, signature: `sell-signature-${round}` };
+      }),
+      executeTerminal: vi.fn(async (_position, action) => {
+        expect(action).toBe(round === 2 ? "refund" : "claim");
+        stage = "cleanup";
+        return { clientActionId: `${action}-${round}`, signature: `${action}-signature-${round}` };
+      }),
+      executeCleanup: vi.fn(async () => {
+        recovered.push(round);
+        stage = "empty";
+        round += 1;
+        return {
+          clientActionId: `cleanup-${round - 1}`,
+          signature: `cleanup-signature-${round - 1}`,
+          recoverableLamports: "2088000",
+          estimatedNetworkFeeLamports: "5000",
+        };
+      }),
+      recordEnteredRound: vi.fn(async () => undefined),
+      hasEnteredRound: vi.fn(async () => false),
+    });
+
+    const events = await runReferenceBot({
+      config: live,
+      adapter: runtime,
+      maximumTicks: 10,
+      wait: async () => undefined,
+      onEvent: () => undefined,
+    });
+    expect(events.map(({ action }) => action)).toEqual([
+      "buy", "sell", "close",
+      "buy", "refund", "close",
+      "buy", "claim", "close",
+      "buy",
+    ]);
+    expect(entered).toEqual([1, 2, 3, 4]);
+    expect(recovered).toEqual([1, 2, 3]);
+    expect(runtime.executeCleanup).toHaveBeenCalledTimes(3);
+  });
+
   it("runtime_reconciles_before_manage_or_entry", async () => {
     const calls: string[] = [];
     const runtime = adapter({

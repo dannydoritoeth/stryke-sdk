@@ -92,6 +92,9 @@ do not submit early even if a UI row already advertises future cleanup.
 It additionally requires `forceClose.status` to be `settled`. Zero shares with
 `not_settled` market status remains pending and must not be submitted because
 the program can still report outstanding liability.
+Each materialized transaction retains the authoritative cleanup item and market
+identity for its chunk so a consumer can match the chosen position rather than
+blindly executing the first `close_all` chunk.
 
 For the fastest safe introduction, run the bundled read-only bot:
 
