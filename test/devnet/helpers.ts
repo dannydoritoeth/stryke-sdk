@@ -1,4 +1,4 @@
-import evidence from "../../docs/evidence/devnet-lifecycle-matrix.json" with { type: "json" };
+import evidence from "../fixtures/devnet-lifecycle-matrix.json" with { type: "json" };
 
 export type EvidenceCell = (typeof evidence.cells)[number];
 export const matrixEvidence = evidence;

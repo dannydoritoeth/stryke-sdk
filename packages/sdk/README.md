@@ -2,16 +2,15 @@
 
 Typed infrastructure for Stryke bot developers.
 
-The package is consumed from this repository during the pilot and is not yet
-published to npm. Node.js 22 or newer is required.
+Published as `@stryketrade/sdk`. Node.js 22 or newer is required.
 
 ## Start
 
-From the repository root:
+From an empty project:
 
 ```bash
-npm ci
-npm run build -w @stryketrade/sdk
+npm init -y
+npm install @stryketrade/sdk
 ```
 
 Connect to the mainnet API, select one canonical market, and
@@ -28,7 +27,7 @@ const quote = await new QuotesClient(client).get({
   market,
   action: "buy",
   side: "yes",
-  amount: "1000000", // collateral base units
+  amount: "10000", // API-authoritative minimum at time of writing
   maximumSlippageBps: 100,
 });
 ```
@@ -95,11 +94,12 @@ Each materialized transaction retains the authoritative cleanup item and market
 identity for its chunk so a consumer can match the chosen position rather than
 blindly executing the first `close_all` chunk.
 
-For the fastest safe introduction, run the bundled read-only bot:
+For the fastest safe introduction, install and run the reference bot:
 
 ```bash
-cp .env.example .env
-npm run start:paper -w @stryketrade/reference-bot
+npm install @stryketrade/reference-bot
+npx stryke-reference-bot doctor --profile=paper
+npx stryke-reference-bot --profile=paper
 ```
 
 Signed execution requires a separately funded wallet adapter plus every

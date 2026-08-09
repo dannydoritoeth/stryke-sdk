@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import sellEvidence from "../../docs/evidence/devnet-sell-matrix.json" with { type: "json" };
-import canonicalBtc5 from "../../docs/evidence/devnet-canonical-btc5.json" with { type: "json" };
+import sellEvidence from "../fixtures/devnet-sell-matrix.json" with { type: "json" };
+import canonicalBtc5 from "../fixtures/devnet-canonical-btc5.json" with { type: "json" };
 import {
   MemoryActionCheckpointStore,
   ReviewedTransactionExecutor,
