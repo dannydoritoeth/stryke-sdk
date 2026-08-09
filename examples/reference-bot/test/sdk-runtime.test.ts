@@ -247,6 +247,7 @@ describe("SDK runtime composition", () => {
           rentRecipient: "owner",
           selfCloseAvailable: false,
           staleCleanup: {
+            status: "eligible",
             action: "close_position",
             cleanupEligibleAt: "2020-01-01T00:00:00.000Z",
           },

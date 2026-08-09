@@ -38,6 +38,7 @@ export type PilotPositionCleanup = {
   selfCloseAvailable: boolean;
   action: "close_position";
   cleanupEligibleAt: string;
+  eligibilityStatus: string;
   marketSettlementStatus: "settled" | "not_settled";
   blockedReason?: string;
 };
@@ -209,6 +210,7 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
     const cleanupRow = record(row.cleanup, "cleanup");
     const staleCleanup = record(cleanupRow.staleCleanup, "cleanup.staleCleanup");
     const cleanupEligibleAt = text(staleCleanup.cleanupEligibleAt, "cleanup.staleCleanup.cleanupEligibleAt");
+    const eligibilityStatus = text(staleCleanup.status, "cleanup.staleCleanup.status");
     const marketSettlementStatus = forceClose?.status;
     if (
       typeof cleanupRow.selfCloseAvailable !== "boolean" ||
@@ -221,6 +223,7 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
       selfCloseAvailable: cleanupRow.selfCloseAvailable,
       action: "close_position",
       cleanupEligibleAt,
+      eligibilityStatus,
       marketSettlementStatus,
       ...(typeof forceClose?.blockedReason === "string"
         ? { blockedReason: forceClose.blockedReason }
@@ -282,7 +285,7 @@ export const positionCleanupAvailable = (
   now = Date.now()
 ): boolean =>
   positionCleanupPending(position) &&
-  position.cleanup!.marketSettlementStatus === "settled" &&
+  position.cleanup!.eligibilityStatus === "eligible" &&
   now >= Date.parse(position.cleanup!.cleanupEligibleAt);
 
 export const positionIfWinPayout = (

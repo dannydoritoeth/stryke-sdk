@@ -87,11 +87,10 @@ requires signer, fee payer, rent recipient, and requested owner to agree.
 The cleanup plan reports recoverable position rent and estimated network fees
 separately. It does not describe shared market-series or strike-market
 initialization rent as wallet-recoverable.
-`positionCleanupAvailable` also enforces the API-authored `cleanupEligibleAt`;
-do not submit early even if a UI row already advertises future cleanup.
-It additionally requires `forceClose.status` to be `settled`. Zero shares with
-`not_settled` market status remains pending and must not be submitted because
-the program can still report outstanding liability.
+`positionCleanupAvailable` enforces both the API-authored
+`staleCleanup.status === "eligible"` and `cleanupEligibleAt`; do not infer
+eligibility from zero shares, a UI label, or `forceClose.status`. The dedicated
+cleanup status is authoritative for the program's stale zero-share close path.
 Each materialized transaction retains the authoritative cleanup item and market
 identity for its chunk so a consumer can match the chosen position rather than
 blindly executing the first `close_all` chunk.
