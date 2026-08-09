@@ -231,9 +231,10 @@ export const parseReferenceBotEnv = (
   const liveTradingEnabled = booleanEnv(profiledEnv, "STRYKE_LIVE_TRADING_ENABLED", false);
   const killSwitchEnabled = booleanEnv(profiledEnv, "STRYKE_KILL_SWITCH_ENABLED", true);
   const activeLive = !readOnlyMode && liveTradingEnabled && !killSwitchEnabled;
+  const requiresExplicitControls = profile === "devnet";
   const required = (name: string, fallback?: string): string => {
     const value = profiledEnv[name] ?? fallback;
-    if (value === undefined || (activeLive && profiledEnv[name] === undefined)) return configurationError(name);
+    if (value === undefined || (requiresExplicitControls && profiledEnv[name] === undefined)) return configurationError(name);
     return value;
   };
   const asset = required("STRYKE_ASSET", referenceBotDefaults.asset) as PilotAsset;
@@ -242,7 +243,7 @@ export const parseReferenceBotEnv = (
   const estimator = required("STRYKE_ESTIMATOR", referenceBotDefaults.estimator) as ReferenceEstimator;
   const sol = (name: string, fallback: bigint) => solToLamports(required(name, `${Number(fallback) / 1e9}`), name);
   const numeric = (name: string, fallback: number) => {
-    if (activeLive) required(name);
+    if (requiresExplicitControls) required(name);
     return numberEnv(profiledEnv, name, fallback);
   };
   const config = parseReferenceBotConfig({
@@ -295,8 +296,11 @@ export const parseReferenceBotEnv = (
     ...(profiledEnv.STRYKE_WALLET_ADAPTER_PATH ? { walletAdapterPath: profiledEnv.STRYKE_WALLET_ADAPTER_PATH } : {}),
     ...(profiledEnv.STRYKE_DATABASE_URL ? { stateDatabaseUrl: profiledEnv.STRYKE_DATABASE_URL } : {}),
   });
-  if (activeLive && (!config.apiBaseUrl || !config.solanaRpcUrl || !config.walletAdapterPath)) {
-    configurationError("live endpoints and wallet adapter");
+  if (profile === "devnet" && (!config.apiBaseUrl || !config.solanaRpcUrl || !config.walletAdapterPath)) {
+    configurationError("devnet endpoints and wallet adapter");
+  }
+  if (activeLive && !config.walletAdapterPath) {
+    configurationError("STRYKE_WALLET_ADAPTER_PATH");
   }
   return config;
 };

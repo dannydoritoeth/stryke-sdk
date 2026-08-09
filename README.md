@@ -15,7 +15,7 @@ positions consume the API-authored side valuation; neither the SDK nor the bot
 recomputes payout from aggregate pools. Missing, stale, V1 or inconsistent
 economics stop before signing.
 
-The default `polymarket_early` baseline compares both executable Stryke sides
+The optional `polymarket_early` strategy compares both executable Stryke sides
 with the aligned Polymarket asks shortly after a round opens. It buys only when
 the total debit, fee, price impact, projected Winning Payout, expected return
 and win profit all pass the configured thresholds. `polymarket_late` performs
@@ -34,7 +34,7 @@ not a guaranteed profitable strategy.
 
 ## Three-step confidence ladder
 
-After the first npm release is published:
+From any empty Node.js 22+ project:
 
 ```bash
 npm install @stryketrade/sdk @stryketrade/reference-bot
@@ -51,9 +51,11 @@ Pyth prices, and quotes but never loads a wallet or submits a transaction.
 From a source checkout, the equivalent command is
 `npm run start:paper -w @stryketrade/reference-bot -- --ticks=2`.
 
-```bash
-npm run start:live -w @stryketrade/reference-bot
-```
+After configuring only the dedicated wallet variables described below, use
+`npx stryke-reference-bot doctor --profile=live`, then explicitly run
+`npx stryke-reference-bot --profile=live` only when the doctor is ready.
+From a source checkout, the final command is
+`npm run start:live -w @stryketrade/reference-bot`.
 
 Live mode uses the mainnet API/RPC values and a separately funded wallet adapter
 to make minimum-size signed mainnet trades when the estimator and every safety
@@ -62,7 +64,7 @@ claims/refunds, reconciles, and repeats.
 
 Mainnet execution remains protected by every configured safety gate.
 
-Before the first signed run, follow the [quickstart wallet steps](docs/quickstart.md#2-create-and-fund-a-dedicated-trading-wallet) to create a dedicated keypair, fund its public address, and set its file path in `.env`. Devnet compatibility remains available through `npm run start:devnet -w @stryketrade/reference-bot` with devnet API and RPC values.
+Before the first signed run, follow the [quickstart wallet steps](docs/quickstart.md#2-create-and-fund-a-dedicated-trading-wallet) to create a dedicated keypair, fund its public address, and set the adapter and keypair paths. Live inherits the paper profile's conservative public market, strategy, sizing, and risk defaults. Devnet compatibility remains available through `npm run start:devnet -w @stryketrade/reference-bot` with explicit devnet API and RPC values.
 
 The credential-free default is `baseline`. Opt in to the external-reference
 early strategy with `STRYKE_STRATEGY=polymarket_early`. For the

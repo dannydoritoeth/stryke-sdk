@@ -92,7 +92,7 @@ export const classifyDoctorError = (profile: ReferenceBotProfile, error: unknown
       error.code === "quote_blocked" && !["market_minimum_unavailable", "configured_size_below_market_minimum", "paired_quote_mismatch"].includes(phase ?? "")
     );
     const configurationRemediation = profile === "live" && error.code === "configuration"
-      ? `Copy .env.example to .env, inspect every value, and configure the dedicated live wallet. ${error.message}`
+      ? `Configure STRYKE_WALLET_ADAPTER_PATH and its dedicated keypair, fund only that wallet, then retry. ${error.message}`
       : error.message;
     return result(profile, waiting ? "WAITING_FOR_MARKET" : "BLOCKED", phase ?? error.code, waiting ? "The setup is healthy but the required market data is temporarily unavailable; retry or keep paper mode running." : configurationRemediation);
   }

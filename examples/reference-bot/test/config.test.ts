@@ -167,8 +167,22 @@ describe("reference bot config", () => {
     expect(config).toMatchObject({ profile: "paper", readOnlyMode: true, liveTradingEnabled: false, killSwitchEnabled: true });
   });
 
-  it("live_profile_enables_mainnet_execution_and_requires_explicit_controls", () => {
-    expect(() => parseReferenceBotEnv({}, "live")).toThrow(/STRYKE_ASSET/);
+  it("live_profile_inherits_conservative_paper_controls_and_only_requires_a_wallet_adapter", () => {
+    expect(() => parseReferenceBotEnv({}, "live")).toThrow(/STRYKE_WALLET_ADAPTER_PATH/);
+    expect(parseReferenceBotEnv({ STRYKE_WALLET_ADAPTER_PATH: "./wallet.mjs" }, "live")).toMatchObject({
+      profile: "live",
+      asset: referenceBotDefaults.asset,
+      expiryFamily: referenceBotDefaults.expiryFamily,
+      strategy: referenceBotDefaults.strategy,
+      tradeSizeLamports: referenceBotDefaults.tradeSizeLamports,
+      maximumTradeSizeLamports: referenceBotDefaults.maximumTradeSizeLamports,
+      apiBaseUrl: referenceBotDefaults.apiBaseUrl,
+      solanaRpcUrl: referenceBotDefaults.solanaRpcUrl,
+      walletAdapterPath: "./wallet.mjs",
+      readOnlyMode: false,
+      liveTradingEnabled: true,
+      killSwitchEnabled: false,
+    });
   });
 
   it("wires_polymarket_controls_from_env_and_validates_hysteresis", () => {

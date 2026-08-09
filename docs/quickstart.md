@@ -49,20 +49,28 @@ solana-keygen pubkey ../stryke-trading-wallet.json
 
 The JSON file contains the wallet's private key material. Anyone with it can
 control the wallet: never commit, share, or use it as a personal wallet. Fund
-the printed address with only the mainnet SOL you intend to risk, then set its path in `.env`:
+the printed address with only the mainnet SOL you intend to risk. From a public
+npm installation, set only these two additions to the paper defaults:
 
-```env
-STRYKE_WALLET_ADAPTER_PATH=./examples/reference-bot/wallet-adapter.example.mjs
-STRYKE_WALLET_KEYPAIR_PATH=../stryke-trading-wallet.json
+```bash
+export STRYKE_WALLET_ADAPTER_PATH="$PWD/node_modules/@stryketrade/reference-bot/wallet-adapter.example.mjs"
+export STRYKE_WALLET_KEYPAIR_PATH=../stryke-trading-wallet.json
 ```
+
+For a source checkout, the adapter path is
+`./examples/reference-bot/wallet-adapter.example.mjs`. Advanced overrides may
+still be placed in `.env`, but they are not required for conservative live
+readiness.
 
 ## 3. Make minimum-size mainnet trades
 
-Configure the separately funded wallet adapter in `.env`, inspect every value,
-then run `npm run doctor:live -w @stryketrade/reference-bot`. It performs all
-readiness, wallet, RPC and funding checks without signing or submitting. Only
-after it reports `READY_FOR_LIVE`, run
-`npm run start:live -w @stryketrade/reference-bot`. It uses the same
+With the two wallet variables set, run
+`npx stryke-reference-bot doctor --profile=live`. It performs all readiness,
+wallet, RPC and funding checks without signing or submitting. Only after it
+reports `READY_FOR_LIVE`, run `npx stryke-reference-bot --profile=live`. From a
+source checkout, the equivalent commands are `npm run doctor:live -w
+@stryketrade/reference-bot` and `npm run start:live -w
+@stryketrade/reference-bot`. Live uses the same
 continuous loop with signed mainnet transactions. A trade occurs only when the
 estimator and all safety checks pass.
 
