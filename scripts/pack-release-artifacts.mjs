@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
@@ -53,6 +53,14 @@ try {
   if (!smoke.includes('"event":"stryke_compatibility"') || (smoke.match(/"tick":/g) ?? []).length !== 2) {
     throw new Error("Packed reference bot clean-room smoke did not complete two ticks");
   }
+  const doctor = spawnSync(resolve(consumerDirectory, "node_modules", ".bin", "stryke-reference-bot"), ["doctor", "--profile=paper"], {
+    cwd: consumerDirectory,
+    encoding: "utf8",
+    env: { ...process.env, STRYKE_API_BASE_URL: "not-a-valid-url" },
+  });
+  if (doctor.status !== 1 || !doctor.stdout.includes('"event":"reference_bot_doctor"') || !doctor.stdout.includes('"status":"BLOCKED"')) {
+    throw new Error("Packed reference bot doctor did not produce the stable blocked contract");
+  }
   const manifest = {
     schemaVersion: "stryke.releaseArtifacts.v1",
     commit,
@@ -72,6 +80,7 @@ try {
     verification: {
       cleanRoomInstall: "passed",
       referenceBotTicks: 2,
+      doctorInvocation: "passed",
     },
   };
   const manifestPath = resolve(outputDirectory, "manifest.json");

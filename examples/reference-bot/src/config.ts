@@ -99,6 +99,8 @@ export const referenceBotDefaults: ReferenceBotConfig = {
   readOnlyMode: true,
   liveTradingEnabled: false,
   killSwitchEnabled: true,
+  apiBaseUrl: "https://api.stryketrade.com",
+  solanaRpcUrl: "https://api.mainnet-beta.solana.com",
   pythHermesUrl: "https://hermes.pyth.network",
   checkpointPath: ".stryke/reference-bot-action.json",
   roundStatePath: ".stryke/reference-bot-rounds.json",
