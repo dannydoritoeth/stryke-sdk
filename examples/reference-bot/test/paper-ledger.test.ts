@@ -2,7 +2,7 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { PilotMarket } from "@stryke/sdk";
+import type { PilotMarket } from "@stryketrade/sdk";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { runMarketTick, type ReferenceBotRuntimeAdapter } from "../src/bot.js";

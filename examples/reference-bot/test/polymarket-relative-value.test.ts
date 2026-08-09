@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ExecutableQuote } from "@stryke/sdk";
+import type { ExecutableQuote } from "@stryketrade/sdk";
 import { convergenceReached, decidePolymarketRelativeEntry } from "../src/polymarket-relative-value.js";
 
 const quote = (side: "yes" | "no", probability: number) => ({ side, normalizedSideProbabilityBps: probability } as ExecutableQuote);

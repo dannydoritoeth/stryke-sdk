@@ -21,7 +21,7 @@ describe("pilot documentation contract", () => {
 
   it("sdk_readme_gives_a_minimal_copyable_developer_path", () => {
     for (const phrase of [
-      "npm run build -w @stryke/sdk",
+      "npm run build -w @stryketrade/sdk",
       "StrykeClient.connect",
       "MarketsClient",
       "QuotesClient",
@@ -77,9 +77,9 @@ describe("pilot documentation contract", () => {
   it("docs_show_read_only_live_and_kill_switch_precedence", () => {
     expect(configuration).toMatch(/readOnlyMode.*Overrides live enablement/);
     expect(configuration).toMatch(/killSwitchEnabled.*Overrides live enablement/);
-    expect(readme).toContain("npm run start:paper -w @stryke/reference-bot");
-    expect(readme).toContain("npm run start:devnet -w @stryke/reference-bot");
-    expect(readme).toContain("npm run start:live -w @stryke/reference-bot");
+    expect(readme).toContain("npm run start:paper -w @stryketrade/reference-bot");
+    expect(readme).toContain("npm run start:devnet -w @stryketrade/reference-bot");
+    expect(readme).toContain("npm run start:live -w @stryketrade/reference-bot");
     expect(readme).toMatch(/mainnet.*safety gate/is);
   });
 

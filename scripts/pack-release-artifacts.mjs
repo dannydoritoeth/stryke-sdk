@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -30,15 +30,19 @@ const pack = (packageName) => {
     ["pack", "-w", packageName, "--pack-destination", outputDirectory, "--json", "--silent"],
     { cwd: root, encoding: "utf8" }
   );
-  return JSON.parse(output)[0];
+  const packed = JSON.parse(output)[0];
+  const artifactName = packageName === "@stryketrade/sdk" ? "stryke-sdk" : "stryke-reference-bot";
+  const canonicalFilename = `${artifactName}-${packed.version}.tgz`;
+  renameSync(resolve(outputDirectory, packed.filename), resolve(outputDirectory, canonicalFilename));
+  return { ...packed, filename: canonicalFilename };
 };
 
 const sha512 = (path) => createHash("sha512").update(readFileSync(path)).digest("hex");
 const consumerDirectory = mkdtempSync(resolve(tmpdir(), "stryke-release-consumer-"));
 
 try {
-  const sdk = pack("@stryke/sdk");
-  const bot = pack("@stryke/reference-bot");
+  const sdk = pack("@stryketrade/sdk");
+  const bot = pack("@stryketrade/reference-bot");
   const sdkTarball = resolve(outputDirectory, sdk.filename);
   const botTarball = resolve(outputDirectory, bot.filename);
   writeFileSync(resolve(consumerDirectory, "package.json"), JSON.stringify({ private: true, type: "module" }));

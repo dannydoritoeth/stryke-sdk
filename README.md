@@ -37,7 +37,7 @@ not a guaranteed profitable strategy.
 After the first npm release is published:
 
 ```bash
-npm install @stryke/sdk @stryke/reference-bot
+npm install @stryketrade/sdk @stryketrade/reference-bot
 npx stryke-reference-bot doctor --profile=paper
 npx stryke-reference-bot --profile=paper --ticks=2
 ```
@@ -49,10 +49,10 @@ public defaults. Remove `-- --ticks=2`
 only when you want the continuous process. Paper mode reads real markets,
 Pyth prices, and quotes but never loads a wallet or submits a transaction.
 From a source checkout, the equivalent command is
-`npm run start:paper -w @stryke/reference-bot -- --ticks=2`.
+`npm run start:paper -w @stryketrade/reference-bot -- --ticks=2`.
 
 ```bash
-npm run start:live -w @stryke/reference-bot
+npm run start:live -w @stryketrade/reference-bot
 ```
 
 Live mode uses the mainnet API/RPC values and a separately funded wallet adapter
@@ -62,7 +62,7 @@ claims/refunds, reconciles, and repeats.
 
 Mainnet execution remains protected by every configured safety gate.
 
-Before the first signed run, follow the [quickstart wallet steps](docs/quickstart.md#2-create-and-fund-a-dedicated-trading-wallet) to create a dedicated keypair, fund its public address, and set its file path in `.env`. Devnet compatibility remains available through `npm run start:devnet -w @stryke/reference-bot` with devnet API and RPC values.
+Before the first signed run, follow the [quickstart wallet steps](docs/quickstart.md#2-create-and-fund-a-dedicated-trading-wallet) to create a dedicated keypair, fund its public address, and set its file path in `.env`. Devnet compatibility remains available through `npm run start:devnet -w @stryketrade/reference-bot` with devnet API and RPC values.
 
 The credential-free default is `baseline`. Opt in to the external-reference
 early strategy with `STRYKE_STRATEGY=polymarket_early`. For the

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ActionCheckpoint } from "@stryke/sdk";
+import type { ActionCheckpoint } from "@stryketrade/sdk";
 
 import { runMarketTick, type ReferenceBotRuntimeAdapter } from "../src/bot.js";
 import { parseReferenceBotConfig } from "../src/config.js";

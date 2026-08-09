@@ -17,7 +17,7 @@ describe("npm publication contract", () => {
       expect(manifest.repository.url).toBe("git+https://github.com/dannydoritoeth/stryke-sdk.git");
     }
     expect(bot.version).toBe(sdk.version);
-    expect(bot.dependencies["@stryke/sdk"]).toBe(sdk.version);
+    expect(bot.dependencies["@stryketrade/sdk"]).toBe(sdk.version);
   });
 
   it("requires an immutable matching tag and verifies clean registry consumers", () => {
@@ -25,9 +25,9 @@ describe("npm publication contract", () => {
     expect(workflow).toContain('test "$GITHUB_REF_NAME" = "npm-v${sdk_version}"');
     expect(workflow).toContain("id-token: write");
     expect(workflow).toContain("environment: npm-production");
-    expect(workflow).toContain("npm publish -w @stryke/sdk --access public");
-    expect(workflow).toContain("npm publish -w @stryke/reference-bot --access public");
-    expect(workflow).toContain('npm install "@stryke/sdk@$version" "@stryke/reference-bot@$version"');
+    expect(workflow).toContain("npm publish -w @stryketrade/sdk --access public");
+    expect(workflow).toContain("npm publish -w @stryketrade/reference-bot --access public");
+    expect(workflow).toContain('npm install "@stryketrade/sdk@$version" "@stryketrade/reference-bot@$version"');
     expect(workflow).toContain("npx --no-install stryke-reference-bot");
   });
 });

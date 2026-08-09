@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { StrykeSdkError } from "@stryke/sdk";
+import { StrykeSdkError } from "@stryketrade/sdk";
 
 import type { ReferenceBotProfile } from "./config.js";
 

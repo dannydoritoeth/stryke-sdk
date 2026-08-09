@@ -7,8 +7,8 @@ and SOL 1m/5m/15m/1h are supported. One-minute live strategy performance is expe
 
 ```bash
 npm ci
-npm run doctor:paper -w @stryke/reference-bot
-npm run start:paper -w @stryke/reference-bot -- --ticks=2
+npm run doctor:paper -w @stryketrade/reference-bot
+npm run start:paper -w @stryketrade/reference-bot -- --ticks=2
 ```
 
 Paper doctor needs no `.env` and exits with `0` for `READY_FOR_PAPER`, `2` for
@@ -59,10 +59,10 @@ STRYKE_WALLET_KEYPAIR_PATH=../stryke-trading-wallet.json
 ## 3. Make minimum-size mainnet trades
 
 Configure the separately funded wallet adapter in `.env`, inspect every value,
-then run `npm run doctor:live -w @stryke/reference-bot`. It performs all
+then run `npm run doctor:live -w @stryketrade/reference-bot`. It performs all
 readiness, wallet, RPC and funding checks without signing or submitting. Only
 after it reports `READY_FOR_LIVE`, run
-`npm run start:live -w @stryke/reference-bot`. It uses the same
+`npm run start:live -w @stryketrade/reference-bot`. It uses the same
 continuous loop with signed mainnet transactions. A trade occurs only when the
 estimator and all safety checks pass.
 

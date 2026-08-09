@@ -34,5 +34,5 @@ jobs:
       - run: npm run test:postgres-state
         env:
           TEST_POSTGRES_URL: postgres://stryke:stryke@127.0.0.1:5432/stryke_reference_bot_test
-      - run: npm pack -w @stryke/sdk --dry-run
-      - run: npm pack -w @stryke/reference-bot --dry-run
+      - run: npm pack -w @stryketrade/sdk --dry-run
+      - run: npm pack -w @stryketrade/reference-bot --dry-run

@@ -24,7 +24,7 @@ port must identify the source concept without adding a repository dependency,
 receive review, and pass this repository's full boundary, consumer, SDK, bot,
 documentation, and relevant live-evidence gates.
 
-The reference bot may access Stryke only through `@stryke/sdk`. Packages must
+The reference bot may access Stryke only through `@stryketrade/sdk`. Packages must
 not use workspace-external paths, local file dependencies, unpublished private
 packages, or absolute filesystem paths. Detailed internal plans, credentials,
 private operations, and evidence from other repositories do not belong here.

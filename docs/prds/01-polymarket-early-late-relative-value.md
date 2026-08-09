@@ -60,7 +60,7 @@ must fail closed for that decision.
 
 In scope:
 
-- external `@stryke/sdk` parsing for the authoritative first closing-fee
+- external `@stryketrade/sdk` parsing for the authoritative first closing-fee
   timestamp supplied by the Stryke API;
 - reference-bot configuration, entry timing, executable-edge math, late hold
   economics, early exit policies, diagnostics and concise onboarding;

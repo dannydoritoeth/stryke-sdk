@@ -1,4 +1,4 @@
-import { StrykeSdkError, type PilotAsset, type PilotExpiryFamily } from "@stryke/sdk";
+import { StrykeSdkError, type PilotAsset, type PilotExpiryFamily } from "@stryketrade/sdk";
 import { resolve } from "node:path";
 
 import type { ReferenceEstimator } from "./strategy.js";

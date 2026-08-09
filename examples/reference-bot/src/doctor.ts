@@ -1,4 +1,4 @@
-import { StrykeSdkError, type ExecutableQuote } from "@stryke/sdk";
+import { StrykeSdkError, type ExecutableQuote } from "@stryketrade/sdk";
 
 import type { EntryEvaluation } from "./bot.js";
 import type { ReferenceBotConfig, ReferenceBotProfile } from "./config.js";

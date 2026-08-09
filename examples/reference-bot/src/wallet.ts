@@ -1,4 +1,4 @@
-import { StrykeSdkError } from "@stryke/sdk";
+import { StrykeSdkError } from "@stryketrade/sdk";
 
 import type { ReferenceBotConfig } from "./config.js";
 

@@ -1,11 +1,11 @@
 # npm publication
 
-`@stryke/sdk` and `@stryke/reference-bot` are public packages. They share one
+`@stryketrade/sdk` and `@stryketrade/reference-bot` are public packages. They share one
 version so the reference bot can depend on an exact reviewed SDK release.
 
 ## One-time namespace and first publication
 
-An npm owner must create or confirm the `stryke` organization and enable
+An npm owner must create or confirm the `stryketrade` organization and enable
 two-factor authentication. The first public version establishes each package
 under that scope and must be published from the exact reviewed tag:
 
@@ -16,8 +16,8 @@ npm ci
 npm run build
 npm run typecheck
 npm test
-npm publish -w @stryke/sdk --access public
-npm publish -w @stryke/reference-bot --access public
+npm publish -w @stryketrade/sdk --access public
+npm publish -w @stryketrade/reference-bot --access public
 ```
 
 The publish commands prompt for the account's current two-factor code. Run
@@ -40,7 +40,7 @@ been verified.
 
 ## Subsequent releases
 
-1. Update both package versions and the bot's exact `@stryke/sdk` dependency in
+1. Update both package versions and the bot's exact `@stryketrade/sdk` dependency in
    one reviewed pull request.
 2. Pass CI and merge the release candidate.
 3. Create a protected annotated tag named `npm-v<version>` at that exact merge
