@@ -51,6 +51,9 @@ paper mode cannot load or sign cleanup. This reclaims wallet-owned position
 rent only—not shared market initialization costs.
 Before `cleanupEligibleAt`, it reports `cleanup_not_yet_eligible` with that
 timestamp and does not evaluate another entry.
+If the market is not yet settled, it instead reports
+`cleanup_awaiting_market_settlement` and does not attempt a transaction; zero
+shares alone do not prove the on-chain liability has cleared.
 
 To perform cleanup without allowing a new market entry, use the bounded
 recovery command after live doctor passes:
@@ -60,7 +63,8 @@ npx stryke-reference-bot recover-rent --profile=live
 ```
 
 It submits at most the currently prepared cleanup chunk and exits. If nothing
-is eligible it reports `no_cleanup_available`; it never evaluates an entry.
+is eligible it reports `no_cleanup_available`, `cleanup_not_yet_eligible`, or
+`cleanup_awaiting_market_settlement`; it never evaluates an entry.
 
 Cleanup is not a substitute for settlement. A non-winning position follows
 `refundable -> refund -> cleanup_available -> close` only when the production

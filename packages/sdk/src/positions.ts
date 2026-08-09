@@ -38,6 +38,8 @@ export type PilotPositionCleanup = {
   selfCloseAvailable: boolean;
   action: "close_position";
   cleanupEligibleAt: string;
+  marketSettlementStatus: "settled" | "not_settled";
+  blockedReason?: string;
 };
 
 export type PilotPositionPoolState = {
@@ -207,16 +209,22 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
     const cleanupRow = record(row.cleanup, "cleanup");
     const staleCleanup = record(cleanupRow.staleCleanup, "cleanup.staleCleanup");
     const cleanupEligibleAt = text(staleCleanup.cleanupEligibleAt, "cleanup.staleCleanup.cleanupEligibleAt");
+    const marketSettlementStatus = forceClose?.status;
     if (
       typeof cleanupRow.selfCloseAvailable !== "boolean" ||
       staleCleanup.action !== "close_position" ||
-      !Number.isFinite(Date.parse(cleanupEligibleAt))
+      !Number.isFinite(Date.parse(cleanupEligibleAt)) ||
+      (marketSettlementStatus !== "settled" && marketSettlementStatus !== "not_settled")
     ) throw new StrykeSdkError("api_response", "Position cleanup metadata is invalid");
     cleanup = {
       rentRecipient: text(cleanupRow.rentRecipient, "cleanup.rentRecipient"),
       selfCloseAvailable: cleanupRow.selfCloseAvailable,
       action: "close_position",
       cleanupEligibleAt,
+      marketSettlementStatus,
+      ...(typeof forceClose?.blockedReason === "string"
+        ? { blockedReason: forceClose.blockedReason }
+        : {}),
     };
   }
   if (
@@ -274,6 +282,7 @@ export const positionCleanupAvailable = (
   now = Date.now()
 ): boolean =>
   positionCleanupPending(position) &&
+  position.cleanup!.marketSettlementStatus === "settled" &&
   now >= Date.parse(position.cleanup!.cleanupEligibleAt);
 
 export const positionIfWinPayout = (

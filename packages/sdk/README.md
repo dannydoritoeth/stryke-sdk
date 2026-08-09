@@ -89,6 +89,9 @@ separately. It does not describe shared market-series or strike-market
 initialization rent as wallet-recoverable.
 `positionCleanupAvailable` also enforces the API-authored `cleanupEligibleAt`;
 do not submit early even if a UI row already advertises future cleanup.
+It additionally requires `forceClose.status` to be `settled`. Zero shares with
+`not_settled` market status remains pending and must not be submitted because
+the program can still report outstanding liability.
 
 For the fastest safe introduction, run the bundled read-only bot:
 
