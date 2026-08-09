@@ -1,96 +1,105 @@
 # `@stryketrade/reference-bot`
 
-Runnable reference bot built exclusively on the public `@stryketrade/sdk` contract.
-It defaults to paper mode, file-backed restart state, live trading disabled,
-and the kill switch enabled.
+Continuous paper/live reference bot built only on `@stryketrade/sdk`. Node.js
+22+ is required.
 
-Install the public packages and use the conservative defaults directly:
+## Start paper trading
+
+From an empty directory:
 
 ```bash
+npm init -y
 npm install @stryketrade/sdk @stryketrade/reference-bot
 npx stryke-reference-bot doctor --profile=paper
-npx stryke-reference-bot --profile=paper --ticks=2
+npx stryke-reference-bot --profile=paper
 ```
 
-Copy `.env.example` to `.env` only to customize those defaults.
-
-Paper execution consumes real production market, oracle, reference, and
-executable quote data but never loads a signer or calls a live transaction
-method. Selected buys are persisted as simulated positions at
-`<STRYKE_ROUND_STATE_PATH>.paper-ledger.json`; restart resumes the same
-position. The simulator holds to authoritative resolution and uses the entry
-quote's projected winning payout for its clearly labelled terminal result.
-That assumption is not a guaranteed fill, return, or profit.
+Paper mode uses production markets, Pyth prices, and executable quotes. It
+never loads a wallet or submits a transaction. Simulated positions are stored
+locally and resumed after restart. Add `--ticks=2` for a short check; otherwise
+the bot runs until Ctrl-C.
 
 Doctor exits `0` for ready, `2` for healthy market waiting, and `1` for a
-blocked setup. Its final `reference_bot_doctor` JSON line includes the stable
-status, reason, remediation, market identity, configured and authoritative
-minimums, and matched quote IDs when available.
+blocked setup. Follow the printed remediation for the first failed check. No
+command forces a trade.
 
-Live inherits paper's conservative public controls and requires a dedicated
-wallet adapter/keypair plus funding. Devnet additionally requires explicit
-devnet endpoints. Advanced overrides are documented in the SDK repository's
-`docs/configuration.md`. Never put a private key or seed phrase directly in an
-environment variable.
+## Move to live trading
 
-An API-authoritative `cleanup_available` position is part of the live
-lifecycle. Before another entry, the bot validates the portfolio `close_all`
-plan, simulates and signs it, confirms it, and reconciles disappearance of the
-empty position account through the durable checkpoint. The successful event is
-`close:wallet_rent_recovered`; read-only mode reports `cleanup_dry_run`, and
-paper mode cannot load or sign cleanup. This reclaims wallet-owned position
-rent only—not shared market initialization costs.
-Before `cleanupEligibleAt`, it reports `cleanup_not_yet_eligible` with that
-timestamp and does not evaluate another entry.
-If the API's dedicated stale-cleanup status is not yet `eligible`, it reports
-`cleanup_awaiting_authoritative_eligibility` and does not attempt a
-transaction; zero shares alone do not prove cleanup eligibility.
+Install the Solana CLI and create a dedicated wallet outside the project:
 
-To perform cleanup without allowing a new market entry, use the bounded
-recovery command. It may run lifecycle recovery below the new-entry funding
-reserve:
+```bash
+solana-keygen new --outfile ../stryke-trading-wallet.json
+solana-keygen pubkey ../stryke-trading-wallet.json
+```
+
+Fund only the printed mainnet address with SOL you intend to risk. The JSON
+file controls the wallet: never commit or share it, and do not use a personal
+wallet.
+
+Configure the adapter bundled with this installed package and the keypair:
+
+```bash
+export STRYKE_WALLET_ADAPTER_PATH="$PWD/node_modules/@stryketrade/reference-bot/wallet-adapter.example.mjs"
+export STRYKE_WALLET_KEYPAIR_PATH="$PWD/../stryke-trading-wallet.json"
+```
+
+Check live readiness without signing, then explicitly start live trading:
+
+```bash
+npx stryke-reference-bot doctor --profile=live
+npx stryke-reference-bot --profile=live
+```
+
+No `.env` or additional live-enable variable is required for this default path;
+`--profile=live` applies the signed mainnet profile. Doctor validates the API,
+market, Pyth data, wallet, mainnet RPC, and required balance without signing.
+It prints the exact funding remediation when the wallet is short.
+
+Live inherits paper's market, strategy, minimum-size, exposure, and safety
+defaults. The trade size is checked against the API-authoritative minimum for
+each market. Keep additional SOL for transaction fees, position-account rent,
+and possible first-trader shared market initialization.
+
+## Continuous lifecycle
+
+Every live tick reconciles durable state before taking another action. It then
+manages open positions, sells or waits for settlement, claims/refunds only when
+the API authorizes them, closes eligible zero-share position accounts to return
+rent, and finally evaluates the next market.
+
+If the wallet is below the new-entry reserve, existing reconciliation and rent
+recovery continue while new entries report `insufficient_funding`. To recover
+eligible rent without permitting a new entry:
 
 ```bash
 npx stryke-reference-bot recover-rent --profile=live
 ```
 
-It submits at most the currently prepared cleanup chunk and exits. If nothing
-is eligible it reports `no_cleanup_available`, `cleanup_not_yet_eligible`, or
-`cleanup_awaiting_authoritative_eligibility`; it never evaluates an entry.
+Position-account rent can be recovered. Shared market-series or strike-market
+initialization costs are not wallet-recoverable unless the API explicitly
+provides a recovery action.
 
-The normal continuous live command needs no separate cleanup invocation. On
-every tick it reconciles any durable checkpoint, processes claim/refund, closes
-an eligible empty position account, verifies that account disappears, and only
-then evaluates the next market. If `close_all` contains multiple chunks, the
-bot executes the chunk whose authoritative market identity matches the selected
-position; later ticks process the remaining positions exactly once.
-If no current market exists during startup, the continuous command reports a
-waiting preflight state and continues into its retrying loop. `doctor` remains
-bounded and reports `WAITING_FOR_MARKET` instead.
-
-Cleanup is not a substitute for settlement. A non-winning position follows
-`refundable -> refund -> cleanup_available -> close` only when the production
-API authoritatively supplies the refundable state, amount, reason and deadline.
-While a market is open, `sell` is the only economic exit; `claim` remains for a
-resolved winner.
-
-One local process needs no database:
+The default state is local:
 
 ```text
-STRYKE_STATE_BACKEND=file
 STRYKE_CHECKPOINT_PATH=.stryke/reference-bot-action.json
 STRYKE_ROUND_STATE_PATH=.stryke/reference-bot-rounds.json
 ```
 
-Operators needing shared restart state and deploy-overlap protection can use
-the same public bot with Postgres:
+Keep these files across restarts. Paper positions use a derived local ledger.
+Operators requiring shared state can select `STRYKE_STATE_BACKEND=postgres`
+and set `STRYKE_DATABASE_URL` plus a stable `STRYKE_STATE_NAMESPACE`.
 
-```text
-STRYKE_STATE_BACKEND=postgres
-STRYKE_DATABASE_URL=postgres://user:password@host:5432/database
-STRYKE_STATE_NAMESPACE=my-bot
-STRYKE_LEASE_TTL_MS=30000
-```
+## Output and safety
 
-The database URL is redacted from effective configuration output. Postgres
-failure or lease loss stops market work and never falls back to local state.
+Every run prints effective non-secret configuration and a reason for each
+action, wait, or block. A BTC market identifier can contain `:SOL:` because SOL
+is the collateral asset; the configured/token asset remains BTC.
+
+Never put a private key, seed phrase, signed transaction, or database password
+in logs or committed configuration. A signature proves submission, not
+confirmation. Submitted or unknown actions retain their checkpoint and are
+reconciled before another transaction.
+
+Advanced environment controls and SDK mechanics are documented in the source
+repository: <https://github.com/dannydoritoeth/stryke-sdk>.

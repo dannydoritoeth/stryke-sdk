@@ -127,6 +127,5 @@ Market and position lifecycle evidence uses
 `stryke.pilotLifecycle.v1`. Normalized state is always accompanied by the raw
 status, raw reason, observation timestamp, and optional observed slot.
 
-See the workspace [quickstart](../../docs/quickstart.md) and
-[typed-error recovery guide](../../docs/troubleshooting.md) for the complete
-transaction flow, configuration and recovery preconditions.
+For the complete paper-to-live quickstart, configuration, and error recovery,
+see <https://github.com/dannydoritoeth/stryke-sdk>.
