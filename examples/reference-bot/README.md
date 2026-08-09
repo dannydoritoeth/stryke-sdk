@@ -4,11 +4,13 @@ Runnable reference bot built exclusively on the public `@stryke/sdk` contract.
 It defaults to paper mode, file-backed restart state, live trading disabled,
 and the kill switch enabled.
 
-From the source workspace, use the conservative public defaults directly:
+After the first npm release is published, install the public packages and use
+the conservative defaults directly:
 
 ```bash
-npm run doctor:paper -w @stryke/reference-bot
-npm run start:paper -w @stryke/reference-bot -- --ticks=2
+npm install @stryke/sdk @stryke/reference-bot
+npx stryke-reference-bot doctor --profile=paper
+npx stryke-reference-bot --profile=paper --ticks=2
 ```
 
 Copy `.env.example` to `.env` only to customize those defaults.
@@ -21,9 +23,9 @@ position. The simulator holds to authoritative resolution and uses the entry
 quote's projected winning payout for its clearly labelled terminal result.
 That assumption is not a guaranteed fill, return, or profit.
 
-The package is not published to npm. After installing the two immutable
-release tarballs described in `docs/artifact-handoff.md`, its installed binary
-can instead be checked and run as:
+Deployments that require an independently checksummed handoff can instead use
+the two immutable release tarballs described in `docs/artifact-handoff.md`.
+The installed commands are the same:
 
 ```bash
 npx stryke-reference-bot doctor --profile=paper

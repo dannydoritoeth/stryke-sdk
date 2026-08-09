@@ -34,10 +34,12 @@ not a guaranteed profitable strategy.
 
 ## Three-step confidence ladder
 
+After the first npm release is published:
+
 ```bash
-npm ci
-npm run doctor:paper -w @stryke/reference-bot
-npm run start:paper -w @stryke/reference-bot -- --ticks=2
+npm install @stryke/sdk @stryke/reference-bot
+npx stryke-reference-bot doctor --profile=paper
+npx stryke-reference-bot --profile=paper --ticks=2
 ```
 
 Doctor reports whether setup is ready, waiting for an eligible market, or
@@ -46,6 +48,8 @@ Copy `.env.example` to `.env` only to inspect or customize the conservative
 public defaults. Remove `-- --ticks=2`
 only when you want the continuous process. Paper mode reads real markets,
 Pyth prices, and quotes but never loads a wallet or submits a transaction.
+From a source checkout, the equivalent command is
+`npm run start:paper -w @stryke/reference-bot -- --ticks=2`.
 
 ```bash
 npm run start:live -w @stryke/reference-bot
@@ -87,7 +91,8 @@ for the short checklist.
 Never put a seed phrase, private key, secret key, or signed transaction in config
 or logs. See the [quickstart](docs/quickstart.md),
 [configuration](docs/configuration.md), [market mechanics](docs/market-mechanics.md),
-[artifact handoff](docs/artifact-handoff.md), and
+[artifact handoff](docs/artifact-handoff.md),
+[npm publication](docs/npm-publishing.md), and
 [error recovery](docs/troubleshooting.md).
 
 No included strategy guarantees accuracy or profit. The recommended baseline
