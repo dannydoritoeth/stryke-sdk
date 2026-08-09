@@ -78,7 +78,7 @@ Deliverables:
 3. Use the same selected market, paired quotes, size, strategy decision and
    lifecycle inputs as live mode.
 4. Emit explicit `paper_buy`, `paper_hold`, `paper_sell`, `paper_claim`,
-   `paper_refund` and `paper_complete` events.
+   `paper_refund` and `paper_loss` events.
 5. Ensure paper read-only enforcement is independent of the live kill switch;
    no paper code path may load a signer or submit.
 6. Document simulation assumptions and reset/export controls.

@@ -7,7 +7,7 @@ import type { EntryEvaluation, ReferenceBotRuntimeAdapter, RuntimeExecution } fr
 
 export const PAPER_LEDGER_SCHEMA_VERSION = "stryke.referenceBotPaperLedger.v1" as const;
 
-type PaperPositionState = "open" | "claimed" | "refunded" | "lost" | "sold";
+type PaperPositionState = "open" | "claimed" | "refunded" | "loss_pending" | "lost" | "sold";
 
 export type PaperPositionRecord = {
   positionId: string;
@@ -45,7 +45,7 @@ const validateRecord = (value: unknown): PaperPositionRecord => {
     !/^\d+$/.test(row.assumedWinningPayoutCollateralUnits ?? "") ||
     typeof row.entryQuoteId !== "string" || typeof row.entryMarketStateVersion !== "string" ||
     typeof row.enteredAt !== "string" || !Number.isFinite(Date.parse(row.enteredAt)) ||
-    !["open", "claimed", "refunded", "lost", "sold"].includes(row.state ?? "")
+    !["open", "claimed", "refunded", "loss_pending", "lost", "sold"].includes(row.state ?? "")
   ) throw new StrykeSdkError("configuration", "Paper ledger contains an unsupported record");
   return row as PaperPositionRecord;
 };
@@ -103,9 +103,17 @@ export class FilePaperLedger {
 
   async complete(positionId: string, state: Exclude<PaperPositionState, "open">): Promise<void> {
     const document = await this.load();
-    const position = document.positions.find((candidate) => candidate.positionId === positionId);
-    if (!position || position.state !== "open") throw new StrykeSdkError("position_state", "Paper position is not open");
+    const position = document.positions.find((candidate) => candidate.positionId === positionId && candidate.state === "open");
+    if (!position) throw new StrykeSdkError("position_state", "Paper position is not open");
     position.state = state;
+    await this.save(document);
+  }
+
+  async acknowledgeLoss(positionId: string): Promise<void> {
+    const document = await this.load();
+    const position = document.positions.find((candidate) => candidate.positionId === positionId && candidate.state === "loss_pending");
+    if (!position) throw new StrykeSdkError("position_state", "Paper loss is not pending acknowledgement");
+    position.state = "lost";
     await this.save(document);
   }
 }
@@ -118,10 +126,10 @@ const lifecycle = (state: PilotPosition["lifecycle"]["state"], reason: string) =
   observedAt: new Date().toISOString(),
 });
 
-const paperPosition = (record: PaperPositionRecord, market?: PilotMarket): PilotPosition => {
-  const resolvedSide = market?.lifecycle.state === "resolved_yes" ? "yes" : market?.lifecycle.state === "resolved_no" ? "no" : undefined;
+const paperPosition = (record: PaperPositionRecord, market?: PilotMarket, paperResolvedSide?: "yes" | "no"): PilotPosition => {
+  const resolvedSide = market?.lifecycle.state === "resolved_yes" ? "yes" : market?.lifecycle.state === "resolved_no" ? "no" : paperResolvedSide;
   const refundable = market?.lifecycle.state === "refundable_underfunded" || market?.lifecycle.state === "refundable_zero_winner";
-  const state = record.state === "claimed" ? "claimed" : record.state === "refunded" ? "refunded" : record.state === "sold" ? "sold" : record.state === "lost" ? "lost" : refundable ? "refundable" : resolvedSide ? (resolvedSide === record.side ? "claimable" : "lost") : "awaiting_resolution";
+  const state = record.state === "claimed" ? "claimed" : record.state === "refunded" ? "refunded" : record.state === "sold" ? "sold" : record.state === "lost" || record.state === "loss_pending" ? "lost" : refundable ? "refundable" : resolvedSide ? (resolvedSide === record.side ? "claimable" : "lost") : "awaiting_resolution";
   const winning = state === "claimable";
   return {
     positionId: record.positionId,
@@ -135,7 +143,7 @@ const paperPosition = (record: PaperPositionRecord, market?: PilotMarket): Pilot
     ...(winning ? { claimableAmount: record.assumedWinningPayoutCollateralUnits } : {}),
     ...(refundable ? { refundableAmount: record.costBasisCollateralUnits } : {}),
     lifecycle: lifecycle(state, state === "claimable" || state === "refundable" ? "paper_entry_quote_assumption" : `paper_${state}`),
-    raw: { simulation: true, entryQuoteId: record.entryQuoteId, payoutAssumption: "entry_quote_projected_winning_payout" },
+    raw: { simulation: true, entryQuoteId: record.entryQuoteId, payoutAssumption: "entry_quote_projected_winning_payout", ...(record.state === "loss_pending" ? { paperLossPending: true } : {}) },
   };
 };
 
@@ -148,12 +156,20 @@ export const createPaperRuntimeAdapter = (base: ReferenceBotRuntimeAdapter, ledg
     const document = await ledger.load();
     return Promise.all(document.positions.map(async (record) => {
       let market: PilotMarket | undefined;
+      let paperResolvedSide: "yes" | "no" | undefined;
       if (record.state === "open") {
         try { market = await base.loadMarketByIdentity?.({ expiryTs: record.expiryTs, strikePrice: record.strikePrice }); }
         catch { /* preserve durable awaiting state until authoritative data recovers */ }
+        if (market && market.intervalLifecycle === "closed" && !["resolved_yes", "resolved_no"].includes(market.lifecycle.state)) {
+          try { paperResolvedSide = await base.resolvePaperOutcome?.({ expiryTs: record.expiryTs, strikePrice: record.strikePrice }); }
+          catch { /* preserve durable awaiting state until authoritative price evidence recovers */ }
+        }
       }
-      const position = paperPosition(record, market);
-      if (record.state === "open" && position.lifecycle.state === "lost") await ledger.complete(record.positionId, "lost");
+      const position = paperPosition(record, market, paperResolvedSide);
+      if (record.state === "open" && position.lifecycle.state === "lost") {
+        await ledger.complete(record.positionId, "loss_pending");
+        return paperPosition({ ...record, state: "loss_pending" }, market, paperResolvedSide);
+      }
       return position;
     }));
   },
@@ -178,4 +194,5 @@ export const createPaperRuntimeAdapter = (base: ReferenceBotRuntimeAdapter, ledg
     await ledger.complete(position.positionId, action === "claim" ? "claimed" : "refunded");
     return { clientActionId: `paper-${action}:${position.positionId}` };
   },
+  acknowledgePaperLoss: (positionId) => ledger.acknowledgeLoss(positionId),
 });

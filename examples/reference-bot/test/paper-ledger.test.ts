@@ -16,7 +16,7 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
-const market = (state: "open" | "resolved_yes"): PilotMarket => ({
+const market = (state: "open" | "trading_closed"): PilotMarket => ({
   marketId: "btc:paper-round",
   asset: "BTC",
   expiryFamily: "five_minute",
@@ -24,17 +24,19 @@ const market = (state: "open" | "resolved_yes"): PilotMarket => ({
   strikePrice: "100",
   pools: { yes: "1000000", no: "1000000", stale: false },
   activation: { yes: { realPoolCollateralUnits: "1000000" }, no: { realPoolCollateralUnits: "1000000" } },
+  intervalLifecycle: state === "open" ? "active" : "closed",
   lifecycle: { state, rawState: state, rawReason: state, observedAt: new Date().toISOString(), source: "api_v1" },
   reference: { alignmentStatus: "aligned", assetKey: "btc" },
   raw: {},
 } as never);
 
 describe("durable paper runtime", () => {
-  it("persists buy, survives restart, holds, and claims once after authoritative resolution", async () => {
+  it("persists buy, survives restart, and reports winning and losing paper settlement once", async () => {
     const directory = await mkdtemp(join(tmpdir(), "stryke-paper-ledger-"));
     directories.push(directory);
     const ledgerPath = join(directory, "ledger.json");
-    let marketState: "open" | "resolved_yes" = "open";
+    let marketState: "open" | "trading_closed" = "open";
+    let paperOutcome: "yes" | "no" = "yes";
     const config = parseReferenceBotConfig({
       estimator: "distance_to_strike",
       readOnlyMode: true,
@@ -46,6 +48,7 @@ describe("durable paper runtime", () => {
       reconcilePending: async (checkpoint) => ({ state: "confirmed", clientActionId: checkpoint.clientActionId }),
       listPositions: async () => [],
       loadMarketByIdentity: async () => market(marketState),
+      resolvePaperOutcome: async () => paperOutcome,
       evaluatePosition: async () => { throw new Error("paper positions hold to expiry"); },
       evaluateEntry: async () => ({
         market: market("open"),
@@ -70,13 +73,16 @@ describe("durable paper runtime", () => {
     const restartedProcess = createPaperRuntimeAdapter(base, new FilePaperLedger(ledgerPath));
     await expect(runMarketTick({ tick: 2, config, adapter: restartedProcess })).resolves.toMatchObject({ action: "paper_hold", reason: "paper_hold_to_expiry" });
 
-    marketState = "resolved_yes";
+    marketState = "trading_closed";
     await expect(restartedProcess.listPositions()).resolves.toMatchObject([{ lifecycle: { state: "claimable" } }]);
     await expect(runMarketTick({ tick: 3, config, adapter: restartedProcess })).resolves.toMatchObject({ action: "paper_claim", reason: "paper_terminal_simulated" });
     await expect(runMarketTick({ tick: 4, config, adapter: restartedProcess })).resolves.toMatchObject({ action: "paper_buy" });
+    paperOutcome = "no";
+    await expect(runMarketTick({ tick: 5, config, adapter: restartedProcess })).resolves.toMatchObject({ action: "paper_loss", reason: "paper_terminal_simulated" });
+    await expect(runMarketTick({ tick: 6, config, adapter: restartedProcess })).resolves.toMatchObject({ action: "paper_buy" });
 
     const stored = await new FilePaperLedger(ledgerPath).load();
-    expect(stored.positions.map(({ state }) => state)).toEqual(["claimed", "open"]);
+    expect(stored.positions.map(({ state }) => state)).toEqual(["claimed", "lost", "open"]);
     expect((await stat(directory)).mode & 0o777).toBe(0o700);
     expect((await stat(ledgerPath)).mode & 0o777).toBe(0o600);
   });

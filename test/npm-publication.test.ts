@@ -27,7 +27,8 @@ describe("npm publication contract", () => {
     expect(workflow).toContain("environment: npm-production");
     expect(workflow).toContain("npm publish -w @stryketrade/sdk --access public");
     expect(workflow).toContain("npm publish -w @stryketrade/reference-bot --access public");
-    expect(workflow).toContain('npm install "@stryketrade/sdk@$version" "@stryketrade/reference-bot@$version"');
+    expect(workflow).toContain('npm install --prefer-online "@stryketrade/sdk@$version" "@stryketrade/reference-bot@$version"');
+    expect(workflow).toContain("for attempt in $(seq 1 12)");
     expect(workflow).toContain("npx --no-install stryke-reference-bot");
   });
 });

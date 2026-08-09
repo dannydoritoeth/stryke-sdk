@@ -82,7 +82,17 @@ jobs:
           consumer="$(mktemp -d)"
           cd "$consumer"
           npm init -y
-          npm install "@stryketrade/sdk@$version" "@stryketrade/reference-bot@$version"
+          installed=false
+          for attempt in $(seq 1 12); do
+            if npm install --prefer-online "@stryketrade/sdk@$version" "@stryketrade/reference-bot@$version"; then
+              installed=true
+              break
+            fi
+            echo "Registry has not propagated version $version yet (attempt $attempt/12)."
+            npm cache clean --force
+            sleep 10
+          done
+          test "$installed" = true
           node --input-type=module -e "import('@stryketrade/sdk').then((sdk) => { if (!sdk.StrykeClient) process.exit(1) })"
           output="$(npx --no-install stryke-reference-bot)"
           test "$(printf '%s' "$output" | grep -c '"tick":')" = "2"
