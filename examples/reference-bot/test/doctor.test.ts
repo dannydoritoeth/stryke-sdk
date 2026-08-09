@@ -48,6 +48,16 @@ describe("reference bot doctor", () => {
     expect(classifyDoctorError("paper", new StrykeSdkError("quote_blocked", "missing", true, { phase: "market_minimum_unavailable" })).status).toBe("BLOCKED");
   });
 
+  it("treats_a_transient_paired_quote_mismatch_as_healthy_waiting", () => {
+    expect(classifyDoctorError(
+      "paper",
+      new StrykeSdkError("quote_blocked", "Matched YES/NO readiness quotes are inconsistent", true, { phase: "paired_quote_mismatch" })
+    )).toMatchObject({
+      status: "WAITING_FOR_MARKET",
+      reason: "paired_quote_mismatch",
+    });
+  });
+
   it("directs_an_unconfigured_live_user_to_the_wallet_only_delta", () => {
     expect(classifyDoctorError("live", new StrykeSdkError("configuration", "Invalid reference bot config: STRYKE_WALLET_ADAPTER_PATH"))).toMatchObject({
       status: "BLOCKED",
