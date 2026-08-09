@@ -5,6 +5,7 @@ import {
   MarketsClient,
   PositionsClient,
   positionCleanupAvailable,
+  positionCleanupPending,
   PriceStore,
   ReviewedTransactionExecutor,
   SDK_VERSION,
@@ -321,15 +322,28 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
     const sdkAdapter = createSdkRuntimeAdapter({ client, rpc, priceStore, checkpoint, config, roundDecisionStore, ...(polymarketClient ? { polymarketClient } : {}), ...(signer ? { owner: signer.address } : {}), ...(executor ? { executor } : {}), ...(cleanupExecutionAdapter ? { cleanupExecutionAdapter } : {}) });
     if (cleanupOnly) {
       try {
-        const eligible = (await sdkAdapter.listPositions()).find((position) =>
+        const positions = await sdkAdapter.listPositions();
+        const eligible = positions.find((position) =>
           positionCleanupAvailable(position)
         );
         if (!eligible) {
+          const pending = positions.find((position) => positionCleanupPending(position));
           console.log(JSON.stringify({
             event: "reference_bot_rent_recovery",
             profile,
             action: "skip",
-            reason: "no_cleanup_available",
+            reason: pending?.cleanup?.marketSettlementStatus === "not_settled"
+              ? "cleanup_awaiting_market_settlement"
+              : pending
+                ? "cleanup_not_yet_eligible"
+                : "no_cleanup_available",
+            ...(pending?.cleanup ? {
+              cleanupEligibleAt: pending.cleanup.cleanupEligibleAt,
+              marketSettlementStatus: pending.cleanup.marketSettlementStatus,
+              ...(pending.cleanup.blockedReason
+                ? { blockedReason: pending.cleanup.blockedReason }
+                : {}),
+            } : {}),
           }));
           return;
         }

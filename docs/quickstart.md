@@ -91,6 +91,10 @@ simulates, signs, confirms, and restart-reconciles the rent recovery before
 another entry. Paper mode cannot sign this action.
 If the authoritative `cleanupEligibleAt` is still in the future, the bot waits
 and reports that timestamp instead of submitting early or opening another trade.
+It also requires the API's market settlement status to be `settled`. A
+`not_settled` position reports `cleanup_awaiting_market_settlement`; the bot
+does not submit a closure that the program would reject for outstanding
+liability.
 
 The plan separates wallet-recoverable position rent from fees. A first trade
 may also fund shared market-series or strike-market initialization accounts;

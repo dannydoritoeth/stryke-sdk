@@ -78,6 +78,7 @@ describe("pilot positions", () => {
     const parsed = parsePilotPosition(row("expired_unclaimed", {
       yesShares: "0",
       noShares: "0",
+      forceClose: { expiryAt: deadline, status: "settled" },
       cleanup,
     }));
     expect(positionCleanupAvailable(parsed)).toBe(true);
@@ -92,6 +93,7 @@ describe("pilot positions", () => {
     const parsed = parsePilotPosition(row("expired_unclaimed", {
       yesShares: "0",
       noShares: "0",
+      forceClose: { expiryAt: deadline, status: "settled" },
       cleanup: {
         rentRecipient: "HYDrCb45WNbMzLjKqQByKduksFCasUfgLNpkA7xvcxf7",
         selfCloseAvailable: true,
@@ -104,6 +106,32 @@ describe("pilot positions", () => {
     expect(positionCleanupPending(parsed)).toBe(true);
     expect(positionCleanupAvailable(parsed, Date.parse("2026-07-22T00:00:59.999Z"))).toBe(false);
     expect(positionCleanupAvailable(parsed, Date.parse("2026-07-22T00:01:00.000Z"))).toBe(true);
+  });
+
+  it("does not expose cleanup while the market has outstanding settlement liability", () => {
+    const parsed = parsePilotPosition(row("expired_unclaimed", {
+      yesShares: "0",
+      noShares: "0",
+      forceClose: {
+        expiryAt: deadline,
+        status: "not_settled",
+        blockedReason: "market_not_settled",
+      },
+      cleanup: {
+        rentRecipient: "HYDrCb45WNbMzLjKqQByKduksFCasUfgLNpkA7xvcxf7",
+        selfCloseAvailable: true,
+        staleCleanup: {
+          action: "close_position",
+          cleanupEligibleAt: "2026-07-22T00:00:00.000Z",
+        },
+      },
+    }));
+    expect(positionCleanupPending(parsed)).toBe(true);
+    expect(positionCleanupAvailable(parsed, Date.parse("2026-07-23T00:00:00.000Z"))).toBe(false);
+    expect(parsed.cleanup).toMatchObject({
+      marketSettlementStatus: "not_settled",
+      blockedReason: "market_not_settled",
+    });
   });
 
   it("normalizes_pending_open_sellable_awaiting_resolution_and_terminal_states", () => {

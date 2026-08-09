@@ -191,8 +191,16 @@ export const runMarketTick = async ({
         positionDecisions.push({
           positionId: position.positionId,
           action: "hold",
-          reason: "cleanup_not_yet_eligible",
-          details: { cleanupEligibleAt: position.cleanup!.cleanupEligibleAt },
+          reason: position.cleanup!.marketSettlementStatus === "not_settled"
+            ? "cleanup_awaiting_market_settlement"
+            : "cleanup_not_yet_eligible",
+          details: {
+            cleanupEligibleAt: position.cleanup!.cleanupEligibleAt,
+            marketSettlementStatus: position.cleanup!.marketSettlementStatus,
+            ...(position.cleanup!.blockedReason
+              ? { blockedReason: position.cleanup!.blockedReason }
+              : {}),
+          },
         });
       }
       continue;
@@ -304,9 +312,17 @@ export const runMarketTick = async ({
 
   const waitingCleanup = cleanupWaiting[0];
   if (waitingCleanup) {
-    return event(tick, "wait", "hold", "cleanup_not_yet_eligible", {
+    return event(tick, "wait", "hold", waitingCleanup.cleanup!.marketSettlementStatus === "not_settled"
+      ? "cleanup_awaiting_market_settlement"
+      : "cleanup_not_yet_eligible", {
       positionId: waitingCleanup.positionId,
-      details: { cleanupEligibleAt: waitingCleanup.cleanup!.cleanupEligibleAt },
+      details: {
+        cleanupEligibleAt: waitingCleanup.cleanup!.cleanupEligibleAt,
+        marketSettlementStatus: waitingCleanup.cleanup!.marketSettlementStatus,
+        ...(waitingCleanup.cleanup!.blockedReason
+          ? { blockedReason: waitingCleanup.cleanup!.blockedReason }
+          : {}),
+      },
       positionDecisions,
     });
   }

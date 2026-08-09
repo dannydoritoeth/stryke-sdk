@@ -45,6 +45,7 @@ describe("reference bot composed runtime", () => {
         selfCloseAvailable: true,
         action: "close_position",
         cleanupEligibleAt: "2020-01-01T00:00:00.000Z",
+        marketSettlementStatus: "settled",
       },
     });
     const executeCleanup = vi.fn(async () => ({
@@ -73,6 +74,7 @@ describe("reference bot composed runtime", () => {
         selfCloseAvailable: true,
         action: "close_position",
         cleanupEligibleAt: "2030-01-01T00:00:00.000Z",
+        marketSettlementStatus: "settled",
       },
     });
     const runtime = adapter({ listPositions: async () => [cleanupPosition] });
@@ -87,6 +89,37 @@ describe("reference bot composed runtime", () => {
       reason: "cleanup_not_yet_eligible",
       details: { cleanupEligibleAt: "2030-01-01T00:00:00.000Z" },
     });
+    expect(runtime.evaluateEntry).not.toHaveBeenCalled();
+  });
+
+  it("waits_for_market_settlement_without_simulating_cleanup_or_evaluating_entry", async () => {
+    const cleanupPosition = position("expired_unclaimed", {
+      yesShares: "0",
+      noShares: "0",
+      cleanup: {
+        rentRecipient: "owner",
+        selfCloseAvailable: true,
+        action: "close_position",
+        cleanupEligibleAt: "2020-01-01T00:00:00.000Z",
+        marketSettlementStatus: "not_settled",
+        blockedReason: "market_not_settled",
+      },
+    });
+    const executeCleanup = vi.fn();
+    const runtime = adapter({
+      listPositions: async () => [cleanupPosition],
+      executeCleanup,
+    });
+    await expect(runMarketTick({ tick: 1, config: live, adapter: runtime })).resolves.toMatchObject({
+      phase: "wait",
+      action: "hold",
+      reason: "cleanup_awaiting_market_settlement",
+      details: {
+        marketSettlementStatus: "not_settled",
+        blockedReason: "market_not_settled",
+      },
+    });
+    expect(executeCleanup).not.toHaveBeenCalled();
     expect(runtime.evaluateEntry).not.toHaveBeenCalled();
   });
 
@@ -110,6 +143,7 @@ describe("reference bot composed runtime", () => {
         selfCloseAvailable: true,
         action: "close_position",
         cleanupEligibleAt: "2020-01-01T00:00:00.000Z",
+        marketSettlementStatus: "settled",
       },
     });
     let tick = 0;
