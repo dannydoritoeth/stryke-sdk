@@ -1,6 +1,7 @@
 import {
   positionSideExposures,
   positionCleanupAvailable,
+  positionCleanupPending,
   terminalActionFor,
   type ActionCheckpoint,
   type ExecutableQuote,
@@ -166,6 +167,7 @@ export const runMarketTick = async ({
   const nonActionableTerminalPositions = new Set<string>();
   const terminalCandidates: Array<{ position: PilotPosition; action: PositionTerminalAction }> = [];
   const cleanupCandidates: PilotPosition[] = [];
+  const cleanupWaiting: PilotPosition[] = [];
   const sellCandidates: Array<{
     position: PilotPosition;
     exposure: PilotPositionSideExposure;
@@ -180,9 +182,19 @@ export const runMarketTick = async ({
     details?: Readonly<Record<string, string | number | boolean>>;
   }> = [];
   for (const position of positions) {
-    if (!paper && positionCleanupAvailable(position)) {
-      cleanupCandidates.push(position);
-      positionDecisions.push({ positionId: position.positionId, action: "close", reason: "wallet_rent_recovery_available" });
+    if (!paper && positionCleanupPending(position)) {
+      if (positionCleanupAvailable(position, nowSeconds * 1_000)) {
+        cleanupCandidates.push(position);
+        positionDecisions.push({ positionId: position.positionId, action: "close", reason: "wallet_rent_recovery_available" });
+      } else {
+        cleanupWaiting.push(position);
+        positionDecisions.push({
+          positionId: position.positionId,
+          action: "hold",
+          reason: "cleanup_not_yet_eligible",
+          details: { cleanupEligibleAt: position.cleanup!.cleanupEligibleAt },
+        });
+      }
       continue;
     }
     if (terminalStates.has(position.lifecycle.state)) {
@@ -287,6 +299,15 @@ export const runMarketTick = async ({
       },
       positionDecisions,
       ...result,
+    });
+  }
+
+  const waitingCleanup = cleanupWaiting[0];
+  if (waitingCleanup) {
+    return event(tick, "wait", "hold", "cleanup_not_yet_eligible", {
+      positionId: waitingCleanup.positionId,
+      details: { cleanupEligibleAt: waitingCleanup.cleanup!.cleanupEligibleAt },
+      positionDecisions,
     });
   }
 

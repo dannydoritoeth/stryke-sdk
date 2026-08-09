@@ -263,11 +263,18 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
   };
 };
 
-export const positionCleanupAvailable = (position: PilotPosition): boolean =>
+export const positionCleanupPending = (position: PilotPosition): boolean =>
   position.cleanup?.selfCloseAvailable === true &&
   position.cleanup.rentRecipient === position.owner &&
   BigInt(position.yesShares) === 0n &&
   BigInt(position.noShares) === 0n;
+
+export const positionCleanupAvailable = (
+  position: PilotPosition,
+  now = Date.now()
+): boolean =>
+  positionCleanupPending(position) &&
+  now >= Date.parse(position.cleanup!.cleanupEligibleAt);
 
 export const positionIfWinPayout = (
   position: PilotPosition,

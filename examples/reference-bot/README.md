@@ -49,6 +49,8 @@ empty position account through the durable checkpoint. The successful event is
 `close:wallet_rent_recovered`; read-only mode reports `cleanup_dry_run`, and
 paper mode cannot load or sign cleanup. This reclaims wallet-owned position
 rent only—not shared market initialization costs.
+Before `cleanupEligibleAt`, it reports `cleanup_not_yet_eligible` with that
+timestamp and does not evaluate another entry.
 
 To perform cleanup without allowing a new market entry, use the bounded
 recovery command after live doctor passes:

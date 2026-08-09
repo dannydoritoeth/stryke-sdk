@@ -87,6 +87,8 @@ requires signer, fee payer, rent recipient, and requested owner to agree.
 The cleanup plan reports recoverable position rent and estimated network fees
 separately. It does not describe shared market-series or strike-market
 initialization rent as wallet-recoverable.
+`positionCleanupAvailable` also enforces the API-authored `cleanupEligibleAt`;
+do not submit early even if a UI row already advertises future cleanup.
 
 For the fastest safe introduction, run the bundled read-only bot:
 

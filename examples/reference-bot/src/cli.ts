@@ -321,7 +321,9 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
     const sdkAdapter = createSdkRuntimeAdapter({ client, rpc, priceStore, checkpoint, config, roundDecisionStore, ...(polymarketClient ? { polymarketClient } : {}), ...(signer ? { owner: signer.address } : {}), ...(executor ? { executor } : {}), ...(cleanupExecutionAdapter ? { cleanupExecutionAdapter } : {}) });
     if (cleanupOnly) {
       try {
-        const eligible = (await sdkAdapter.listPositions()).find(positionCleanupAvailable);
+        const eligible = (await sdkAdapter.listPositions()).find((position) =>
+          positionCleanupAvailable(position)
+        );
         if (!eligible) {
           console.log(JSON.stringify({
             event: "reference_bot_rent_recovery",
