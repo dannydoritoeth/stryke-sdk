@@ -6,6 +6,7 @@ import { STRYKE_SDK_ERROR_CODES } from "../packages/sdk/src/index.js";
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const readme = read("README.md");
 const sdkReadme = read("packages/sdk/README.md");
+const botReadme = read("examples/reference-bot/README.md");
 const quickstart = read("docs/quickstart.md");
 const mechanics = read("docs/market-mechanics.md");
 const configuration = read("docs/configuration.md");
@@ -92,6 +93,20 @@ describe("pilot documentation contract", () => {
     expect(readme).toContain("npx stryke-reference-bot doctor --profile=live");
     expect(readme).toContain("npx stryke-reference-bot --profile=live");
     expect(readme.indexOf("--profile=paper")).toBeLessThan(readme.indexOf("--profile=live"));
+  });
+
+  it("published_bot_readme_contains_the_complete_live_delta", () => {
+    for (const phrase of [
+      "solana-keygen new --outfile ../stryke-trading-wallet.json",
+      "STRYKE_WALLET_ADAPTER_PATH",
+      "wallet-adapter.example.mjs",
+      "STRYKE_WALLET_KEYPAIR_PATH",
+      "npx stryke-reference-bot doctor --profile=live",
+      "npx stryke-reference-bot --profile=live",
+      "No `.env` or additional live-enable variable is required",
+      "insufficient_funding",
+    ]) expect(botReadme).toContain(phrase);
+    expect(botReadme).toMatch(/`:SOL:` because SOL\s+is the collateral asset/i);
   });
 
   it("public_docs_do_not_leak_private_plans_paths_or_operations", () => {
