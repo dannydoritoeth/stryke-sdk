@@ -4,6 +4,14 @@ This repository is authoritative for the developer SDK, reference bot, public
 developer documentation, handoff package, and repository-local release
 evidence.
 
+The product objective and working-backwards delivery order are defined in
+`docs/prds/02-clean-install-trading-readiness.md` and its linked implementation
+plan. Work affecting installation, onboarding, paper mode, live readiness,
+configuration, packaging, documentation, or release evidence must name the
+`OUT-*` and `READY-*` requirements it advances and the earliest release-gate
+cell it closes. Do not prioritize convenience work over an earlier open outcome
+unless it fixes safety/correctness or unblocks an independent dependency.
+
 Before changing files, report the current repository path, Git remote, working
 tree status, upstream publication/divergence state, and intended scope. Resolve
 ambiguous terms such as "SDK repo", "bot SDK", or "reference bot" before
