@@ -1,6 +1,6 @@
 {
   "name": "@stryketrade/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Public TypeScript SDK for Stryke prediction markets.",
   "repository": {
     "type": "git",
