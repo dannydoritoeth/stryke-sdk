@@ -21,7 +21,7 @@ import {
   type ActionCheckpointStore,
   type ExecutableQuote,
   type PilotPosition,
-} from "@stryke/sdk";
+} from "@stryketrade/sdk";
 import { createSolanaRpc, isTransactionSigner, type TransactionSigner } from "@solana/kit";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";

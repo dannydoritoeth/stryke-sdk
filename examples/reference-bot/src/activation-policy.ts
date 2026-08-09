@@ -1,4 +1,4 @@
-import type { ExecutableQuote } from "@stryke/sdk";
+import type { ExecutableQuote } from "@stryketrade/sdk";
 
 export type ActivationEntryDecision = { allowed: boolean; reason: string };
 

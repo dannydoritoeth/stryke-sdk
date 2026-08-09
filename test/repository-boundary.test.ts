@@ -62,7 +62,7 @@ describe("public repository boundary", () => {
         (match) => match[1]
       );
       expect(imports.filter((path) => path.includes("stryke"))).toEqual(
-        imports.filter((path) => path === "@stryke/sdk")
+        imports.filter((path) => path === "@stryketrade/sdk")
       );
     }
   });

@@ -8,7 +8,7 @@ import {
   type PilotPositionSideExposure,
   type PositionTerminalAction,
   StrykeSdkError,
-} from "@stryke/sdk";
+} from "@stryketrade/sdk";
 
 import type { ReferenceBotConfig } from "./config.js";
 import { decideBestEntry, type BestEntryDecision } from "./entry.js";

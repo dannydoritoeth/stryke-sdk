@@ -1,4 +1,4 @@
-import type { ActionCheckpoint, ExecutableQuote, QuoteSide } from "@stryke/sdk";
+import type { ActionCheckpoint, ExecutableQuote, QuoteSide } from "@stryketrade/sdk";
 
 import type { ReferenceBotConfig } from "./config.js";
 import { assertFairProbability } from "./strategy.js";

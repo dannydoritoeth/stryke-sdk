@@ -1,4 +1,4 @@
-import { SUPPORTED_PROGRAM_ID, SUPPORTED_QUOTE_MATH_VERSION, type ExecutableQuote, type PilotPosition } from "@stryke/sdk";
+import { SUPPORTED_PROGRAM_ID, SUPPORTED_QUOTE_MATH_VERSION, type ExecutableQuote, type PilotPosition } from "@stryketrade/sdk";
 
 export const quote = (overrides: Partial<ExecutableQuote> = {}): ExecutableQuote => {
   const value: ExecutableQuote = ({

@@ -1,4 +1,4 @@
-import type { ExecutableQuote, PilotMarket } from "@stryke/sdk";
+import type { ExecutableQuote, PilotMarket } from "@stryketrade/sdk";
 
 export type PolymarketTimingMode = "polymarket_early" | "polymarket_late";
 export type EntryWindowDecision = { eligible: boolean; reason: string; opensAt: number; closesAt: number };

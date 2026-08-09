@@ -1,4 +1,4 @@
-# @stryke/sdk
+# @stryketrade/sdk
 
 Typed infrastructure for Stryke bot developers.
 
@@ -11,14 +11,14 @@ From the repository root:
 
 ```bash
 npm ci
-npm run build -w @stryke/sdk
+npm run build -w @stryketrade/sdk
 ```
 
 Connect to the mainnet API, select one canonical market, and
 request an executable quote:
 
 ```ts
-import { MarketsClient, QuotesClient, StrykeClient } from "@stryke/sdk";
+import { MarketsClient, QuotesClient, StrykeClient } from "@stryketrade/sdk";
 
 const client = await StrykeClient.connect({
   apiBaseUrl: process.env.STRYKE_API_BASE_URL ?? "https://api.stryketrade.com",
@@ -75,7 +75,7 @@ For the fastest safe introduction, run the bundled read-only bot:
 
 ```bash
 cp .env.example .env
-npm run start:paper -w @stryke/reference-bot
+npm run start:paper -w @stryketrade/reference-bot
 ```
 
 Signed execution requires a separately funded wallet adapter plus every

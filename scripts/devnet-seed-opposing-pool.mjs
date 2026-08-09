@@ -4,7 +4,7 @@ import { createSolanaRpc, isTransactionSigner } from "@solana/kit";
 import {
   FileActionCheckpointStore, PriceStore, ReviewedTransactionExecutor,
   SolanaReviewedExecutionAdapter, StrykeClient, TransactionsClient, subscribeHermes,
-} from "@stryke/sdk";
+} from "@stryketrade/sdk";
 import { parseReferenceBotConfig } from "../examples/reference-bot/dist/config.js";
 import { createSdkRuntimeAdapter } from "../examples/reference-bot/dist/sdk-runtime.js";
 

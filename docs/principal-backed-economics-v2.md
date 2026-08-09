@@ -94,7 +94,7 @@ above:
 - `npm run check:config-controls`: passed.
 - `npm run check:strategy-claim`: passed; the stronger strategy claim remains
   intentionally unpublished until fresh deployed-candidate evidence exists.
-- `npm run test:polymarket-fixture -w @stryke/reference-bot`: the actual CLI
+- `npm run test:polymarket-fixture -w @stryketrade/reference-bot`: the actual CLI
   emitted `buy -> hold -> sell -> same-round skip -> next-round buy`, proving
   two ordered market cycles through the composition entrypoint.
 

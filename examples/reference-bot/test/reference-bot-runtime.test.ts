@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ActionCheckpoint, PilotPosition } from "@stryke/sdk";
-import { StrykeSdkError } from "@stryke/sdk";
+import type { ActionCheckpoint, PilotPosition } from "@stryketrade/sdk";
+import { StrykeSdkError } from "@stryketrade/sdk";
 
 import { runMarketTick, runReferenceBot, type ReferenceBotRuntimeAdapter } from "../src/bot.js";
 import { parseReferenceBotConfig } from "../src/config.js";

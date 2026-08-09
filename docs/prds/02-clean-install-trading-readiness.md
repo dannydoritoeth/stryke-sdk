@@ -22,7 +22,7 @@ or direct helper calls, prove those outcomes from a clean environment.
 From an empty directory, the supported happy path is no longer than:
 
 ```bash
-npm install @stryke/sdk @stryke/reference-bot
+npm install @stryketrade/sdk @stryketrade/reference-bot
 npx stryke-reference-bot doctor --profile=paper
 npx stryke-reference-bot --profile=paper
 ```
@@ -75,7 +75,7 @@ understand all advanced controls before using conservative defaults.
 
 | ID | Requirement |
 | --- | --- |
-| READY-01 | Publish compatible `@stryke/sdk` and reference-bot packages; repository-only and unidentified tarball workflows do not satisfy clean installation. |
+| READY-01 | Publish compatible `@stryketrade/sdk` and reference-bot packages; repository-only and unidentified tarball workflows do not satisfy clean installation. |
 | READY-02 | Provide paper and live `doctor` commands with stable machine-readable results and human-readable remediation. |
 | READY-03 | Paper mode must use a simulated execution adapter and durable paper ledger while making wallet loading and transaction submission impossible. |
 | READY-04 | Paper simulation must consume the same market selection, quote economics, strategy, sizing and safety decisions as live execution. |
@@ -100,7 +100,7 @@ understand all advanced controls before using conservative defaults.
   wallet or funds.
 - Wallet material, signed bytes and secrets never appear in configuration
   output, logs, evidence, fixtures or repository files.
-- The reference bot accesses Stryke only through `@stryke/sdk`.
+- The reference bot accesses Stryke only through `@stryketrade/sdk`.
 - No paper result is represented as a guaranteed live fill, return or profit.
 
 ## Scope

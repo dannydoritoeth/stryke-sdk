@@ -17,10 +17,10 @@ import {
   type MaterializedPilotTransaction,
   type PilotMarket,
   type SolanaExecutionRpc,
-} from "@stryke/sdk";
+} from "@stryketrade/sdk";
 import type { TransactionSigner } from "@solana/kit";
 
-import type { StrykeClient } from "@stryke/sdk";
+import type { StrykeClient } from "@stryketrade/sdk";
 
 export type LiveBuyInput = {
   client: StrykeClient;

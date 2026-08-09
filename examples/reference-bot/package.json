@@ -1,5 +1,5 @@
 {
-  "name": "@stryke/reference-bot",
+  "name": "@stryketrade/reference-bot",
   "version": "0.1.0",
   "description": "Runnable reference bot built exclusively on the public Stryke SDK.",
   "repository": {
@@ -33,25 +33,25 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "prepack": "npm run build -w @stryke/sdk && npm run build",
+    "prepack": "npm run build -w @stryketrade/sdk && npm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run test",
-    "start:read-only": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js --read-only",
-    "start:live-data": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js --live-data",
-    "start:paper": "npm run build -w @stryke/sdk && npm run build && node --env-file-if-exists=../../.env dist/cli.js --profile=paper",
-    "start:devnet": "npm run build -w @stryke/sdk && npm run build && node --env-file-if-exists=../../.env dist/cli.js --profile=devnet",
-    "start:live": "npm run build -w @stryke/sdk && npm run build && node --env-file-if-exists=../../.env dist/cli.js --profile=live",
+    "start:read-only": "npm run build -w @stryketrade/sdk && npm run build && node dist/cli.js --read-only",
+    "start:live-data": "npm run build -w @stryketrade/sdk && npm run build && node dist/cli.js --live-data",
+    "start:paper": "npm run build -w @stryketrade/sdk && npm run build && node --env-file-if-exists=../../.env dist/cli.js --profile=paper",
+    "start:devnet": "npm run build -w @stryketrade/sdk && npm run build && node --env-file-if-exists=../../.env dist/cli.js --profile=devnet",
+    "start:live": "npm run build -w @stryketrade/sdk && npm run build && node --env-file-if-exists=../../.env dist/cli.js --profile=live",
     "start:live:built": "node dist/cli.js --profile=live",
-    "doctor:paper": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js doctor --profile=paper",
-    "doctor:live": "npm run build -w @stryke/sdk && npm run build && node --env-file-if-exists=../../.env dist/cli.js doctor --profile=live",
-    "test:polymarket-fixture": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js --fixture-polymarket",
-    "test:polymarket-bootstrap-fixture": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js --fixture-polymarket-bootstrap",
-    "test:polymarket-late-fixture": "npm run build -w @stryke/sdk && npm run build && node dist/cli.js --fixture-polymarket-late",
+    "doctor:paper": "npm run build -w @stryketrade/sdk && npm run build && node dist/cli.js doctor --profile=paper",
+    "doctor:live": "npm run build -w @stryketrade/sdk && npm run build && node --env-file-if-exists=../../.env dist/cli.js doctor --profile=live",
+    "test:polymarket-fixture": "npm run build -w @stryketrade/sdk && npm run build && node dist/cli.js --fixture-polymarket",
+    "test:polymarket-bootstrap-fixture": "npm run build -w @stryketrade/sdk && npm run build && node dist/cli.js --fixture-polymarket-bootstrap",
+    "test:polymarket-late-fixture": "npm run build -w @stryketrade/sdk && npm run build && node dist/cli.js --fixture-polymarket-late",
     "clean": "rm -rf dist"
   },
   "dependencies": {
     "@solana/kit": "^7.0.0",
-    "@stryke/sdk": "0.1.0",
+    "@stryketrade/sdk": "0.1.0",
     "pg": "^8.16.3"
   },
   "devDependencies": {

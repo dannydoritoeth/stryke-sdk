@@ -3,7 +3,7 @@
 The SDK and reference bot are independently installable public packages. A
 consumer does not need this repository at runtime and does not need any other
 Stryke repository. The reference bot accesses Stryke only through
-`@stryke/sdk`.
+`@stryketrade/sdk`.
 
 ## Build a reviewed candidate
 

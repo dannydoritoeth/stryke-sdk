@@ -8,7 +8,7 @@ describe("reference bot architecture", () => {
       .filter((file) => file.endsWith(".ts"))
       .map((file) => readFileSync(new URL(file, sourceDirectory), "utf8"))
       .join("\n");
-    expect(source).toContain('from "@stryke/sdk"');
+    expect(source).toContain('from "@stryketrade/sdk"');
     expect(source).not.toMatch(/\bfetch\s*\(|new WebSocket|new EventSource|sendRawTransaction|confirmTransaction/);
   });
 

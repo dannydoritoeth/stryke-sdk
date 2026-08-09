@@ -1,4 +1,4 @@
-import type { ExecutableQuote, QuoteSide } from "@stryke/sdk";
+import type { ExecutableQuote, QuoteSide } from "@stryketrade/sdk";
 import type { PolymarketExecutablePrice } from "../polymarket-client.js";
 
 export type ExecutableEntryEconomics = {

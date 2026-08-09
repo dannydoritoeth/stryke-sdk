@@ -20,7 +20,7 @@ describe("external reference-bot consumer", () => {
       };
       expect(manifest.schemaVersion).toBe("stryke.releaseArtifacts.v1");
       expect(manifest.commit).toMatch(/^[0-9a-f]{40}$/);
-      expect(manifest.packages.map(({ name }) => name)).toEqual(["@stryke/sdk", "@stryke/reference-bot"]);
+      expect(manifest.packages.map(({ name }) => name)).toEqual(["@stryketrade/sdk", "@stryketrade/reference-bot"]);
       for (const entry of manifest.packages) {
         expect(entry.sha512).toMatch(/^[0-9a-f]{128}$/);
         expect(entry.npmIntegrity).toMatch(/^sha512-/);

@@ -1,4 +1,4 @@
-import type { ActionCheckpoint, ActionCheckpointStore } from "@stryke/sdk";
+import type { ActionCheckpoint, ActionCheckpointStore } from "@stryketrade/sdk";
 import { Pool, type PoolConfig } from "pg";
 
 import { roundKey, type RoundDecisionStore, type RoundIdentity } from "./round-state.js";

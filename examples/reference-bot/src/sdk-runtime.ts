@@ -14,7 +14,7 @@ import {
   type PriceStore,
   type ReviewedTransactionExecutor,
   type StrykeClient,
-} from "@stryke/sdk";
+} from "@stryketrade/sdk";
 
 import type { ReferenceBotRuntimeAdapter, RuntimeExecution } from "./bot.js";
 import type { ReferenceBotConfig } from "./config.js";

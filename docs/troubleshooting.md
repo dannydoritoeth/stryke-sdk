@@ -5,7 +5,7 @@
 Run paper doctor without credentials or an environment file:
 
 ```bash
-npm run doctor:paper -w @stryke/reference-bot
+npm run doctor:paper -w @stryketrade/reference-bot
 ```
 
 The final `reference_bot_doctor` event uses schema
@@ -18,7 +18,7 @@ Live doctor uses `.env`, validates the wallet, RPC and funding path, and never
 signs or submits:
 
 ```bash
-npm run doctor:live -w @stryke/reference-bot
+npm run doctor:live -w @stryketrade/reference-bot
 ```
 
 ## Startup preflight
@@ -44,7 +44,7 @@ To check the configured mainnet API, Pyth feed, wallet, RPC, and funding without
 entering the trading loop or signing, run:
 
 ```bash
-npm run start:live -w @stryke/reference-bot -- --preflight-only
+npm run start:live -w @stryketrade/reference-bot -- --preflight-only
 ```
 
 Catch `StrykeSdkError`, inspect `code` and `retryable`, and log only its bounded

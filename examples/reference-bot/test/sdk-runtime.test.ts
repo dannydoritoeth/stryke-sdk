@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MemoryActionCheckpointStore, PYTH_FEED_IDS, PriceStore, SUPPORTED_PROGRAM_ID, SUPPORTED_QUOTE_MATH_VERSION } from "@stryke/sdk";
+import { MemoryActionCheckpointStore, PYTH_FEED_IDS, PriceStore, SUPPORTED_PROGRAM_ID, SUPPORTED_QUOTE_MATH_VERSION } from "@stryketrade/sdk";
 
 import { runMarketTick } from "../src/bot.js";
 import { parseReferenceBotConfig } from "../src/config.js";

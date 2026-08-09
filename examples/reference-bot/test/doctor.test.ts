@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { StrykeSdkError } from "@stryke/sdk";
+import { StrykeSdkError } from "@stryketrade/sdk";
 import { parseReferenceBotConfig } from "../src/config.js";
 import { classifyDoctorError, classifyDoctorEvaluation, doctorExitCode } from "../src/doctor.js";
 import { quote } from "./fixtures.js";

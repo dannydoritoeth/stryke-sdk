@@ -10,7 +10,7 @@ const run = promisify(execFile);
 
 describe("documented example contract", () => {
   it("documented_read_only_command_runs_without_wallet", async () => {
-    const result = await run("npm", ["run", "start:read-only", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8", env: { ...process.env, STRYKE_WALLET_ADAPTER_PATH: "" } });
+    const result = await run("npm", ["run", "start:read-only", "-w", "@stryketrade/reference-bot"], { cwd: workspace, encoding: "utf8", env: { ...process.env, STRYKE_WALLET_ADAPTER_PATH: "" } });
     expect(result.stdout).toContain('"action":"dry_run"');
     expect(result.stdout).toContain('"effectiveFeeBps":0');
     expect(result.stdout).toContain('"tick":2,"phase":"entry","action":"blocked","reason":"trading_locked_until_settlement"');
@@ -51,11 +51,11 @@ describe("documented example contract", () => {
     const troubleshooting = readFileSync(join(workspace, "docs/troubleshooting.md"), "utf8");
     expect(cli).toContain('process.argv.includes("--preflight-only")');
     expect(cli.indexOf('process.argv.includes("--preflight-only")')).toBeLessThan(cli.indexOf("new FileActionCheckpointStore"));
-    expect(troubleshooting).toContain("npm run start:live -w @stryke/reference-bot -- --preflight-only");
+    expect(troubleshooting).toContain("npm run start:live -w @stryketrade/reference-bot -- --preflight-only");
   });
 
   it("reference_bot_completes_two_early_market_cycles", async () => {
-    const result = await run("npm", ["run", "test:polymarket-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
+    const result = await run("npm", ["run", "test:polymarket-fixture", "-w", "@stryketrade/reference-bot"], { cwd: workspace, encoding: "utf8" });
     for (const expected of [
       "buy:polymarket_executable_edge",
       "hold:position_not_economically_complete",
@@ -66,13 +66,13 @@ describe("documented example contract", () => {
   }, 30_000);
 
   it("reference_bot_completes_two_late_hold_and_settlement_cycles", async () => {
-    const result = await run("npm", ["run", "test:polymarket-late-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
+    const result = await run("npm", ["run", "test:polymarket-late-fixture", "-w", "@stryketrade/reference-bot"], { cwd: workspace, encoding: "utf8" });
     for (const expected of ["buy:polymarket_executable_edge", "hold:position_not_economically_complete", "claim:terminal_confirmed", "skip:same_round_reentry_blocked"]) expect(result.stdout).toContain(expected);
     expect(result.stdout.match(/buy:polymarket_executable_edge/g)).toHaveLength(2);
   }, 30_000);
 
   it("reference_bot_bootstraps_an_exact_empty_market_through_two_cli_iterations", async () => {
-    const result = await run("npm", ["run", "test:polymarket-bootstrap-fixture", "-w", "@stryke/reference-bot"], { cwd: workspace, encoding: "utf8" });
+    const result = await run("npm", ["run", "test:polymarket-bootstrap-fixture", "-w", "@stryketrade/reference-bot"], { cwd: workspace, encoding: "utf8" });
     expect(result.stdout).toContain("buy:polymarket_empty_market_bootstrap");
     expect(result.stdout).toContain("skip:same_round_reentry_blocked");
   }, 30_000);

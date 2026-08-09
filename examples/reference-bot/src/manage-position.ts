@@ -1,4 +1,4 @@
-import { terminalActionFor, type ExecutableQuote, type PilotPosition, type PositionTerminalAction } from "@stryke/sdk";
+import { terminalActionFor, type ExecutableQuote, type PilotPosition, type PositionTerminalAction } from "@stryketrade/sdk";
 
 import { assertFairProbability } from "./strategy.js";
 

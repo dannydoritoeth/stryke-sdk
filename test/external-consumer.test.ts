@@ -11,7 +11,7 @@ describe("external SDK consumer", () => {
     const directory = await mkdtemp(join(tmpdir(), "stryke-sdk-consumer-"));
     try {
       const pack = JSON.parse(
-        execFileSync("npm", ["pack", "-w", "@stryke/sdk", "--json"], {
+        execFileSync("npm", ["pack", "-w", "@stryketrade/sdk", "--json"], {
           cwd: root,
           encoding: "utf8",
         })
@@ -28,7 +28,7 @@ describe("external SDK consumer", () => {
       );
       await writeFile(
         join(directory, "consumer.mjs"),
-        'import { SDK_VERSION } from "@stryke/sdk"; process.stdout.write(SDK_VERSION);'
+        'import { SDK_VERSION } from "@stryketrade/sdk"; process.stdout.write(SDK_VERSION);'
       );
       expect(
         execFileSync("node", ["consumer.mjs"], {
@@ -38,7 +38,7 @@ describe("external SDK consumer", () => {
       ).toBe("0.1.0");
       const installed = JSON.parse(
         await readFile(
-          join(directory, "node_modules", "@stryke", "sdk", "package.json"),
+          join(directory, "node_modules", "@stryketrade", "sdk", "package.json"),
           "utf8"
         )
       ) as { main: string };

@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import { StrykeSdkError, type ExecutableQuote, type PilotMarket, type PilotPosition, type PositionTerminalAction } from "@stryke/sdk";
+import { StrykeSdkError, type ExecutableQuote, type PilotMarket, type PilotPosition, type PositionTerminalAction } from "@stryketrade/sdk";
 
 import type { EntryEvaluation, ReferenceBotRuntimeAdapter, RuntimeExecution } from "./bot.js";
 

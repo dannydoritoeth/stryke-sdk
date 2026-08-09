@@ -1,4 +1,4 @@
-import { StrykeSdkError } from "@stryke/sdk";
+import { StrykeSdkError } from "@stryketrade/sdk";
 import { describe, expect, it, vi } from "vitest";
 
 import { runReferenceBot, type ReferenceBotRuntimeAdapter } from "../src/bot.js";

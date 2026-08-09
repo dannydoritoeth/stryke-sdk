@@ -58,8 +58,8 @@ jobs:
       - run: npm run test:postgres-state
         env:
           TEST_POSTGRES_URL: postgres://stryke:stryke@127.0.0.1:5432/stryke_reference_bot_test
-      - run: npm pack -w @stryke/sdk --dry-run
-      - run: npm pack -w @stryke/reference-bot --dry-run
+      - run: npm pack -w @stryketrade/sdk --dry-run
+      - run: npm pack -w @stryketrade/reference-bot --dry-run
       - name: Install a current npm CLI for trusted publishing
         if: inputs.publish
         run: npm install --global npm@11.5.1
@@ -67,14 +67,14 @@ jobs:
         if: inputs.publish
         run: |
           version="$(node -p "require('./packages/sdk/package.json').version")"
-          ! npm view "@stryke/sdk@$version" version
-          ! npm view "@stryke/reference-bot@$version" version
+          ! npm view "@stryketrade/sdk@$version" version
+          ! npm view "@stryketrade/reference-bot@$version" version
       - name: Publish SDK with npm trusted publishing
         if: inputs.publish
-        run: npm publish -w @stryke/sdk --access public
+        run: npm publish -w @stryketrade/sdk --access public
       - name: Publish reference bot with npm trusted publishing
         if: inputs.publish
-        run: npm publish -w @stryke/reference-bot --access public
+        run: npm publish -w @stryketrade/reference-bot --access public
       - name: Verify clean installation from the public registry
         if: inputs.publish
         run: |
@@ -82,8 +82,8 @@ jobs:
           consumer="$(mktemp -d)"
           cd "$consumer"
           npm init -y
-          npm install "@stryke/sdk@$version" "@stryke/reference-bot@$version"
-          node --input-type=module -e "import('@stryke/sdk').then((sdk) => { if (!sdk.StrykeClient) process.exit(1) })"
+          npm install "@stryketrade/sdk@$version" "@stryketrade/reference-bot@$version"
+          node --input-type=module -e "import('@stryketrade/sdk').then((sdk) => { if (!sdk.StrykeClient) process.exit(1) })"
           output="$(npx --no-install stryke-reference-bot)"
           test "$(printf '%s' "$output" | grep -c '"tick":')" = "2"
           printf '%s' "$output" | grep '"event":"stryke_compatibility"'

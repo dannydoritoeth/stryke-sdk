@@ -1,6 +1,6 @@
-# `@stryke/reference-bot`
+# `@stryketrade/reference-bot`
 
-Runnable reference bot built exclusively on the public `@stryke/sdk` contract.
+Runnable reference bot built exclusively on the public `@stryketrade/sdk` contract.
 It defaults to paper mode, file-backed restart state, live trading disabled,
 and the kill switch enabled.
 
@@ -8,7 +8,7 @@ After the first npm release is published, install the public packages and use
 the conservative defaults directly:
 
 ```bash
-npm install @stryke/sdk @stryke/reference-bot
+npm install @stryketrade/sdk @stryketrade/reference-bot
 npx stryke-reference-bot doctor --profile=paper
 npx stryke-reference-bot --profile=paper --ticks=2
 ```
