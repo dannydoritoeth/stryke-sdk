@@ -26,8 +26,10 @@ SDK/API/program compatibility fields `sdkVersion`, `apiVersion`,
 `apiSchemaVersion`, `programId`, and `programVersion`. It never loads a wallet
 or submits. When the strategy selects an executable production buy quote, the
 bot records an explicitly simulated fill in a versioned local ledger, restores
-it after restart, holds it to authoritative market resolution, and reports
-`paper_buy`, `paper_hold`, and `paper_claim`/`paper_refund` events. Winning
+it after restart, and holds it to settlement. Initialized markets follow the
+authoritative API lifecycle; paper-only rounds that were never initialized use
+the first production Pyth observation crossing expiry. The bot reports
+`paper_buy`, `paper_hold`, and `paper_claim`/`paper_refund`/`paper_loss` events. Winning
 payout is the entry quote's projected payout; it is a simulation assumption,
 not evidence of a live fill or profit. The ledger is stored beside round state
 at `<STRYKE_ROUND_STATE_PATH>.paper-ledger.json` with owner-only file modes.

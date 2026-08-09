@@ -7,6 +7,24 @@ import { authoritativeActivationFor, authoritativeMinimumForEntry, createSdkRunt
 import { quote } from "./fixtures.js";
 
 describe("SDK runtime composition", () => {
+  it("resolves an uninitialized paper market from expiry-crossing Pyth observations", async () => {
+    const now = 1_900_000_100_000;
+    const expiryTs = 1_900_000_000;
+    const store = new PriceStore({ now: () => now, historyWindowMs: 300_000 });
+    const id = PYTH_FEED_IDS.BTC.slice(2);
+    store.seedHistorical("BTC", { parsed: [{ id, price: { price: "9999", expo: -2, publish_time: expiryTs - 1 } }] });
+    store.seedHistorical("BTC", { parsed: [{ id, price: { price: "10001", expo: -2, publish_time: expiryTs } }] });
+    const adapter = createSdkRuntimeAdapter({
+      client: {} as never,
+      rpc: {} as never,
+      priceStore: store,
+      checkpoint: new MemoryActionCheckpointStore(),
+      config: parseReferenceBotConfig({ asset: "BTC" }),
+      now: () => now,
+    });
+    await expect(adapter.resolvePaperOutcome?.({ expiryTs, strikePrice: "100" })).resolves.toBe("yes");
+  });
+
   it("uses_the_dynamic_market_minimum_and_fails_closed_when_unavailable_or_too_small", () => {
     const market = { marketId: "btc-5m", minimumTradeCollateralUnits: "14000000" } as never;
     expect(authoritativeMinimumForEntry(market, 14_000_000n)).toBe(14_000_000n);

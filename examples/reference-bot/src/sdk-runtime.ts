@@ -222,6 +222,19 @@ export const createSdkRuntimeAdapter = ({
   };
   return {
     loadMarketByIdentity: (identity) => markets.byIdentity(config.asset, { expiryFamily: config.expiryFamily, expiryTs: identity.expiryTs, targetValue: identity.strikePrice }),
+    resolvePaperOutcome: async (identity) => {
+      const observations = priceStore.history(config.asset).slice().sort((left, right) => left.publishTime - right.publishTime);
+      let previousPublishTime: number | undefined;
+      for (const observation of observations) {
+        if (previousPublishTime !== undefined && previousPublishTime < identity.expiryTs && identity.expiryTs <= observation.publishTime) {
+          const target = Number(identity.strikePrice);
+          if (!Number.isFinite(target)) throw new StrykeSdkError("validation", "Paper settlement target is invalid");
+          return observation.price > target ? "yes" : "no";
+        }
+        previousPublishTime = observation.publishTime;
+      }
+      return undefined;
+    },
     loadCheckpoint: () => checkpoint.load(),
     reconcilePending: async (pending) => {
       if (pending.materialization) {

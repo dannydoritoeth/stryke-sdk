@@ -20,7 +20,7 @@ import { polymarketEntryWindow, type PolymarketTimingMode } from "./strategy/ent
 import { decidePolymarketEarlyExit } from "./strategy/polymarket-exit.js";
 import { assertRuntimeLeaseHeld, type RuntimeLease } from "./runtime-lease.js";
 
-export type RuntimeAction = "buy" | "sell" | "claim" | "refund" | "paper_buy" | "paper_hold" | "paper_sell" | "paper_claim" | "paper_refund";
+export type RuntimeAction = "buy" | "sell" | "claim" | "refund" | "paper_buy" | "paper_hold" | "paper_sell" | "paper_claim" | "paper_refund" | "paper_loss";
 
 export type RuntimeEvent = {
   tick: number;
@@ -77,6 +77,8 @@ export interface ReferenceBotRuntimeAdapter {
   hasEnteredRound?(market: PilotMarket): Promise<boolean>;
   recordEnteredRound?(market: PilotMarket): Promise<void>;
   loadMarketByIdentity?(identity: { expiryTs: number; strikePrice: string }): Promise<PilotMarket>;
+  resolvePaperOutcome?(identity: { expiryTs: number; strikePrice: string }): Promise<"yes" | "no" | undefined>;
+  acknowledgePaperLoss?(positionId: string): Promise<void>;
 }
 
 const terminalStates = new Set(["claimable", "refundable"]);
@@ -154,6 +156,11 @@ export const runMarketTick = async ({
   }
 
   const positions = (await adapter.listPositions()).slice().sort((a, b) => a.positionId.localeCompare(b.positionId));
+  const pendingPaperLoss = paper && positions.find((position) => position.lifecycle.state === "lost" && position.raw.paperLossPending === true);
+  if (pendingPaperLoss) {
+    await adapter.acknowledgePaperLoss?.(pendingPaperLoss.positionId);
+    return event(tick, "position", "paper_loss", "paper_terminal_simulated", { positionId: pendingPaperLoss.positionId });
+  }
   const nonActionableTerminalPositions = new Set<string>();
   const terminalCandidates: Array<{ position: PilotPosition; action: PositionTerminalAction }> = [];
   const sellCandidates: Array<{
