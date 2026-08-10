@@ -99,3 +99,29 @@ export type {
   PriceStoreOptions,
   PriceSubscription,
 } from "./prices.js";
+export {
+  STRYKE_MCP_BUNDLE_VERSION,
+  STRYKE_MCP_ENDPOINT,
+  STRYKE_MCP_PROTOCOL_VERSION,
+  STRYKE_MCP_TOOL_NAMES,
+  StrykeMcpToolError,
+  StrykeReadOnlyMcpClient,
+} from "./mcp.js";
+export type {
+  StrykeMcpAmountUnit,
+  StrykeMcpCurrentMarkets,
+  StrykeMcpCurrentMarketsInput,
+  StrykeMcpEnvironment,
+  StrykeMcpErrorBody,
+  StrykeMcpExpiryFamily,
+  StrykeMcpMarket,
+  StrykeMcpMarketDetail,
+  StrykeMcpMarketState,
+  StrykeMcpQuoteAction,
+  StrykeMcpQuotePreview,
+  StrykeMcpQuotePreviewInput,
+  StrykeMcpQuoteSide,
+  StrykeMcpSymbol,
+  StrykeMcpToolName,
+  StrykeReadOnlyMcpClientOptions,
+} from "./mcp.js";

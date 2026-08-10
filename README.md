@@ -71,6 +71,36 @@ doctor's required balance.
 - `@stryketrade/reference-bot`: a small continuous paper/live composition built
   only on the public SDK.
 
+## Anonymous read-only MCP
+
+Use the production MCP to inspect the environment, discover current BTC/SOL
+markets, inspect one dynamically selected market, and preview a quote without
+credentials or a wallet:
+
+```js
+import { StrykeReadOnlyMcpClient } from "@stryketrade/sdk";
+
+const mcp = await StrykeReadOnlyMcpClient.connect();
+try {
+  const current = await mcp.getCurrentPythMarkets({ symbol: "BTC" });
+  const marketId = current.markets[0]?.marketId;
+  if (marketId) {
+    console.log(await mcp.previewQuote({
+      marketId,
+      action: "buy",
+      side: "up",
+      amount: { value: "0.01", unit: "SOL" },
+    }));
+  }
+} finally {
+  await mcp.close();
+}
+```
+
+The client rejects changed or non-read-only tool surfaces. See the
+[read-only MCP guide](docs/read-only-mcp.md) for the complete reference flow,
+structured error handling, and production validation command.
+
 No included estimator guarantees accuracy or profit. Missing, stale, degraded,
 or incompatible data fails closed. A signature proves submission, not
 confirmation; the bot reconciles authoritative state before another action.

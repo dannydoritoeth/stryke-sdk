@@ -4,6 +4,28 @@ Use Node.js 22+. BTC five-minute markets are the canonical onboarding path.
 BTC and SOL 1m/5m/15m/1h are supported; one-minute live automation is
 experimental because its timing window is tighter.
 
+## Read-only MCP inspection
+
+For anonymous market inspection and quote previews without starting a bot,
+install only the SDK:
+
+```bash
+mkdir stryke-mcp && cd stryke-mcp
+npm init -y
+npm install @stryketrade/sdk
+```
+
+Create `inspect.mjs` using the reference flow in the
+[read-only MCP guide](read-only-mcp.md), then run:
+
+```bash
+node inspect.mjs
+```
+
+No API key, OAuth token, cookie, or wallet is required. The client verifies the
+exact read-only Phase A tool contract at connection time and cannot invoke
+transaction or wallet operations.
+
 ## Paper trading
 
 Create an empty project and install the public packages:

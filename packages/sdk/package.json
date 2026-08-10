@@ -36,6 +36,7 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
     "@pythnetwork/hermes-client": "^2.1.0",
     "@solana/kit": "^7.0.0"
   }

@@ -4,6 +4,40 @@ Typed infrastructure for Stryke bot developers.
 
 Published as `@stryketrade/sdk`. Node.js 22 or newer is required.
 
+## Anonymous read-only MCP
+
+Connect to the production MCP without a wallet or credentials:
+
+```ts
+import { StrykeReadOnlyMcpClient } from "@stryketrade/sdk";
+
+const mcp = await StrykeReadOnlyMcpClient.connect();
+try {
+  const environment = await mcp.getEnvironment();
+  const current = await mcp.getCurrentPythMarkets({ symbol: "BTC" });
+  const marketId = current.markets[0]?.marketId;
+  if (marketId) {
+    const market = await mcp.getMarket(marketId);
+    const quote = await mcp.previewQuote({
+      marketId,
+      action: "buy",
+      side: "up",
+      amount: { value: "0.01", unit: "SOL" },
+    });
+    console.log({ environment, market, quote });
+  }
+} finally {
+  await mcp.close();
+}
+```
+
+Connection fails closed unless the endpoint exposes exactly the four
+documented tools and marks each one read-only. Tool failures throw
+`StrykeMcpToolError`, preserving `code`, `retryable`, `retryAfterMs`, and
+`remediation`.
+Discover market IDs dynamically and never change origin, symbol, source,
+collateral, or network as an implicit fallback.
+
 ## Start
 
 From an empty project:
