@@ -10,6 +10,8 @@
     "test": "vitest run --exclude 'test/devnet/**'",
     "test:contract": "vitest run packages/sdk/test/market-matrix.contract.test.ts test/docs-contract.test.ts",
     "test:consumer": "vitest run test/external-consumer.test.ts",
+    "test:mcp:production": "STRYKE_MCP_PRODUCTION=1 vitest run packages/sdk/test/mcp.production.test.ts",
+    "example:mcp": "npm run build -w @stryketrade/sdk && node examples/read-only-mcp.mjs",
     "test:devnet": "vitest run",
     "test:examples": "vitest run examples",
     "test:postgres-state": "vitest run examples/reference-bot/test/postgres-state.integration.test.ts",
