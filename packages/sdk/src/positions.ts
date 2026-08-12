@@ -213,11 +213,16 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
     const eligibilityStatus = text(staleCleanup.status, "cleanup.staleCleanup.status");
     const marketSettlementStatus = forceClose?.status;
     const cleanupAction = staleCleanup.action;
+    const supportedCleanupAction =
+      cleanupAction === undefined ||
+      cleanupAction === "claim" ||
+      cleanupAction === "refund" ||
+      cleanupAction === "close_position";
     if (
       typeof cleanupRow.selfCloseAvailable !== "boolean" ||
       !Number.isFinite(Date.parse(cleanupEligibleAt)) ||
-      (cleanupAction !== undefined && cleanupAction !== "close_position") ||
-      (eligibilityStatus === "eligible" && cleanupAction !== "close_position")
+      !supportedCleanupAction ||
+      (cleanupRow.selfCloseAvailable && cleanupAction !== "close_position")
     ) throw new StrykeSdkError("api_response", "Position cleanup metadata is invalid");
     cleanup = {
       rentRecipient: text(cleanupRow.rentRecipient, "cleanup.rentRecipient"),

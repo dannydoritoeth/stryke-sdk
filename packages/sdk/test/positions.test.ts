@@ -188,6 +188,69 @@ describe("pilot positions", () => {
     expect(parsed.cleanup).not.toHaveProperty("action");
   });
 
+  it.each([
+    ["claimable", "claim", { claimableAmount: "10" }, "claim"],
+    ["refundable", "refund", { refundableAmount: "10" }, "refund"],
+  ] as const)(
+    "parses production %s cleanup metadata for terminal %s",
+    (state, staleAction, amounts, terminalAction) => {
+      const parsed = parsePilotPosition(row(state, {
+        ...amounts,
+        ...(state === "refundable" ? {
+          pilotLifecycle: {
+            ...row("refundable").pilotLifecycle,
+            rawReason: "market_underfunded_refund",
+          },
+        } : {}),
+        cleanup: {
+          rentRecipient: "HYDrCb45WNbMzLjKqQByKduksFCasUfgLNpkA7xvcxf7",
+          selfClaimAvailable: state === "claimable",
+          selfRefundAvailable: state === "refundable",
+          selfCloseAvailable: false,
+          staleCleanup: {
+            status: "eligible",
+            action: staleAction,
+            cleanupEligibleAt: "2026-07-22T00:00:00.000Z",
+          },
+        },
+      }));
+      expect(terminalActionFor(parsed, Date.parse("2026-07-22T00:00:00.000Z"))).toBe(terminalAction);
+      expect(positionCleanupAvailable(parsed)).toBe(false);
+      expect(parsed.cleanup).not.toHaveProperty("action");
+    }
+  );
+
+  it("requires close_position when self-close is available", () => {
+    expect(() => parsePilotPosition(row("claimed", {
+      yesShares: "0",
+      noShares: "0",
+      cleanup: {
+        rentRecipient: "HYDrCb45WNbMzLjKqQByKduksFCasUfgLNpkA7xvcxf7",
+        selfCloseAvailable: true,
+        staleCleanup: {
+          status: "eligible",
+          action: "claim",
+          cleanupEligibleAt: "2026-07-22T00:00:00.000Z",
+        },
+      },
+    }))).toThrowError("Position cleanup metadata is invalid");
+  });
+
+  it("rejects an unknown cleanup lifecycle action", () => {
+    expect(() => parsePilotPosition(row("claimable", {
+      claimableAmount: "10",
+      cleanup: {
+        rentRecipient: "HYDrCb45WNbMzLjKqQByKduksFCasUfgLNpkA7xvcxf7",
+        selfCloseAvailable: false,
+        staleCleanup: {
+          status: "eligible",
+          action: "withdraw",
+          cleanupEligibleAt: "2026-07-22T00:00:00.000Z",
+        },
+      },
+    }))).toThrowError("Position cleanup metadata is invalid");
+  });
+
   it("normalizes_pending_open_sellable_awaiting_resolution_and_terminal_states", () => {
     const states: PilotPositionLifecycleState[] = [
       "pending_confirmation",
