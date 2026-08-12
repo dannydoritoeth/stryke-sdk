@@ -4,6 +4,8 @@ import { CleanupClient, SUPPORTED_PROGRAM_ID } from "../src/index.js";
 
 const owner = "DqAZKE675GJNhxJgTYYzZs6DAeGNZAmZ1GJX2CNbUfq1";
 const position = "8pSVGYUpRxbmnRZ9u2CDnUXVgtneYvxiJ4M4XF7BQouH";
+const strike = "25ehQULapi9WWNBLKzGkeAx92VMLi2EpSatKi8rHpHdf";
+const series = "2MKVbjFcLTda3w5Cjj5oyWwbGV4aEXL5KdRzL2e15h9y";
 
 const response = (recipient = owner) => ({
   owner,
@@ -73,6 +75,44 @@ const rpc = {
   }),
 };
 
+const sharedResponse = () => {
+  const plan = response() as any;
+  plan.chunks[0].instructions.push(
+    {
+      name: "close_strike_market",
+      programId: SUPPORTED_PROGRAM_ID,
+      dataBase64: "b2lkv1J2zEAA",
+      accounts: [
+        { name: "processor", pubkey: owner, isSigner: true, isWritable: false },
+        { name: "series", pubkey: series, isSigner: false, isWritable: true },
+        { name: "strike", pubkey: strike, isSigner: false, isWritable: true },
+        { name: "rent_recipient", pubkey: owner, isSigner: false, isWritable: true },
+      ],
+    },
+    {
+      name: "close_market_series",
+      programId: SUPPORTED_PROGRAM_ID,
+      dataBase64: "b2lkv1J2zEAA",
+      accounts: [
+        { name: "processor", pubkey: owner, isSigner: true, isWritable: false },
+        { name: "series", pubkey: series, isSigner: false, isWritable: true },
+        { name: "escrow", pubkey: "7b5s5eFvX2rpxKKWXQZzoa7qrdEg88obyTDTJxnsh4Dt", isSigner: false, isWritable: true },
+        { name: "rent_recipient", pubkey: owner, isSigner: false, isWritable: true },
+        { name: "system_program", pubkey: "11111111111111111111111111111111", isSigner: false, isWritable: false },
+      ],
+    }
+  );
+  plan.chunks[0].rentQuote.recoverableRentItems.push(
+    { kind: "strike_market", address: strike, amountLamports: "2547360", recipient: owner, recoveryCondition: "strike_terminal_close" },
+    { kind: "market_series_and_escrow", address: series, amountLamports: "3695760", recipient: owner, recoveryCondition: "series_terminal_close" }
+  );
+  plan.chunks[0].rentQuote.userRecoverableLamports = "8331120";
+  plan.chunks[0].rentQuote.estimatedNetworkFeeLamports = "15000";
+  plan.items[0].market.marketSeries = series;
+  plan.items[0].market.strikeMarket = strike;
+  return plan;
+};
+
 describe("wallet rent cleanup", () => {
   it("validates and materializes an API-authoritative close_all plan", async () => {
     const api = client(response());
@@ -113,6 +153,27 @@ describe("wallet rent cleanup", () => {
     mismatched.items[0]!.chunkIndex = 1;
     await expect(
       new CleanupClient(client(mismatched) as never, rpc).prepareAll(owner)
+    ).rejects.toMatchObject({ code: "intent_mismatch" });
+  });
+
+  it("validates the exact shared position strike and series cleanup authority", async () => {
+    const plan = await new CleanupClient(client(sharedResponse()) as never, rpc).prepareAll(owner);
+    expect(plan).toMatchObject({
+      totalRecoverableLamports: "8331120",
+      transactions: [{ review: { positionAddresses: [position] } }],
+    });
+  });
+
+  it.each([
+    ["redirected shared rent", (plan: any) => { plan.chunks[0].rentQuote.recoverableRentItems[1].recipient = "11111111111111111111111111111111"; }],
+    ["unknown shared kind", (plan: any) => { plan.chunks[0].rentQuote.recoverableRentItems[1].kind = "unknown"; }],
+    ["mismatched strike account", (plan: any) => { plan.chunks[0].instructions[1].accounts.find((account: any) => account.name === "strike").pubkey = position; }],
+    ["reordered instructions", (plan: any) => { [plan.chunks[0].instructions[1], plan.chunks[0].instructions[2]] = [plan.chunks[0].instructions[2], plan.chunks[0].instructions[1]]; }],
+  ])("fails closed for %s", async (_name, tamper) => {
+    const plan = sharedResponse();
+    tamper(plan);
+    await expect(
+      new CleanupClient(client(plan) as never, rpc).prepareAll(owner)
     ).rejects.toMatchObject({ code: "intent_mismatch" });
   });
 });

@@ -40,6 +40,17 @@ is the design gap. Endpoint credentials must never be logged in any mode.
 - A future compatible API `close_all` plan may include wallet-position and
   eligible shared-market cleanup; the SDK executes the API-authored reviewed
   plan without inventing accounts or recipients.
+- The validator accepts shared cleanup only as the exact ordered
+  `close_user_position -> close_strike_market -> close_market_series` sequence
+  for each reviewed market. Its quoted rent items must respectively be
+  `user_position/position_terminal_close`,
+  `strike_market/strike_terminal_close`, and
+  `market_series_and_escrow/series_terminal_close`; every recipient and
+  instruction `rent_recipient` is the signing wallet, every processor is that
+  wallet, and quoted position/strike/series addresses must match the writable
+  accounts in their corresponding instructions. Unknown kinds, instructions,
+  reordered or duplicated sequences, redirected recipients, and mismatched
+  accounts fail closed before materialization.
 - Release evidence uses a production-shaped claimable fixture and repeated
   claim -> close -> reconcile iterations.
 - The public CLI exposes `drain --profile=devnet|live`. Drain uses the normal
@@ -89,6 +100,9 @@ drain CLI:
 - existing composed repeated lifecycle and restart tests remain green
 - downstream API composition must prove shared position -> strike -> series
   recovery before the next funded canary
+- `shared_cleanup_plan_validates_exact_position_strike_series_authority`
+- shared-cleanup tamper tests reject redirected recipients, unknown kinds,
+  mismatched accounts, and reordered instructions
 - `drain_cli_claims_closes_observes_two_clean_ticks_and_never_enters`
 - `drain_cli_restart_reconciles_before_continuing`
 - `drain_cli_does_not_complete_for_pending_or_stale_state`
