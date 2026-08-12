@@ -3,6 +3,18 @@ import { Pool, type PoolConfig } from "pg";
 
 import { roundKey, type RoundDecisionStore, type RoundIdentity } from "./round-state.js";
 import type { RuntimeLease, RuntimeLeaseIdentity, RuntimeLeaseStore } from "./runtime-lease.js";
+import type { ReferenceBotConfig } from "./config.js";
+
+export const referenceBotPostgresPoolConfig = (
+  config: ReferenceBotConfig
+): PoolConfig => ({
+  connectionString: config.stateDatabaseUrl,
+  max: config.stateDatabasePoolMax,
+  connectionTimeoutMillis: config.stateDatabasePoolConnectionTimeoutMs,
+  idleTimeoutMillis: config.stateDatabasePoolIdleTimeoutMs,
+  maxLifetimeSeconds: config.stateDatabasePoolMaxLifetimeSeconds,
+  application_name: "stryke-reference-bot",
+});
 
 const identityKey = (identity: RuntimeLeaseIdentity) =>
   [identity.cluster, identity.wallet, identity.asset, identity.expiryFamily].join(":");

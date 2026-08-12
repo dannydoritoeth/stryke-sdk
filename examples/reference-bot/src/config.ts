@@ -52,6 +52,10 @@ export type ReferenceBotConfig = {
   roundStatePath: string;
   stateBackend: "file" | "postgres";
   stateDatabaseUrl?: string;
+  stateDatabasePoolMax: number;
+  stateDatabasePoolConnectionTimeoutMs: number;
+  stateDatabasePoolIdleTimeoutMs: number;
+  stateDatabasePoolMaxLifetimeSeconds: number;
   stateNamespace: string;
   leaseTtlMs: number;
   walletAdapterPath?: string;
@@ -105,6 +109,10 @@ export const referenceBotDefaults: ReferenceBotConfig = {
   checkpointPath: ".stryke/reference-bot-action.json",
   roundStatePath: ".stryke/reference-bot-rounds.json",
   stateBackend: "file",
+  stateDatabasePoolMax: 2,
+  stateDatabasePoolConnectionTimeoutMs: 5_000,
+  stateDatabasePoolIdleTimeoutMs: 30_000,
+  stateDatabasePoolMaxLifetimeSeconds: 300,
   stateNamespace: "default",
   leaseTtlMs: 30_000,
 };
@@ -213,6 +221,10 @@ export const parseReferenceBotConfig = (
   if (!["file", "postgres"].includes(config.stateBackend)) configurationError("stateBackend");
   if (typeof config.stateNamespace !== "string" || !config.stateNamespace) configurationError("stateNamespace");
   config.leaseTtlMs = integer(config.leaseTtlMs, "leaseTtlMs", 5_000, 300_000);
+  config.stateDatabasePoolMax = integer(config.stateDatabasePoolMax, "stateDatabasePoolMax", 1, 20);
+  config.stateDatabasePoolConnectionTimeoutMs = integer(config.stateDatabasePoolConnectionTimeoutMs, "stateDatabasePoolConnectionTimeoutMs", 1, 60_000);
+  config.stateDatabasePoolIdleTimeoutMs = integer(config.stateDatabasePoolIdleTimeoutMs, "stateDatabasePoolIdleTimeoutMs", 1, 300_000);
+  config.stateDatabasePoolMaxLifetimeSeconds = integer(config.stateDatabasePoolMaxLifetimeSeconds, "stateDatabasePoolMaxLifetimeSeconds", 1, 86_400);
   if (config.stateBackend === "postgres" && (typeof config.stateDatabaseUrl !== "string" || !config.stateDatabaseUrl)) configurationError("stateDatabaseUrl");
   return config;
 };
@@ -290,6 +302,10 @@ export const parseReferenceBotEnv = (
     stateBackend: (profiledEnv.STRYKE_STATE_BACKEND ?? referenceBotDefaults.stateBackend) as ReferenceBotConfig["stateBackend"],
     stateNamespace: profiledEnv.STRYKE_STATE_NAMESPACE ?? referenceBotDefaults.stateNamespace,
     leaseTtlMs: numberEnv(profiledEnv, "STRYKE_LEASE_TTL_MS", referenceBotDefaults.leaseTtlMs),
+    stateDatabasePoolMax: numberEnv(profiledEnv, "STRYKE_DATABASE_POOL_MAX", referenceBotDefaults.stateDatabasePoolMax),
+    stateDatabasePoolConnectionTimeoutMs: numberEnv(profiledEnv, "STRYKE_DATABASE_POOL_CONNECTION_TIMEOUT_MS", referenceBotDefaults.stateDatabasePoolConnectionTimeoutMs),
+    stateDatabasePoolIdleTimeoutMs: numberEnv(profiledEnv, "STRYKE_DATABASE_POOL_IDLE_TIMEOUT_MS", referenceBotDefaults.stateDatabasePoolIdleTimeoutMs),
+    stateDatabasePoolMaxLifetimeSeconds: numberEnv(profiledEnv, "STRYKE_DATABASE_POOL_MAX_LIFETIME_SECONDS", referenceBotDefaults.stateDatabasePoolMaxLifetimeSeconds),
     pythHermesUrl: profiledEnv.STRYKE_PYTH_HERMES_URL ?? referenceBotDefaults.pythHermesUrl,
     ...(profiledEnv.STRYKE_API_BASE_URL ? { apiBaseUrl: profiledEnv.STRYKE_API_BASE_URL } : {}),
     ...(profiledEnv.STRYKE_SOLANA_RPC_URL ? { solanaRpcUrl: profiledEnv.STRYKE_SOLANA_RPC_URL } : {}),

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, referenceBotDefaults, resolveReferenceBotRuntimeBindings } from "../src/config.js";
 import { loadWalletForLiveTrading } from "../src/wallet.js";
+import { referenceBotPostgresPoolConfig } from "../src/postgres-state.js";
 
 describe("reference bot config", () => {
   it("uses_a_conservative_edge_and_bounded_overlapping_positions", () => {
@@ -142,16 +143,38 @@ describe("reference bot config", () => {
       STRYKE_DATABASE_URL: "postgres://user:secret@db.example.com/stryke",
       STRYKE_STATE_NAMESPACE: "btc-bootstrap",
       STRYKE_LEASE_TTL_MS: "45000",
+      STRYKE_DATABASE_POOL_MAX: "2",
+      STRYKE_DATABASE_POOL_CONNECTION_TIMEOUT_MS: "5000",
+      STRYKE_DATABASE_POOL_IDLE_TIMEOUT_MS: "30000",
+      STRYKE_DATABASE_POOL_MAX_LIFETIME_SECONDS: "300",
     });
     expect(config).toMatchObject({
       stateBackend: "postgres",
       stateDatabaseUrl: "postgres://user:secret@db.example.com/stryke",
       stateNamespace: "btc-bootstrap",
       leaseTtlMs: 45_000,
+      stateDatabasePoolMax: 2,
+      stateDatabasePoolConnectionTimeoutMs: 5_000,
+      stateDatabasePoolIdleTimeoutMs: 30_000,
+      stateDatabasePoolMaxLifetimeSeconds: 300,
+    });
+    expect(referenceBotPostgresPoolConfig(config)).toEqual({
+      connectionString: "postgres://user:secret@db.example.com/stryke",
+      max: 2,
+      connectionTimeoutMillis: 5_000,
+      idleTimeoutMillis: 30_000,
+      maxLifetimeSeconds: 300,
+      application_name: "stryke-reference-bot",
     });
     expect(publicConfig(config).stateDatabaseUrl).toBe("[configured]");
     expect(() => parseReferenceBotEnv({ STRYKE_STATE_BACKEND: "postgres" })).toThrow("stateDatabaseUrl");
     expect(() => parseReferenceBotEnv({ STRYKE_STATE_BACKEND: "postgres", STRYKE_DATABASE_URL: "postgres://db", STRYKE_LEASE_TTL_MS: "4999" })).toThrow("leaseTtlMs");
+    for (const [name, value, field] of [
+      ["STRYKE_DATABASE_POOL_MAX", "0", "stateDatabasePoolMax"],
+      ["STRYKE_DATABASE_POOL_CONNECTION_TIMEOUT_MS", "soon", "STRYKE_DATABASE_POOL_CONNECTION_TIMEOUT_MS"],
+      ["STRYKE_DATABASE_POOL_IDLE_TIMEOUT_MS", "-1", "STRYKE_DATABASE_POOL_IDLE_TIMEOUT_MS"],
+      ["STRYKE_DATABASE_POOL_MAX_LIFETIME_SECONDS", "1.5", "STRYKE_DATABASE_POOL_MAX_LIFETIME_SECONDS"],
+    ]) expect(() => parseReferenceBotEnv({ [name]: value })).toThrow(field);
   });
 
   it("public config strips endpoint credentials while runtime retains them", () => {

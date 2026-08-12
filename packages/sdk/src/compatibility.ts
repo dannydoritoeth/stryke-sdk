@@ -1,6 +1,6 @@
 import { StrykeSdkError } from "./errors.js";
 
-export const SDK_VERSION = "0.1.20" as const;
+export const SDK_VERSION = "0.1.21" as const;
 export const SUPPORTED_API_VERSION = "v1" as const;
 export const SUPPORTED_API_SCHEMA_VERSION = "1.0.0" as const;
 export const SUPPORTED_PROGRAM_ID =
