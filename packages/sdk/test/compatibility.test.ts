@@ -18,6 +18,16 @@ const capabilities = {
     programId: SUPPORTED_PROGRAM_ID,
     programVersion: "0.1.0",
     idlSpecVersion: "0.1.0",
+    deployedRules: {
+      schemaVersion: "1.0.0",
+      environment: "production",
+      sourceCommit: "9f8df797c404fff7a965fc462d88d9bfb10b9900",
+      binarySha256: "6ec28ae515e5e0d6828dde513ba76ccf142a830c1b0efc6c1bbfad150c11fed7",
+      settlementMode: "historical_expiry_price_atomic",
+      forceCloseSeconds: 7_776_000,
+      ownerCloseHasGracePeriod: false,
+      manifestUrl: "https://stryketrade.com/api-docs/contracts/minimal-pyth-rules-v1.json",
+    },
   },
   assets: [
     { symbol: "BTC", pythFeedId: "btc-feed" },
@@ -63,12 +73,39 @@ describe("SDK compatibility handshake", () => {
     ).rejects.toBeInstanceOf(StrykeSdkError);
   });
 
-  it("retains devnet compatibility", async () => {
+  it("retains devnet compatibility with its independently identified release", async () => {
+    const devnet = {
+      ...capabilities,
+      cluster: "devnet",
+      contract: {
+        ...capabilities.contract,
+        deployedRules: {
+          ...capabilities.contract.deployedRules,
+          environment: "devnet",
+          sourceCommit: "8a421a7d3f9fba4c6df667e47b9833c95a543983",
+          binarySha256: "332a3cb8c6b4fea0655b103cbab932ca5c8234e0ebef7910a418824b14bb4279",
+          settlementMode: "first_valid_post_expiry",
+        },
+      },
+    };
     const client = await StrykeClient.connect({
       apiBaseUrl: "https://devnet.example",
-      fetch: async () => response({ ...capabilities, cluster: "devnet" }),
+      fetch: async () => response(devnet),
     });
     expect(client.capabilities.cluster).toBe("devnet");
+  });
+
+  it("fails closed when API rule metadata drifts from the deployed release", async () => {
+    await expect(StrykeClient.connect({
+      apiBaseUrl: "https://pilot.example",
+      fetch: async () => response({
+        ...capabilities,
+        contract: {
+          ...capabilities.contract,
+          deployedRules: { ...capabilities.contract.deployedRules, forceCloseSeconds: 63_072_000 },
+        },
+      }),
+    })).rejects.toMatchObject({ code: "compatibility" });
   });
 
   it("accepts additive v1 fields without changing the known contract", async () => {

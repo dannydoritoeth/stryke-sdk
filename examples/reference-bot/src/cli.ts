@@ -372,7 +372,9 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
                 : "cleanup_not_yet_eligible"
               : "no_cleanup_available",
             ...(pending?.cleanup ? {
-              cleanupEligibleAt: pending.cleanup.cleanupEligibleAt,
+              ...(pending.cleanup.cleanupEligibleAt
+                ? { cleanupEligibleAt: pending.cleanup.cleanupEligibleAt }
+                : {}),
               cleanupEligibilityStatus: pending.cleanup.eligibilityStatus,
               marketSettlementStatus: pending.cleanup.marketSettlementStatus,
               ...(pending.cleanup.blockedReason

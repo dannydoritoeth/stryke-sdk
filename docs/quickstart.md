@@ -97,12 +97,12 @@ Every tick follows this order:
 reconcile saved action
   -> manage/exit open positions
   -> claim or refund when API-authorized
-  -> close eligible zero-share position accounts and recover rent
+  -> close API-authorized position accounts and recover rent
   -> evaluate the next market
 ```
 
 Cleanup is automatic in the continuous live command. It waits for the API's
-authoritative cleanup status and time, signs once, and keeps its checkpoint
+authoritative `selfCloseAvailable` signal, signs once, and keeps its checkpoint
 until the account disappears. Position-account rent is recoverable; shared
 market initialization costs are not unless the production API explicitly
 provides a recovery action.

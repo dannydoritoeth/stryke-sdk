@@ -66,7 +66,7 @@ const market = {
 } as PilotMarket;
 
 describe("pilot positions", () => {
-  it("accepts only same-owner zero-share cleanup availability", () => {
+  it("accepts only same-owner API-authored cleanup availability", () => {
     const cleanup = {
       rentRecipient: "HYDrCb45WNbMzLjKqQByKduksFCasUfgLNpkA7xvcxf7",
       selfCloseAvailable: true,
@@ -78,7 +78,7 @@ describe("pilot positions", () => {
     };
     const parsed = parsePilotPosition(row("expired_unclaimed", {
       yesShares: "0",
-      noShares: "0",
+      noShares: "12",
       forceClose: { expiryAt: deadline, status: "settled" },
       cleanup,
     }));
@@ -90,7 +90,7 @@ describe("pilot positions", () => {
     })).toBe(false);
   });
 
-  it("does not expose cleanup before the authoritative eligibility time", () => {
+  it("does not invent a grace-period gate from legacy cleanup timestamps", () => {
     const parsed = parsePilotPosition(row("expired_unclaimed", {
       yesShares: "0",
       noShares: "0",
@@ -106,11 +106,11 @@ describe("pilot positions", () => {
       },
     }));
     expect(positionCleanupPending(parsed)).toBe(true);
-    expect(positionCleanupAvailable(parsed, Date.parse("2026-07-22T00:00:59.999Z"))).toBe(false);
+    expect(positionCleanupAvailable(parsed, Date.parse("2026-07-22T00:00:59.999Z"))).toBe(true);
     expect(positionCleanupAvailable(parsed, Date.parse("2026-07-22T00:01:00.000Z"))).toBe(true);
   });
 
-  it("waits for API cleanup eligibility even after the eligibility timestamp", () => {
+  it("trusts selfCloseAvailable rather than independently reinterpreting status metadata", () => {
     const parsed = parsePilotPosition(row("expired_unclaimed", {
       yesShares: "0",
       noShares: "0",
@@ -130,12 +130,27 @@ describe("pilot positions", () => {
       },
     }));
     expect(positionCleanupPending(parsed)).toBe(true);
-    expect(positionCleanupAvailable(parsed, Date.parse("2026-07-23T00:00:00.000Z"))).toBe(false);
+    expect(positionCleanupAvailable(parsed, Date.parse("2026-07-23T00:00:00.000Z"))).toBe(true);
     expect(parsed.cleanup).toMatchObject({
       eligibilityStatus: "awaiting_resolution",
       marketSettlementStatus: "not_settled",
       blockedReason: "market_not_settled",
     });
+  });
+
+  it("parses immediate minimal-profile cleanup without a fabricated eligibility timestamp", () => {
+    const parsed = parsePilotPosition(row("lost", {
+      yesShares: "0",
+      noShares: "12",
+      forceClose: { expiryAt: deadline, status: "settled" },
+      cleanup: {
+        rentRecipient: "HYDrCb45WNbMzLjKqQByKduksFCasUfgLNpkA7xvcxf7",
+        selfCloseAvailable: true,
+        staleCleanup: { status: "eligible", action: "close_position" },
+      },
+    }));
+    expect(parsed.cleanup).not.toHaveProperty("cleanupEligibleAt");
+    expect(positionCleanupAvailable(parsed)).toBe(true);
   });
 
   it("accepts API-eligible cleanup when the on-chain stale-close path does not require settlement", () => {

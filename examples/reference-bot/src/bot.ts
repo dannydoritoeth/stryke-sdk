@@ -198,7 +198,9 @@ export const runMarketTick = async ({
             ? "cleanup_awaiting_authoritative_eligibility"
             : "cleanup_not_yet_eligible",
           details: {
-            cleanupEligibleAt: position.cleanup!.cleanupEligibleAt,
+            ...(position.cleanup!.cleanupEligibleAt
+              ? { cleanupEligibleAt: position.cleanup!.cleanupEligibleAt }
+              : {}),
             cleanupEligibilityStatus: position.cleanup!.eligibilityStatus,
             ...(position.cleanup!.marketSettlementStatus
               ? { marketSettlementStatus: position.cleanup!.marketSettlementStatus }
@@ -323,7 +325,9 @@ export const runMarketTick = async ({
       : "cleanup_not_yet_eligible", {
       positionId: waitingCleanup.positionId,
       details: {
-        cleanupEligibleAt: waitingCleanup.cleanup!.cleanupEligibleAt,
+        ...(waitingCleanup.cleanup!.cleanupEligibleAt
+          ? { cleanupEligibleAt: waitingCleanup.cleanup!.cleanupEligibleAt }
+          : {}),
         cleanupEligibilityStatus: waitingCleanup.cleanup!.eligibilityStatus,
         ...(waitingCleanup.cleanup!.marketSettlementStatus
           ? { marketSettlementStatus: waitingCleanup.cleanup!.marketSettlementStatus }
