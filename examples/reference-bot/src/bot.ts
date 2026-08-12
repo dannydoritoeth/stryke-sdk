@@ -141,11 +141,13 @@ export const runMarketTick = async ({
   tick,
   config,
   adapter,
+  entryEnabled = true,
   nowSeconds = Math.floor(Date.now() / 1_000),
 }: {
   tick: number;
   config: ReferenceBotConfig;
   adapter: ReferenceBotRuntimeAdapter;
+  entryEnabled?: boolean;
   nowSeconds?: number;
 }): Promise<RuntimeEvent> => {
   const paper = adapter.executionMode === "paper";
@@ -363,6 +365,12 @@ export const runMarketTick = async ({
       : event(tick, "wait", "hold", "position_not_economically_complete", { positionDecisions });
   }
 
+  if (!entryEnabled) {
+    return event(tick, "entry", "skip", "entry_disabled_for_drain", {
+      positionDecisions,
+    });
+  }
+
   const funding = await adapter.entryFundingStatus?.();
   if (funding && !funding.available) {
     return event(tick, "entry", "blocked", "insufficient_funding", {
@@ -519,6 +527,8 @@ export const runReferenceBot = async ({
   maximumTicks,
   signal,
   runtimeLease,
+  entryEnabled = true,
+  completeAfterConsecutiveIdleTicks,
   onEvent = (value: RuntimeEvent) => console.log(JSON.stringify(value)),
   wait = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)),
 }: {
@@ -528,22 +538,32 @@ export const runReferenceBot = async ({
   maximumTicks?: number;
   signal?: AbortSignal;
   runtimeLease?: RuntimeLease;
+  entryEnabled?: boolean;
+  completeAfterConsecutiveIdleTicks?: number;
   onEvent?: (event: RuntimeEvent) => void;
   wait?: (milliseconds: number) => Promise<void>;
 }): Promise<RuntimeEvent[]> => {
   const events: RuntimeEvent[] = [];
+  let consecutiveIdleTicks = 0;
   try {
     for (let tick = 1; !signal?.aborted; tick += 1) {
       if (runtimeLease) await assertRuntimeLeaseHeld(runtimeLease);
       let result: RuntimeEvent;
       try {
-        result = await runMarketTick({ tick, config, adapter });
+        result = await runMarketTick({ tick, config, adapter, entryEnabled });
       } catch (error) {
         if (!(error instanceof StrykeSdkError) || !error.retryable) throw error;
         result = event(tick, "wait", "blocked", `retryable_${error.code}`);
       }
       events.push(result);
       onEvent(result);
+      consecutiveIdleTicks = result.reason === "entry_disabled_for_drain"
+        ? consecutiveIdleTicks + 1
+        : 0;
+      if (
+        completeAfterConsecutiveIdleTicks !== undefined &&
+        consecutiveIdleTicks >= completeAfterConsecutiveIdleTicks
+      ) break;
       if (once || signal?.aborted || tick === maximumTicks) break;
       await wait(config.tickIntervalMs);
     }

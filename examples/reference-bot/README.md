@@ -75,9 +75,21 @@ eligible rent without permitting a new entry:
 npx stryke-reference-bot recover-rent --profile=live
 ```
 
+At an entry cutoff, use the continuous terminal lifecycle instead:
+
+```bash
+npx stryke-reference-bot drain --profile=live
+```
+
+Drain never evaluates or submits a new entry. It reconciles pending actions,
+waits for settlement, claims/refunds, executes API-authored cleanup, and exits
+only after two consecutive fresh lifecycle observations are clean. Successful
+completion emits `reference_bot_drain_complete`; absence of that event is a
+failed or incomplete drain.
+
 Position-account rent can be recovered. Shared market-series or strike-market
-initialization costs are not wallet-recoverable unless the API explicitly
-provides a recovery action.
+initialization costs are recovered only when the API explicitly includes those
+safe, authoritative instructions in the reviewed cleanup plan.
 
 The default state is local:
 
