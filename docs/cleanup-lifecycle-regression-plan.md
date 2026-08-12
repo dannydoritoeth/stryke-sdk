@@ -30,6 +30,12 @@ is the design gap. Endpoint credentials must never be logged in any mode.
 
 - SDK position parsing accepts the production lifecycle actions `claim`,
   `refund`, and `close_position` without converting claim/refund into cleanup.
+- Terminal claim/refund selection follows the fresh API-authored
+  `selfClaimAvailable` / `selfRefundAvailable` flags and positive amount. A
+  missing force-close timestamp must not suppress an action the same response
+  explicitly makes available; transaction preparation remains the final
+  authoritative eligibility check. An explicit elapsed deadline with no
+  matching availability flag remains blocked.
 - `positionCleanupAvailable` is true only when `selfCloseAvailable` is true and
   the authoritative action is `close_position`.
 - Invalid action/type/timestamp combinations continue to fail closed.
