@@ -1,6 +1,6 @@
 {
   "name": "@stryketrade/reference-bot",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "Runnable reference bot built exclusively on the public Stryke SDK.",
   "repository": {
     "type": "git",
@@ -51,7 +51,7 @@
   },
   "dependencies": {
     "@solana/kit": "^7.0.0",
-    "@stryketrade/sdk": "0.1.18",
+    "@stryketrade/sdk": "0.1.19",
     "pg": "^8.16.3"
   },
   "devDependencies": {

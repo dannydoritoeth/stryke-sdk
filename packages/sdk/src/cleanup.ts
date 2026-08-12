@@ -188,28 +188,49 @@ export class CleanupClient {
       units(chunk.rentQuote.estimatedPriorityFeeLamports, "estimatedPriorityFeeLamports");
       units(chunk.rentQuote.userNonRecoverableLamports, "userNonRecoverableLamports");
       units(chunk.rentQuote.appSponsoredRecoverableLamports, "appSponsoredRecoverableLamports");
-      const positionAddresses: string[] = chunk.rentQuote.recoverableRentItems.map((item) => {
+      const expectedCleanupShape = [
+        ["user_position", "position_terminal_close", "close_user_position", "position"],
+        ["strike_market", "strike_terminal_close", "close_strike_market", "strike"],
+        ["market_series_and_escrow", "series_terminal_close", "close_market_series", "series"],
+      ] as const;
+      const rentItems = chunk.rentQuote.recoverableRentItems;
+      const sharedCleanup = rentItems.some((item) => item.kind !== "user_position");
+      const positionAddresses: string[] = [];
+      const invalidRentItem = rentItems.some((item, index) => {
+        const expected = sharedCleanup
+          ? expectedCleanupShape[index % expectedCleanupShape.length]
+          : expectedCleanupShape[0];
         if (
-          item.kind !== "user_position" ||
-          item.recoveryCondition !== "position_terminal_close" ||
+          !expected ||
+          item.kind !== expected[0] ||
+          item.recoveryCondition !== expected[1] ||
           item.recipient !== owner ||
           !isAddress(item.address) ||
           units(item.amountLamports, "recoverableRentItems.amountLamports") <= 0n
         ) {
-          throw new StrykeSdkError(
-            "intent_mismatch",
-            "Cleanup rent recipient or item is not wallet-authoritative"
-          );
+          return true;
         }
-        return item.address;
+        if (item.kind === "user_position") positionAddresses.push(item.address);
+        return false;
       });
+      if (invalidRentItem) {
+        throw new StrykeSdkError(
+          "intent_mismatch",
+          "Cleanup rent recipient or item is not wallet-authoritative"
+        );
+      }
       const quotedItemTotal = chunk.rentQuote.recoverableRentItems.reduce(
         (sum, item) => sum + units(item.amountLamports, "recoverableRentItems.amountLamports"),
         0n
       );
       const contract = chunk.transaction;
-      const invalidInstruction = chunk.instructions.some((instruction) =>
-        instruction.name !== "close_user_position" ||
+      const invalidInstruction = chunk.instructions.some((instruction, index) => {
+        const rentItem = rentItems[index];
+        const expected = sharedCleanup
+          ? expectedCleanupShape[index % expectedCleanupShape.length]
+          : expectedCleanupShape[0];
+        return !rentItem || !expected ||
+        instruction.name !== expected[2] ||
         instruction.programId !== this.client.capabilities.contract.programId ||
         !instruction.accounts.some((account) =>
           account.name === "rent_recipient" && account.pubkey === owner && account.isWritable
@@ -218,19 +239,20 @@ export class CleanupClient {
           account.name === "processor" && account.pubkey === owner && account.isSigner
         ) ||
         !instruction.accounts.some((account) =>
-          account.name === "position" &&
-          positionAddresses.includes(account.pubkey) &&
+          account.name === expected[3] &&
+          account.pubkey === rentItem.address &&
           account.isWritable
-        )
-      );
+        );
+      });
       if (
         recoverable <= 0n ||
         quotedItemTotal !== recoverable ||
         positionAddresses.length === 0 ||
+        (sharedCleanup && rentItems.length % expectedCleanupShape.length !== 0) ||
         cleanupItems.some((item) => item === undefined || item.chunkIndex !== chunk.index) ||
         new Set(chunk.itemIds).size !== chunk.itemIds.length ||
         new Set(positionAddresses).size !== positionAddresses.length ||
-        chunk.instructions.length !== positionAddresses.length ||
+        chunk.instructions.length !== rentItems.length ||
         contract.feePayer !== owner ||
         contract.signers.length !== 1 ||
         contract.signers[0] !== owner ||
