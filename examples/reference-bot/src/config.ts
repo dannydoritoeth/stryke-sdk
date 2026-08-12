@@ -305,6 +305,9 @@ export const parseReferenceBotEnv = (
   return config;
 };
 
+const publicEndpoint = (value: string | undefined): string | undefined =>
+  value ? new URL(value).origin : undefined;
+
 export const publicConfig = (config: ReferenceBotConfig) => ({
   ...config,
   tradeSizeLamports: config.tradeSizeLamports.toString(),
@@ -312,6 +315,10 @@ export const publicConfig = (config: ReferenceBotConfig) => ({
   maximumAggregateExposureLamports: config.maximumAggregateExposureLamports.toString(),
   feeFreeActivationLimitLamports: config.feeFreeActivationLimitLamports.toString(),
   feeFreeBufferLamports: config.feeFreeBufferLamports.toString(),
+  apiBaseUrl: publicEndpoint(config.apiBaseUrl),
+  solanaRpcUrl: publicEndpoint(config.solanaRpcUrl),
+  pythHermesUrl: publicEndpoint(config.pythHermesUrl),
+  polymarketClobUrl: publicEndpoint(config.polymarketClobUrl),
   walletAdapterPath: config.walletAdapterPath ? "[configured]" : undefined,
   stateDatabaseUrl: config.stateDatabaseUrl ? "[configured]" : undefined,
 });

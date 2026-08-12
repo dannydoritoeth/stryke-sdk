@@ -19,6 +19,13 @@ user-position rent recovery, but a mainnet canary exposed two gaps:
 No protocol change is required. Production already stores the setup rent
 recipient and permits normal terminal strike and series closure.
 
+Production paper verification also exposed a security regression: the
+structured effective-config event printed the full configured Solana RPC URL,
+including any path/query credential. The direct cause is `publicConfig`
+returning endpoint strings unchanged. Missing credential-bearing endpoint
+fixtures are the detection gap; relying only on database/wallet-field redaction
+is the design gap. Endpoint credentials must never be logged in any mode.
+
 ## Requirements
 
 - SDK position parsing accepts the production lifecycle actions `claim`,
@@ -41,6 +48,9 @@ recipient and permits normal terminal strike and series closure.
 - Drain emits `reference_bot_drain_complete` exactly once and exits zero on
   success. Stale/unavailable state, a retained checkpoint, an unknown action,
   timeout, or interruption cannot emit completion.
+- Public configuration output reduces every endpoint to its URL origin and
+  strips username, password, path, query, and fragment. Runtime bindings retain
+  the full configured value. Invalid URLs fail validation without being echoed.
 
 ## Pseudocode
 
@@ -78,6 +88,8 @@ drain CLI:
 - `drain_cli_claims_closes_observes_two_clean_ticks_and_never_enters`
 - `drain_cli_restart_reconciles_before_continuing`
 - `drain_cli_does_not_complete_for_pending_or_stale_state`
+- `public_config_strips_rpc_path_query_fragment_and_credentials`
+- `runtime_binding_retains_full_rpc_endpoint_after_log_redaction`
 
 ## Phases
 

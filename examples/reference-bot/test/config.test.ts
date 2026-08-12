@@ -154,6 +154,14 @@ describe("reference bot config", () => {
     expect(() => parseReferenceBotEnv({ STRYKE_STATE_BACKEND: "postgres", STRYKE_DATABASE_URL: "postgres://db", STRYKE_LEASE_TTL_MS: "4999" })).toThrow("leaseTtlMs");
   });
 
+  it("public config strips endpoint credentials while runtime retains them", () => {
+    const rpc = "https://user:password@rpc.example.com/private/key?api-key=secret#fragment";
+    const config = parseReferenceBotConfig({ solanaRpcUrl: rpc });
+    expect(publicConfig(config).solanaRpcUrl).toBe("https://rpc.example.com");
+    expect(JSON.stringify(publicConfig(config))).not.toMatch(/password|private|secret|api-key/);
+    expect(resolveReferenceBotRuntimeBindings(config).solanaRpcUrl).toBe(rpc);
+  });
+
   it("active_live_requires_every_explicit_control_before_wallet_or_api_work", () => {
     expect(() => parseReferenceBotEnv({}, "devnet")).toThrow(/STRYKE_ASSET/);
   });
