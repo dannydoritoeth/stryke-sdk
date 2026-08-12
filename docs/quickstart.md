@@ -113,6 +113,16 @@ To recover eligible rent without allowing a new entry:
 npx stryke-reference-bot recover-rent --profile=live
 ```
 
+To stop new entries while continuously finishing settlement, claim/refund and
+API-authored cleanup, run:
+
+```bash
+npx stryke-reference-bot drain --profile=live
+```
+
+Treat the structured `reference_bot_drain_complete` event as the success
+signal. Without it, keep the bot out of a new live-entry window.
+
 If the wallet is below the new-entry reserve, the continuous bot still
 reconciles and performs eligible recovery, then reports `insufficient_funding`
 instead of entering another market.

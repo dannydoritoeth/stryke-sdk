@@ -211,8 +211,12 @@ const selectedMaximumTicks = (): number | undefined => {
 const runSdkBot = async (profile: ReferenceBotProfile) => {
   const doctorMode = process.argv.includes("doctor");
   const cleanupOnly = process.argv.includes("recover-rent");
-  if (cleanupOnly && profile === "paper") {
-    throw new StrykeSdkError("configuration", "recover-rent requires --profile=devnet or --profile=live");
+  const drainMode = process.argv.includes("drain");
+  if ((cleanupOnly || drainMode) && profile === "paper") {
+    throw new StrykeSdkError("configuration", `${drainMode ? "drain" : "recover-rent"} requires --profile=devnet or --profile=live`);
+  }
+  if (cleanupOnly && drainMode) {
+    throw new StrykeSdkError("configuration", "Use either drain or recover-rent, not both");
   }
   if (profile === "devnet" && !doctorMode) requireRootEnvFile(profile);
   let config: ReturnType<typeof parseReferenceBotEnv>;
@@ -416,7 +420,37 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
             expiryFamily: config.expiryFamily,
           }, randomUUID())
         : undefined;
-      await runReferenceBot({ config, adapter, once: process.argv.includes("--once"), ...(maximumTicks === undefined ? {} : { maximumTicks }), signal: controller.signal, ...(runtimeLease ? { runtimeLease } : {}) });
+      const events = await runReferenceBot({
+        config,
+        adapter,
+        once: process.argv.includes("--once"),
+        ...(maximumTicks === undefined ? {} : { maximumTicks }),
+        signal: controller.signal,
+        ...(runtimeLease ? { runtimeLease } : {}),
+        ...(drainMode
+          ? {
+              entryEnabled: false,
+              completeAfterConsecutiveIdleTicks: 2,
+            }
+          : {}),
+      });
+      if (drainMode) {
+        const completed = events.slice(-2).every(
+          ({ reason }) => reason === "entry_disabled_for_drain"
+        );
+        if (!completed) {
+          throw new StrykeSdkError(
+            "position_state",
+            "Drain stopped before two consecutive clean lifecycle observations"
+          );
+        }
+        console.log(JSON.stringify({
+          event: "reference_bot_drain_complete",
+          profile,
+          cleanObservations: 2,
+          ticks: events.length,
+        }));
+      }
     } finally {
       if (postgresState) await postgresState.close();
     }

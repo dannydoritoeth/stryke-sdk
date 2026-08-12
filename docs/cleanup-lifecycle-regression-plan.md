@@ -33,6 +33,14 @@ recipient and permits normal terminal strike and series closure.
   plan without inventing accounts or recipients.
 - Release evidence uses a production-shaped claimable fixture and repeated
   claim -> close -> reconcile iterations.
+- The public CLI exposes `drain --profile=devnet|live`. Drain uses the normal
+  wallet/checkpoint/API/reviewer/executor composition, disables entry at the
+  final runtime decision point, and completes only after two consecutive fresh
+  iterations find no pending reconciliation, terminal action, cleanup action,
+  or waiting cleanup.
+- Drain emits `reference_bot_drain_complete` exactly once and exits zero on
+  success. Stale/unavailable state, a retained checkpoint, an unknown action,
+  timeout, or interruption cannot emit completion.
 
 ## Pseudocode
 
@@ -50,6 +58,12 @@ runtime tick:
   else if closeable: execute API-authored cleanup plan
   else if cleanup pending: wait
   else evaluate entry
+
+drain CLI:
+  run the normal runtime with entry_enabled=false
+  reset clean_count after every reconciliation/action/wait/error
+  increment clean_count only when lifecycle inspection reaches entry_disabled
+  after two consecutive clean ticks emit reference_bot_drain_complete and exit
 ```
 
 ## Tests
@@ -61,14 +75,18 @@ runtime tick:
 - existing composed repeated lifecycle and restart tests remain green
 - downstream API composition must prove shared position -> strike -> series
   recovery before the next funded canary
+- `drain_cli_claims_closes_observes_two_clean_ticks_and_never_enters`
+- `drain_cli_restart_reconciles_before_continuing`
+- `drain_cli_does_not_complete_for_pending_or_stale_state`
 
 ## Phases
 
 1. Fix and test cleanup parsing.
 2. Publish an immutable patch release with commit and npm integrity evidence.
-3. Consume the release from the product Render artifact intake.
-4. Complete the product API shared-rent cleanup plan and composition proof.
-5. Run paper validation, then one bounded live canary through final wallet
+3. Add and publish the composed drain CLI with multi-iteration/restart proof.
+4. Consume the release from the product Render artifact intake.
+5. Complete the product API shared-rent cleanup plan and composition proof.
+6. Run paper validation, then one bounded live canary through final wallet
    reconciliation.
 
 ## Done Done

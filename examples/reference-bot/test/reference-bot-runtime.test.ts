@@ -374,6 +374,86 @@ describe("reference bot composed runtime", () => {
     expect(wait.mock.calls).toEqual([[1_234], [1_234]]);
   });
 
+  it("drain_runs_lifecycle_then_requires_two_clean_ticks_without_entry", async () => {
+    let stage: "claim" | "close" | "empty" = "claim";
+    const claimable = position("claimable", {
+      claimableAmount: "10",
+      actionDeadline: new Date(Date.now() + 60_000).toISOString(),
+    });
+    const closeable = position("claimed", {
+      yesShares: "0",
+      noShares: "0",
+      cleanup: {
+        rentRecipient: "owner",
+        selfCloseAvailable: true,
+        action: "close_position",
+        cleanupEligibleAt: "2020-01-01T00:00:00.000Z",
+        eligibilityStatus: "eligible",
+        marketSettlementStatus: "settled",
+      },
+    });
+    const runtime = adapter({
+      listPositions: vi.fn(async () =>
+        stage === "claim" ? [claimable] : stage === "close" ? [closeable] : []
+      ),
+      executeTerminal: vi.fn(async () => {
+        stage = "close";
+        return { clientActionId: "claim-1", signature: "claim-signature" };
+      }),
+      executeCleanup: vi.fn(async () => {
+        stage = "empty";
+        return { clientActionId: "close-1", signature: "close-signature" };
+      }),
+    });
+
+    const events = await runReferenceBot({
+      config: live,
+      adapter: runtime,
+      entryEnabled: false,
+      completeAfterConsecutiveIdleTicks: 2,
+      maximumTicks: 10,
+      wait: async () => {},
+    });
+
+    expect(events.map(({ reason }) => reason)).toEqual([
+      "terminal_confirmed",
+      "wallet_rent_recovered",
+      "entry_disabled_for_drain",
+      "entry_disabled_for_drain",
+    ]);
+    expect(runtime.executeBuy).not.toHaveBeenCalled();
+    expect(runtime.evaluateEntry).not.toHaveBeenCalled();
+  });
+
+  it("drain_resets_clean_observations_when_restart_reconciliation_appears", async () => {
+    let tick = 0;
+    const checkpoint = { clientActionId: "close-1", intentHash: "intent", state: "submitted" } as ActionCheckpoint;
+    const runtime = adapter({
+      loadCheckpoint: vi.fn(async () => (++tick === 2 ? checkpoint : undefined)),
+      reconcilePending: vi.fn(async () => ({
+        state: "confirmed",
+        clientActionId: checkpoint.clientActionId,
+      })),
+    });
+
+    const events = await runReferenceBot({
+      config: live,
+      adapter: runtime,
+      entryEnabled: false,
+      completeAfterConsecutiveIdleTicks: 2,
+      maximumTicks: 5,
+      wait: async () => {},
+    });
+
+    expect(events.map(({ reason }) => reason)).toEqual([
+      "entry_disabled_for_drain",
+      "reconciled_confirmed",
+      "entry_disabled_for_drain",
+      "entry_disabled_for_drain",
+    ]);
+    expect(runtime.executeBuy).not.toHaveBeenCalled();
+  });
+
   it("runtime_open_position_holds_then_sells_from_fresh_executable_values", async () => {
     const open = position();
     let proceeds = "95";
