@@ -33,8 +33,10 @@ is the design gap. Endpoint credentials must never be logged in any mode.
 - `positionCleanupAvailable` is true only when `selfCloseAvailable` is true and
   the authoritative action is `close_position`.
 - Invalid action/type/timestamp combinations continue to fail closed.
-- The reference bot orders terminal claim/refund before close and does not
-  enter a new market while recovery remains pending.
+- The reference bot orders terminal claim/refund before close. While entries
+  are enabled, a protocol-time-locked rent cleanup is recorded but does not
+  block evaluation of a different eligible market. Drain continues to wait for
+  and execute that cleanup before declaring completion.
 - A future compatible API `close_all` plan may include wallet-position and
   eligible shared-market cleanup; the SDK executes the API-authored reviewed
   plan without inventing accounts or recipients.
@@ -66,7 +68,9 @@ runtime tick:
   reconcile pending action
   if claimable/refundable: execute terminal action
   else if closeable: execute API-authored cleanup plan
-  else if cleanup pending: wait
+  else if cleanup pending and entry_enabled=false: wait
+  else if cleanup pending and entry_enabled=true: retain cleanup observation
+    and evaluate the next market through normal risk/duplicate controls
   else evaluate entry
 
 drain CLI:
@@ -90,6 +94,8 @@ drain CLI:
 - `drain_cli_does_not_complete_for_pending_or_stale_state`
 - `public_config_strips_rpc_path_query_fragment_and_credentials`
 - `runtime_binding_retains_full_rpc_endpoint_after_log_redaction`
+- `live_mode_continues_entry_evaluation_while_rent_cleanup_is_time_locked`
+- drain variants prove future cleanup still blocks both clean observations
 
 ## Phases
 
