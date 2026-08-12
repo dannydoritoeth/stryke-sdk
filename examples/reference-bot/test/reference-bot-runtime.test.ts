@@ -107,7 +107,7 @@ describe("reference bot composed runtime", () => {
     expect(runtime.evaluateEntry).not.toHaveBeenCalled();
   });
 
-  it("waits_for_authoritative_cleanup_time_without_evaluating_an_entry", async () => {
+  it("drain_waits_for_authoritative_cleanup_time_without_evaluating_an_entry", async () => {
     const cleanupPosition = position("expired_unclaimed", {
       yesShares: "0",
       noShares: "0",
@@ -125,6 +125,7 @@ describe("reference bot composed runtime", () => {
       tick: 1,
       config: live,
       adapter: runtime,
+      entryEnabled: false,
       nowSeconds: Date.parse("2029-12-31T23:59:59.000Z") / 1_000,
     })).resolves.toMatchObject({
       phase: "wait",
@@ -135,7 +136,7 @@ describe("reference bot composed runtime", () => {
     expect(runtime.evaluateEntry).not.toHaveBeenCalled();
   });
 
-  it("waits_for_authoritative_cleanup_eligibility_without_simulating_or_evaluating_entry", async () => {
+  it("drain_waits_for_authoritative_cleanup_eligibility_without_simulating_or_evaluating_entry", async () => {
     const cleanupPosition = position("expired_unclaimed", {
       yesShares: "0",
       noShares: "0",
@@ -154,7 +155,7 @@ describe("reference bot composed runtime", () => {
       listPositions: async () => [cleanupPosition],
       executeCleanup,
     });
-    await expect(runMarketTick({ tick: 1, config: live, adapter: runtime })).resolves.toMatchObject({
+    await expect(runMarketTick({ tick: 1, config: live, adapter: runtime, entryEnabled: false })).resolves.toMatchObject({
       phase: "wait",
       action: "hold",
       reason: "cleanup_awaiting_authoritative_eligibility",
@@ -166,6 +167,33 @@ describe("reference bot composed runtime", () => {
     });
     expect(executeCleanup).not.toHaveBeenCalled();
     expect(runtime.evaluateEntry).not.toHaveBeenCalled();
+  });
+
+  it("live_mode_continues_entry_evaluation_while_rent_cleanup_is_time_locked", async () => {
+    const cleanupPosition = position("expired_unclaimed", {
+      yesShares: "0",
+      noShares: "0",
+      cleanup: {
+        rentRecipient: "owner",
+        selfCloseAvailable: true,
+        action: "close_position",
+        cleanupEligibleAt: "2030-01-01T00:00:00.000Z",
+        eligibilityStatus: "eligible",
+        marketSettlementStatus: "not_expired",
+        blockedReason: "force_close_expiry_not_elapsed",
+      },
+    });
+    const runtime = adapter({ listPositions: async () => [cleanupPosition] });
+
+    const result = await runMarketTick({
+      tick: 1,
+      config: live,
+      adapter: runtime,
+      nowSeconds: Date.parse("2029-12-31T23:59:59.000Z") / 1_000,
+    });
+
+    expect(result.phase).toBe("entry");
+    expect(runtime.evaluateEntry).toHaveBeenCalledOnce();
   });
 
   it("non_winner_refunds_before_a_later_zero_share_rent_cleanup", async () => {

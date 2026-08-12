@@ -317,7 +317,7 @@ export const runMarketTick = async ({
   }
 
   const waitingCleanup = cleanupWaiting[0];
-  if (waitingCleanup) {
+  if (waitingCleanup && !entryEnabled) {
     return event(tick, "wait", "hold", waitingCleanup.cleanup!.eligibilityStatus !== "eligible"
       ? "cleanup_awaiting_authoritative_eligibility"
       : "cleanup_not_yet_eligible", {
