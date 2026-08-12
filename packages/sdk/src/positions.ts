@@ -35,6 +35,8 @@ export type PilotPosition = {
 
 export type PilotPositionCleanup = {
   rentRecipient: string;
+  selfClaimAvailable?: boolean;
+  selfRefundAvailable?: boolean;
   selfCloseAvailable: boolean;
   action?: "close_position";
   cleanupEligibleAt: string;
@@ -219,6 +221,8 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
       cleanupAction === "refund" ||
       cleanupAction === "close_position";
     if (
+      (cleanupRow.selfClaimAvailable !== undefined && typeof cleanupRow.selfClaimAvailable !== "boolean") ||
+      (cleanupRow.selfRefundAvailable !== undefined && typeof cleanupRow.selfRefundAvailable !== "boolean") ||
       typeof cleanupRow.selfCloseAvailable !== "boolean" ||
       !Number.isFinite(Date.parse(cleanupEligibleAt)) ||
       !supportedCleanupAction ||
@@ -226,6 +230,12 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
     ) throw new StrykeSdkError("api_response", "Position cleanup metadata is invalid");
     cleanup = {
       rentRecipient: text(cleanupRow.rentRecipient, "cleanup.rentRecipient"),
+      ...(typeof cleanupRow.selfClaimAvailable === "boolean"
+        ? { selfClaimAvailable: cleanupRow.selfClaimAvailable }
+        : {}),
+      ...(typeof cleanupRow.selfRefundAvailable === "boolean"
+        ? { selfRefundAvailable: cleanupRow.selfRefundAvailable }
+        : {}),
       selfCloseAvailable: cleanupRow.selfCloseAvailable,
       ...(cleanupAction === "close_position" ? { action: cleanupAction } : {}),
       cleanupEligibleAt,
@@ -367,7 +377,20 @@ export const terminalActionFor = (
   position: PilotPosition,
   now = Date.now()
 ): PositionTerminalAction => {
-  if (!position.actionDeadline || now >= Date.parse(position.actionDeadline)) {
+  const claimAvailable = position.cleanup?.selfClaimAvailable === true;
+  const refundAvailable = position.cleanup?.selfRefundAvailable === true;
+  const authoritativeAvailability =
+    position.cleanup?.selfClaimAvailable !== undefined ||
+    position.cleanup?.selfRefundAvailable !== undefined;
+  const legacyDeadlineAvailable =
+    Boolean(position.actionDeadline) &&
+    now < Date.parse(position.actionDeadline!);
+  if (
+    position.actionDeadline &&
+    now >= Date.parse(position.actionDeadline) &&
+    !claimAvailable &&
+    !refundAvailable
+  ) {
     throw new StrykeSdkError(
       "position_state",
       "Position claim or refund deadline is unavailable or expired"
@@ -375,15 +398,19 @@ export const terminalActionFor = (
   }
   if (
     position.lifecycle.state === "claimable" &&
+    (claimAvailable || (!authoritativeAvailability && legacyDeadlineAvailable)) &&
     BigInt(position.claimableAmount ?? "0") > 0n
   ) {
     return "claim";
   }
   if (
     position.lifecycle.state === "refundable" &&
+    (refundAvailable || (!authoritativeAvailability && legacyDeadlineAvailable)) &&
     BigInt(position.refundableAmount ?? "0") > 0n &&
-    (position.lifecycle.rawReason.includes("underfunded") ||
-      position.lifecycle.rawReason.includes("zero_winner"))
+    (refundAvailable ||
+      (!authoritativeAvailability &&
+        (position.lifecycle.rawReason.includes("underfunded") ||
+          position.lifecycle.rawReason.includes("zero_winner"))))
   ) {
     return "refund";
   }

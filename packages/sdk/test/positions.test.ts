@@ -337,14 +337,48 @@ describe("pilot positions", () => {
     );
   });
 
-  it("claim_refund_deadline_is_preserved_and_enforced", () => {
+  it("fresh_authoritative_availability_overrides_missing_or_elapsed_deadline", () => {
     const position = parsePilotPosition(
-      row("claimable", { claimableAmount: "10" })
+      row("claimable", {
+        claimableAmount: "10",
+        cleanup: {
+          rentRecipient: "HYDrCb45WNbMzLjKqQByKduksFCasUfgLNpkA7xvcxf7",
+          selfClaimAvailable: true,
+          selfRefundAvailable: false,
+          selfCloseAvailable: false,
+          staleCleanup: {
+            status: "eligible",
+            action: "claim",
+            cleanupEligibleAt: "2026-07-22T00:00:00.000Z",
+          },
+        },
+      })
     );
     expect(position.actionDeadline).toBe(deadline);
     expect(terminalActionFor(position, Date.parse("2026-07-22T00:00:00Z"))).toBe("claim");
-    expect(() => terminalActionFor(position, Date.parse(deadline))).toThrowError(
-      expect.objectContaining({ code: "position_state" })
-    );
+    expect(terminalActionFor(position, Date.parse(deadline))).toBe("claim");
+  });
+
+  it("accepts_a_production_refund_without_force_close_deadline_or_internal_reason", () => {
+    const production = row("refundable", {
+      refundableAmount: "4950000",
+      forceClose: undefined,
+      pilotLifecycle: {
+        ...row("refundable").pilotLifecycle,
+        rawReason: "Refundable",
+      },
+      cleanup: {
+        rentRecipient: "HYDrCb45WNbMzLjKqQByKduksFCasUfgLNpkA7xvcxf7",
+        selfClaimAvailable: false,
+        selfRefundAvailable: true,
+        selfCloseAvailable: false,
+        staleCleanup: {
+          status: "eligible",
+          action: "refund",
+          cleanupEligibleAt: "2026-07-22T00:00:00.000Z",
+        },
+      },
+    });
+    expect(terminalActionFor(parsePilotPosition(production))).toBe("refund");
   });
 });
