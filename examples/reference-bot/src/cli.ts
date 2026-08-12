@@ -38,7 +38,10 @@ import { PolymarketClient } from "./polymarket-client.js";
 import { FileRoundDecisionStore } from "./round-state.js";
 import { MemoryRoundDecisionStore } from "./round-state.js";
 import type { RoundDecisionStore } from "./round-state.js";
-import { PostgresReferenceBotState } from "./postgres-state.js";
+import {
+  PostgresReferenceBotState,
+  referenceBotPostgresPoolConfig,
+} from "./postgres-state.js";
 import { requireRuntimeLease } from "./runtime-lease.js";
 import { classifyDoctorError, classifyDoctorEvaluation, emitDoctorResult } from "./doctor.js";
 import { createPaperRuntimeAdapter, FilePaperLedger } from "./paper-ledger.js";
@@ -312,7 +315,7 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
     }
     const postgresState = config.stateBackend === "postgres"
       ? new PostgresReferenceBotState(
-          { connectionString: config.stateDatabaseUrl },
+          referenceBotPostgresPoolConfig(config),
           config.stateNamespace,
           config.leaseTtlMs
         )
