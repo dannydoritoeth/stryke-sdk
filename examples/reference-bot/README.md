@@ -64,7 +64,7 @@ and possible first-trader shared market initialization.
 
 Every live tick reconciles durable state before taking another action. It then
 manages open positions, sells or waits for settlement, claims/refunds only when
-the API authorizes them, closes eligible zero-share position accounts to return
+the API authorizes them, closes API-authorized position accounts to return
 rent, and finally evaluates the next market.
 
 If the wallet is below the new-entry reserve, existing reconciliation and rent

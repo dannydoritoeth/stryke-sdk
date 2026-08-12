@@ -110,8 +110,10 @@ underfunded or zero-winner reason/deadline, `terminalActionFor(position)`
 returns `refund`; prepare it with `TransactionsClient.prepareTerminal`. The SDK
 never infers collateral refund eligibility from market conditions.
 
-After economic exposure is zero, a wallet-owned position account can separately
-expose `cleanup_available`. Check `positionCleanupAvailable(position)`, then call
+After the deployed program has no remaining winning/refundable entitlement, a
+wallet-owned position account can separately expose `cleanup_available`. A
+losing-side token balance may remain and does not by itself block account close.
+Check `positionCleanupAvailable(position)`, then call
 `new CleanupClient(client, rpc).prepareAll(owner, "SOL")`. Review and execute
 each returned transaction through the same dedicated owner signer. The client
 accepts only `close_user_position` instructions from the compatible program and
@@ -120,10 +122,11 @@ requires signer, fee payer, rent recipient, and requested owner to agree.
 The cleanup plan reports recoverable position rent and estimated network fees
 separately. It does not describe shared market-series or strike-market
 initialization rent as wallet-recoverable.
-`positionCleanupAvailable` enforces both the API-authored
-`staleCleanup.status === "eligible"` and `cleanupEligibleAt`; do not infer
-eligibility from zero shares, a UI label, or `forceClose.status`. The dedicated
-cleanup status is authoritative for the program's stale zero-share close path.
+`positionCleanupAvailable` uses the API-authored `selfCloseAvailable` flag and
+same-owner rent recipient. The minimal program has no cleanup grace period, so
+the SDK does not invent a timestamp or zero-total-share gate. Transaction
+preparation revalidates the live account state and returns only a reviewed
+`close_user_position` instruction.
 Each materialized transaction retains the authoritative cleanup item and market
 identity for its chunk so a consumer can match the chosen position rather than
 blindly executing the first `close_all` chunk.

@@ -39,7 +39,7 @@ export type PilotPositionCleanup = {
   selfRefundAvailable?: boolean;
   selfCloseAvailable: boolean;
   action?: "close_position";
-  cleanupEligibleAt: string;
+  cleanupEligibleAt?: string;
   eligibilityStatus: string;
   marketSettlementStatus?: string;
   blockedReason?: string;
@@ -211,7 +211,9 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
   if (row.cleanup !== undefined) {
     const cleanupRow = record(row.cleanup, "cleanup");
     const staleCleanup = record(cleanupRow.staleCleanup, "cleanup.staleCleanup");
-    const cleanupEligibleAt = text(staleCleanup.cleanupEligibleAt, "cleanup.staleCleanup.cleanupEligibleAt");
+    const cleanupEligibleAt = staleCleanup.cleanupEligibleAt === undefined
+      ? undefined
+      : text(staleCleanup.cleanupEligibleAt, "cleanup.staleCleanup.cleanupEligibleAt");
     const eligibilityStatus = text(staleCleanup.status, "cleanup.staleCleanup.status");
     const marketSettlementStatus = forceClose?.status;
     const cleanupAction = staleCleanup.action;
@@ -224,7 +226,7 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
       (cleanupRow.selfClaimAvailable !== undefined && typeof cleanupRow.selfClaimAvailable !== "boolean") ||
       (cleanupRow.selfRefundAvailable !== undefined && typeof cleanupRow.selfRefundAvailable !== "boolean") ||
       typeof cleanupRow.selfCloseAvailable !== "boolean" ||
-      !Number.isFinite(Date.parse(cleanupEligibleAt)) ||
+      (cleanupEligibleAt !== undefined && !Number.isFinite(Date.parse(cleanupEligibleAt))) ||
       !supportedCleanupAction ||
       (cleanupRow.selfCloseAvailable && cleanupAction !== "close_position")
     ) throw new StrykeSdkError("api_response", "Position cleanup metadata is invalid");
@@ -238,7 +240,7 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
         : {}),
       selfCloseAvailable: cleanupRow.selfCloseAvailable,
       ...(cleanupAction === "close_position" ? { action: cleanupAction } : {}),
-      cleanupEligibleAt,
+      ...(cleanupEligibleAt === undefined ? {} : { cleanupEligibleAt }),
       eligibilityStatus,
       ...(typeof marketSettlementStatus === "string" ? { marketSettlementStatus } : {}),
       ...(typeof forceClose?.blockedReason === "string"
@@ -292,17 +294,13 @@ export const parsePilotPosition = (value: unknown): PilotPosition => {
 
 export const positionCleanupPending = (position: PilotPosition): boolean =>
   position.cleanup?.selfCloseAvailable === true &&
-  position.cleanup.rentRecipient === position.owner &&
-  BigInt(position.yesShares) === 0n &&
-  BigInt(position.noShares) === 0n;
+  position.cleanup.rentRecipient === position.owner;
 
 export const positionCleanupAvailable = (
   position: PilotPosition,
-  now = Date.now()
+  _now = Date.now()
 ): boolean =>
-  positionCleanupPending(position) &&
-  position.cleanup!.eligibilityStatus === "eligible" &&
-  now >= Date.parse(position.cleanup!.cleanupEligibleAt);
+  positionCleanupPending(position);
 
 export const positionIfWinPayout = (
   position: PilotPosition,

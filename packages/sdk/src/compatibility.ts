@@ -1,6 +1,6 @@
 import { StrykeSdkError } from "./errors.js";
 
-export const SDK_VERSION = "0.1.21" as const;
+export const SDK_VERSION = "0.1.22" as const;
 export const SUPPORTED_API_VERSION = "v1" as const;
 export const SUPPORTED_API_SCHEMA_VERSION = "1.0.0" as const;
 export const SUPPORTED_PROGRAM_ID =
@@ -32,6 +32,16 @@ export type ApiCapabilitiesV1 = {
     programId: string;
     programVersion: string;
     idlSpecVersion: string;
+    deployedRules: {
+      schemaVersion: "1.0.0";
+      environment: "production" | "devnet";
+      sourceCommit: string;
+      binarySha256: string;
+      settlementMode: "historical_expiry_price_atomic" | "first_valid_post_expiry";
+      forceCloseSeconds: 7_776_000;
+      ownerCloseHasGracePeriod: false;
+      manifestUrl?: string;
+    };
   };
   assets: ReadonlyArray<{
     symbol: string;
@@ -64,6 +74,10 @@ export const parseCapabilitiesV1 = (value: unknown): ApiCapabilitiesV1 => {
     throw new StrykeSdkError("compatibility", "Capability matrices are missing");
   }
 
+  if (!isRecord(value.contract.deployedRules)) {
+    throw new StrykeSdkError("compatibility", "Missing deployed rule contract");
+  }
+  const deployedRules = value.contract.deployedRules;
   const parsed = {
     apiVersion: stringField(value.apiVersion, "apiVersion"),
     schemaVersion: stringField(value.schemaVersion, "schemaVersion"),
@@ -86,6 +100,16 @@ export const parseCapabilitiesV1 = (value: unknown): ApiCapabilitiesV1 => {
         value.contract.idlSpecVersion,
         "contract.idlSpecVersion"
       ),
+      deployedRules: {
+        schemaVersion: stringField(deployedRules.schemaVersion, "contract.deployedRules.schemaVersion"),
+        environment: stringField(deployedRules.environment, "contract.deployedRules.environment"),
+        sourceCommit: stringField(deployedRules.sourceCommit, "contract.deployedRules.sourceCommit"),
+        binarySha256: stringField(deployedRules.binarySha256, "contract.deployedRules.binarySha256"),
+        settlementMode: stringField(deployedRules.settlementMode, "contract.deployedRules.settlementMode"),
+        forceCloseSeconds: deployedRules.forceCloseSeconds,
+        ownerCloseHasGracePeriod: deployedRules.ownerCloseHasGracePeriod,
+        ...(typeof deployedRules.manifestUrl === "string" ? { manifestUrl: deployedRules.manifestUrl } : {}),
+      },
     },
     assets,
     expiryFamilies,
@@ -98,7 +122,20 @@ export const parseCapabilitiesV1 = (value: unknown): ApiCapabilitiesV1 => {
     !SUPPORTED_CLUSTERS.includes(parsed.cluster as SupportedCluster) ||
     parsed.contract.profile !== "minimal_pyth" ||
     parsed.contract.programId !== SUPPORTED_PROGRAM_ID ||
-    parsed.contract.programVersion !== SUPPORTED_PROGRAM_VERSION
+    parsed.contract.programVersion !== SUPPORTED_PROGRAM_VERSION ||
+    parsed.contract.deployedRules.schemaVersion !== "1.0.0" ||
+    parsed.contract.deployedRules.forceCloseSeconds !== 7_776_000 ||
+    parsed.contract.deployedRules.ownerCloseHasGracePeriod !== false ||
+    (parsed.cluster === "mainnet-beta" &&
+      (parsed.contract.deployedRules.environment !== "production" ||
+        parsed.contract.deployedRules.sourceCommit !== "9f8df797c404fff7a965fc462d88d9bfb10b9900" ||
+        parsed.contract.deployedRules.binarySha256 !== "6ec28ae515e5e0d6828dde513ba76ccf142a830c1b0efc6c1bbfad150c11fed7" ||
+        parsed.contract.deployedRules.settlementMode !== "historical_expiry_price_atomic")) ||
+    (parsed.cluster === "devnet" &&
+      (parsed.contract.deployedRules.environment !== "devnet" ||
+        parsed.contract.deployedRules.sourceCommit !== "8a421a7d3f9fba4c6df667e47b9833c95a543983" ||
+        parsed.contract.deployedRules.binarySha256 !== "332a3cb8c6b4fea0655b103cbab932ca5c8234e0ebef7910a418824b14bb4279" ||
+        parsed.contract.deployedRules.settlementMode !== "first_valid_post_expiry"))
   ) {
     throw new StrykeSdkError("compatibility", "Unsupported Stryke deployment", false, {
       apiVersion: parsed.apiVersion,

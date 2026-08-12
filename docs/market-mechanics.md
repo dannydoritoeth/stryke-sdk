@@ -17,7 +17,9 @@ bounded history. Missing, stale, wrong-feed, or unverified data blocks the bot;
 there is no fallback source. A locally observed Pyth price never marks a Stryke
 market or position resolved.
 
-Settlement uses the first verified update crossing expiry:
+The frozen production release at source commit
+`9f8df797c404fff7a965fc462d88d9bfb10b9900` uses the first verified update
+crossing expiry:
 `prev_publish_time < expiry_ts <= publish_time`, no later than
 `expiry_ts + 300`. Feed identity and verification must match. YES wins only when
 the normalized resolved value is strictly greater than the strike. Equality
