@@ -20,6 +20,7 @@ import type { PolymarketExecutablePrice } from "./polymarket-client.js";
 import { selectEmptyMarketBootstrapEntry, selectExecutablePolymarketEntry } from "./strategy/polymarket-entry.js";
 import { polymarketEntryWindow, type PolymarketTimingMode } from "./strategy/entry-window.js";
 import { decidePolymarketEarlyExit } from "./strategy/polymarket-exit.js";
+import { decidePreFeeRevalidation, preFeeRevalidationWindow } from "./strategy/pre-fee-revalidation.js";
 import { assertRuntimeLeaseHeld, type RuntimeLease } from "./runtime-lease.js";
 
 export type RuntimeAction = "buy" | "sell" | "claim" | "refund" | "close" | "paper_buy" | "paper_hold" | "paper_sell" | "paper_claim" | "paper_refund" | "paper_loss";
@@ -63,6 +64,12 @@ export type EntryEvaluation = {
   polymarketPrices?: Readonly<Record<"yes" | "no", PolymarketExecutablePrice>>;
 };
 
+export type PreFeeRevalidationEvaluation = {
+  buyQuotes: readonly [ExecutableQuote, ExecutableQuote];
+  polymarketPrices: Readonly<Record<"yes" | "no", PolymarketExecutablePrice>>;
+  dataFresh: boolean;
+};
+
 export type RuntimeExecution = { clientActionId?: string; signature?: string; recoverableLamports?: string; estimatedNetworkFeeLamports?: string };
 
 export interface ReferenceBotRuntimeAdapter {
@@ -72,6 +79,7 @@ export interface ReferenceBotRuntimeAdapter {
   listPositions(): Promise<PilotPosition[]>;
   evaluatePosition(position: PilotPosition, exposure: PilotPositionSideExposure): Promise<PositionEvaluation>;
   evaluateEntry(): Promise<EntryEvaluation>;
+  evaluatePreFeeRevalidation?(position: PilotPosition, exposure: PilotPositionSideExposure, market: PilotMarket): Promise<PreFeeRevalidationEvaluation>;
   executeBuy(evaluation: EntryEvaluation, quote: ExecutableQuote): Promise<RuntimeExecution>;
   executeSell(position: PilotPosition, exposure: PilotPositionSideExposure, evaluation: PositionEvaluation, reason: string): Promise<RuntimeExecution>;
   executeTerminal(position: PilotPosition, action: PositionTerminalAction): Promise<RuntimeExecution>;
@@ -80,6 +88,8 @@ export interface ReferenceBotRuntimeAdapter {
   hasConvergenceExitedRound?(market: PilotMarket): Promise<boolean>;
   hasEnteredRound?(market: PilotMarket): Promise<boolean>;
   recordEnteredRound?(market: PilotMarket): Promise<void>;
+  hasPreFeeRevalidatedPosition?(market: PilotMarket, positionId: string): Promise<boolean>;
+  recordPreFeeRevalidatedPosition?(market: PilotMarket, positionId: string, outcome: string): Promise<void>;
   loadMarketByIdentity?(identity: { expiryTs: number; strikePrice: string }): Promise<PilotMarket>;
   resolvePaperOutcome?(identity: { expiryTs: number; strikePrice: string }): Promise<"yes" | "no" | undefined>;
   acknowledgePaperLoss?(positionId: string): Promise<void>;
@@ -247,7 +257,42 @@ export const runMarketTick = async ({
       continue;
     }
     if (isPolymarketStrategy(config) && polymarketMode(config) === "polymarket_late") {
-      positionDecisions.push({ positionId: position.positionId, action: "hold", reason: "strategy_holds_to_expiry" });
+      if (!config.polymarketPreFeeRevalidationEnabled) {
+        positionDecisions.push({ positionId: position.positionId, action: "hold", reason: "strategy_holds_to_expiry" });
+        continue;
+      }
+      const window = preFeeRevalidationWindow({ quote: evaluation.sellQuote, now: nowSeconds, windowSeconds: config.polymarketLateWindowSeconds, submissionBufferSeconds: config.polymarketSubmissionBufferSeconds });
+      const details = { strategy: config.strategy, opensAt: window.opensAt, closesAt: window.closesAt };
+      if (!window.eligible) {
+        positionDecisions.push({ positionId: position.positionId, action: "hold", reason: window.reason, details });
+        continue;
+      }
+      if (await adapter.hasPreFeeRevalidatedPosition?.(evaluation.market, position.positionId)) {
+        positionDecisions.push({ positionId: position.positionId, action: "hold", reason: "pre_fee_revalidation_already_completed", details });
+        continue;
+      }
+      if (!adapter.evaluatePreFeeRevalidation) {
+        await adapter.recordPreFeeRevalidatedPosition?.(evaluation.market, position.positionId, "adapter_unavailable");
+        positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "pre_fee_revalidation_unavailable", details });
+        continue;
+      }
+      let revalidation: PreFeeRevalidationEvaluation;
+      try { revalidation = await adapter.evaluatePreFeeRevalidation(position, exposure, evaluation.market); }
+      catch {
+        await adapter.recordPreFeeRevalidatedPosition?.(evaluation.market, position.positionId, "source_unavailable");
+        positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "pre_fee_revalidation_unavailable", details });
+        continue;
+      }
+      if (!revalidation.dataFresh) {
+        await adapter.recordPreFeeRevalidatedPosition?.(evaluation.market, position.positionId, "stale");
+        positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "pre_fee_revalidation_stale", details });
+        continue;
+      }
+      const result = decidePreFeeRevalidation({ heldSide: exposure.side, quotes: revalidation.buyQuotes, prices: revalidation.polymarketPrices, entryEdgeBps: config.polymarketEntryEdgeBps, minimumHoldReturnBps: config.polymarketMinimumHoldReturnBps, minimumWinProfitBps: config.polymarketMinimumWinProfitBps });
+      const decisionDetails = { ...details, selectedSide: result.selected.side, selectedPasses: result.selected.passes, selectedReason: result.selected.reason };
+      positionDecisions.push({ positionId: position.positionId, action: result.action, reason: result.reason, details: decisionDetails });
+      if (result.action === "hold") await adapter.recordPreFeeRevalidatedPosition?.(evaluation.market, position.positionId, result.reason);
+      else sellCandidates.push({ position, exposure, evaluation, decision: { action: "sell", reason: result.reason }, details: decisionDetails });
       continue;
     }
     if (isPolymarketStrategy(config)) {
@@ -356,6 +401,7 @@ export const runMarketTick = async ({
       if (isQuoteRevalidationError(error)) return event(tick, "position", "hold", "quote_changed_before_submission", { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions });
       throw error;
     }
+    if (paper && sell.decision.reason === "polymarket_pre_fee_signal_changed") await adapter.recordPreFeeRevalidatedPosition?.(sell.evaluation.market, sell.position.positionId, sell.decision.reason);
     return event(tick, "position", paper ? "paper_sell" : "sell", paper ? `${sell.decision.reason}_paper_simulated` : sell.decision.reason, { positionId: sell.position.positionId, marketId: sell.evaluation.market.marketId, details: sell.details, positionDecisions, ...result });
   }
 

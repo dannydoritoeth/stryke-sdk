@@ -26,7 +26,9 @@ import {
 } from "@stryketrade/sdk";
 import { createSolanaRpc, isTransactionSigner, type TransactionSigner } from "@solana/kit";
 import { randomUUID } from "node:crypto";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
 import { runReferenceBot } from "./bot.js";
@@ -155,6 +157,34 @@ const runPolymarketLateFixtureSmoke = async () => {
   marketId = "late-round-2";
   const second = await runReferenceBot({ config, adapter: adapter as never, once: true, wait: async () => {} });
   console.log(JSON.stringify({ event: "polymarket_late_fixture_complete", actions: [...first, ...second].map(({ action, reason }) => `${action}:${reason}`) }));
+};
+
+const runPreFeeRevalidationFixtureSmoke = async () => {
+  const directory = await mkdtemp(join(tmpdir(), "stryke-pre-fee-cli-"));
+  try {
+    const path = join(directory, "rounds.json");
+    const config = parseReferenceBotConfig({ strategy: "polymarket_late", polymarketEarlyExitPolicy: "hold_to_expiry", polymarketPreFeeRevalidationEnabled: true, readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+    const now = Math.floor(Date.now() / 1_000);
+    const candidate = { marketId: "pre-fee-round", intervalStartTs: now - 280, expiryTs: now + 20, strikePrice: "100", reference: { alignmentStatus: "aligned" }, pools: { yes: "1", no: "1", stale: false }, activation: { yes: { realPoolCollateralUnits: "1" }, no: { realPoolCollateralUnits: "1" } } } as never;
+    const identity = { marketId: "pre-fee-round", expiryTs: now + 20, strikePrice: "100" };
+    const price = (askBps: number) => ({ tokenId: "token", bidBps: askBps - 100, askBps, spreadBps: 100, observedAtMs: Date.now() });
+    const buyQuote = (side: "yes" | "no"): ExecutableQuote => ({ ...sampleQuote, quoteId: `pre-fee-${side}`, side, amount: "100", grossAmount: "100", economics: { ...sampleQuote.economics, grossAmount: "100", projectedWinningPayout: "200" }, closingProtection: { ...sampleQuote.closingProtection, closingStartsAt: now + 20, hardLockTs: now + 30 } });
+    const held = { positionId: "pre-fee-position", owner: "owner", market: { expiryTs: now + 20, targetValue: "100" }, yesShares: "100", noShares: "0", yesCostBasisCollateralUnits: "100", lifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() }, raw: {} } as PilotPosition;
+    const makeAdapter = (rounds: FileRoundDecisionStore) => ({
+      loadCheckpoint: async () => undefined, reconcilePending: async () => ({ state: "confirmed", clientActionId: "none" }), listPositions: async () => [held],
+      evaluatePosition: async () => ({ market: candidate, estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 20, priceHistory: [] }, sellQuote: buyQuote("yes"), ifWinPayout: "200", dataFresh: true }),
+      evaluateEntry: async () => ({ market: candidate, estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 20, priceHistory: [] }, buyQuotes: [buyQuote("yes"), buyQuote("no")] as const, proposedSizeLamports: config.tradeSizeLamports, aggregateExposureLamports: 100n, openPositions: 1, dataFresh: true, polymarketPrices: { yes: price(3_800), no: price(6_000) } }),
+      evaluatePreFeeRevalidation: async () => ({ buyQuotes: [buyQuote("yes"), buyQuote("no")] as const, polymarketPrices: { yes: price(3_800), no: price(6_000) }, dataFresh: true }),
+      executeBuy: async () => ({ clientActionId: "none" }), executeTerminal: async () => ({ clientActionId: "none" }),
+      executeSell: async () => { await rounds.recordPreFeeRevalidation({ ...identity, positionId: held.positionId }, "polymarket_pre_fee_signal_changed"); return { clientActionId: "pre-fee-sell" }; },
+      hasPreFeeRevalidatedPosition: (_market: unknown, positionId: string) => rounds.hasPreFeeRevalidation({ ...identity, positionId }),
+      recordPreFeeRevalidatedPosition: (_market: unknown, positionId: string, outcome: string) => rounds.recordPreFeeRevalidation({ ...identity, positionId }, outcome),
+      hasEnteredRound: async () => true,
+    });
+    const first = await runReferenceBot({ config, adapter: makeAdapter(new FileRoundDecisionStore(path)) as never, maximumTicks: 2, wait: async () => {} });
+    const restarted = await runReferenceBot({ config, adapter: makeAdapter(new FileRoundDecisionStore(path)) as never, once: true, wait: async () => {} });
+    console.log(JSON.stringify({ event: "pre_fee_revalidation_fixture_complete", actions: [...first, ...restarted].map(({ action, reason }) => `${action}:${reason}`) }));
+  } finally { await rm(directory, { recursive: true, force: true }); }
 };
 
 const runPolymarketBootstrapFixtureSmoke = async () => {
@@ -466,6 +496,7 @@ try {
   if (process.argv.includes("--fixture-polymarket-bootstrap")) await runPolymarketBootstrapFixtureSmoke();
   else if (process.argv.includes("--fixture-polymarket")) await runPolymarketFixtureSmoke();
   else if (process.argv.includes("--fixture-polymarket-late")) await runPolymarketLateFixtureSmoke();
+  else if (process.argv.includes("--fixture-pre-fee-revalidation")) await runPreFeeRevalidationFixtureSmoke();
   else if (process.argv.some((argument) => argument.startsWith("--profile="))) await runSdkBot(selectedProfile());
   else if (process.argv.includes("--live") || process.argv.includes("--live-data")) await runSdkBot(process.argv.includes("--live") ? "live" : "paper");
   else await runFixtureSmoke();

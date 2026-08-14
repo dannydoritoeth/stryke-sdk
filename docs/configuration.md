@@ -44,7 +44,8 @@ transaction work.
 | `STRYKE_POLY_MIN_HOLD_RETURN_BPS` | minimum Polymarket-weighted expected hold return, default `100` |
 | `STRYKE_POLY_MIN_WIN_PROFIT_BPS` | minimum profit if the selected side wins, default `100` |
 | `STRYKE_POLY_BOOTSTRAP_EMPTY_MARKET` | allow a minimum-size first trade when both real pools are exactly empty and the Polymarket edge passes; default `true` |
-| `STRYKE_POLY_EXIT_POLICY` | `hold_to_expiry`, `exit_on_convergence` (default), or `risk_managed`; late always holds |
+| `STRYKE_POLY_PRE_FEE_REVALIDATION_ENABLED` | for the late strategy, re-check the original entry criteria immediately before closing fees begin and sell the full held side if it no longer qualifies; default `false` |
+| `STRYKE_POLY_EXIT_POLICY` | `hold_to_expiry`, `exit_on_convergence` (default), or `risk_managed`; late uses `hold_to_expiry` between entry and its optional pre-fee recheck |
 
 Connection controls are `STRYKE_API_BASE_URL`, `STRYKE_SOLANA_RPC_URL`,
 `STRYKE_WALLET_ADAPTER_PATH`, `STRYKE_CHECKPOINT_PATH`, and
@@ -78,6 +79,15 @@ spot probability—to calculate the executable cost probability, expected hold
 return and win profit. Early may use executable bids for convergence exit.
 Native one-minute and degraded fallback rounds are skipped. The bot never
 places Polymarket orders and this is not an arbitrage guarantee.
+
+When `STRYKE_POLY_PRE_FEE_REVALIDATION_ENABLED=true`, a late-strategy position
+gets one restart-safe recheck during the same bounded window used for late
+entry. The bot requests fresh Stryke buy quotes for both sides at the original
+position size and fresh Polymarket prices, then applies the same entry edge,
+expected-return, and win-profit tests. It holds only when the held side remains
+the qualifying selection; otherwise it attempts to sell the full position
+before closing fees begin. Missing, stale, or ambiguous inputs fail safe by
+holding. The bot never reverses into the opposite side.
 
 The bundled example wallet adapter reads `STRYKE_WALLET_KEYPAIR_PATH`. Point it
 to an absolute path outside the repository for a separately funded trading

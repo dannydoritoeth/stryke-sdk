@@ -29,4 +29,15 @@ describe("restart-safe convergence round state", () => {
       await expect(restarted.hasEntry(next)).resolves.toBe(false);
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
+  it("persists_one_pre_fee_decision_per_position_across_restart", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "stryke-pre-fee-state-"));
+    try {
+      const path = join(directory, "rounds.json");
+      const identity = { marketId: "market-1", expiryTs: 100, strikePrice: "50", positionId: "position-1" };
+      await new FileRoundDecisionStore(path).recordPreFeeRevalidation(identity, "polymarket_pre_fee_signal_confirmed");
+      const restarted = new FileRoundDecisionStore(path);
+      await expect(restarted.hasPreFeeRevalidation(identity)).resolves.toBe(true);
+      await expect(restarted.hasPreFeeRevalidation({ ...identity, positionId: "position-2" })).resolves.toBe(false);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
 });
