@@ -29,6 +29,7 @@ export type ReferenceBotConfig = {
   polymarketMinimumWinProfitBps: number;
   polymarketBootstrapEmptyMarket: boolean;
   polymarketPreFeeRevalidationEnabled: boolean;
+  polymarketPreFeeRevalidationLeadSeconds: number;
   polymarketEarlyExitPolicy: "hold_to_expiry" | "exit_on_convergence" | "risk_managed";
   tradeSizeLamports: bigint;
   maximumTradeSizeLamports: bigint;
@@ -101,6 +102,7 @@ export const referenceBotDefaults: ReferenceBotConfig = {
   polymarketMinimumWinProfitBps: 100,
   polymarketBootstrapEmptyMarket: true,
   polymarketPreFeeRevalidationEnabled: false,
+  polymarketPreFeeRevalidationLeadSeconds: 15,
   polymarketEarlyExitPolicy: "exit_on_convergence",
   readOnlyMode: true,
   liveTradingEnabled: false,
@@ -208,9 +210,14 @@ export const parseReferenceBotConfig = (
   config.polymarketEarlyWindowSeconds = integer(config.polymarketEarlyWindowSeconds, "polymarketEarlyWindowSeconds", 1, 3_600);
   config.polymarketLateWindowSeconds = integer(config.polymarketLateWindowSeconds, "polymarketLateWindowSeconds", 1, 600);
   config.polymarketSubmissionBufferSeconds = integer(config.polymarketSubmissionBufferSeconds, "polymarketSubmissionBufferSeconds", 1, 60);
+  config.polymarketPreFeeRevalidationLeadSeconds = integer(config.polymarketPreFeeRevalidationLeadSeconds, "polymarketPreFeeRevalidationLeadSeconds", 2, 300);
   config.polymarketMinimumHoldReturnBps = integer(config.polymarketMinimumHoldReturnBps, "polymarketMinimumHoldReturnBps", 0, 100_000);
   config.polymarketMinimumWinProfitBps = integer(config.polymarketMinimumWinProfitBps, "polymarketMinimumWinProfitBps", 0, 100_000);
   if (config.polymarketSubmissionBufferSeconds >= config.polymarketLateWindowSeconds) configurationError("polymarketSubmissionBufferSeconds");
+  if (config.polymarketPreFeeRevalidationEnabled && (
+    config.polymarketPreFeeRevalidationLeadSeconds >= config.polymarketLateWindowSeconds
+    || config.polymarketPreFeeRevalidationLeadSeconds <= config.polymarketSubmissionBufferSeconds
+  )) configurationError("polymarketPreFeeRevalidationLeadSeconds");
   if (config.polymarketExitEdgeBps >= config.polymarketEntryEdgeBps) configurationError("polymarketExitEdgeBps");
   if (config.tradeSizeLamports > config.maximumTradeSizeLamports) configurationError("tradeSizeLamports");
   if (config.maximumAggregateExposureLamports < config.maximumTradeSizeLamports) configurationError("maximumAggregateExposureLamports");
@@ -298,6 +305,7 @@ export const parseReferenceBotEnv = (
     polymarketMinimumWinProfitBps: numeric("STRYKE_POLY_MIN_WIN_PROFIT_BPS", referenceBotDefaults.polymarketMinimumWinProfitBps),
     polymarketBootstrapEmptyMarket: booleanEnv(profiledEnv, "STRYKE_POLY_BOOTSTRAP_EMPTY_MARKET", referenceBotDefaults.polymarketBootstrapEmptyMarket),
     polymarketPreFeeRevalidationEnabled: booleanEnv(profiledEnv, "STRYKE_POLY_PRE_FEE_REVALIDATION_ENABLED", referenceBotDefaults.polymarketPreFeeRevalidationEnabled),
+    polymarketPreFeeRevalidationLeadSeconds: numeric("STRYKE_POLY_PRE_FEE_REVALIDATION_LEAD_SECONDS", referenceBotDefaults.polymarketPreFeeRevalidationLeadSeconds),
     polymarketEarlyExitPolicy: (profiledEnv.STRYKE_POLY_EXIT_POLICY ?? referenceBotDefaults.polymarketEarlyExitPolicy) as ReferenceBotConfig["polymarketEarlyExitPolicy"],
     readOnlyMode, liveTradingEnabled, killSwitchEnabled,
     checkpointPath: profiledEnv.STRYKE_CHECKPOINT_PATH ?? referenceBotDefaults.checkpointPath,

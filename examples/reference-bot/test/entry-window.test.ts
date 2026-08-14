@@ -17,4 +17,10 @@ describe("Polymarket strategy entry windows", () => {
     expect(polymarketEntryWindow({ ...input, mode: "polymarket_late", now: 1_799_999_950 }).eligible).toBe(true);
     expect(polymarketEntryWindow({ ...input, mode: "polymarket_late", now: 1_799_999_967 }).reason).toBe("entry_window_closed");
   });
+
+  it("reserves_a_distinct_post_entry_window_when_pre_fee_revalidation_is_enabled", () => {
+    const reserved = { ...input, mode: "polymarket_late" as const, lateEntryCloseLeadSeconds: 10 };
+    expect(polymarketEntryWindow({ ...reserved, now: 1_799_999_950 })).toMatchObject({ eligible: true, closesAt: 1_799_999_960 });
+    expect(polymarketEntryWindow({ ...reserved, now: 1_799_999_960 })).toMatchObject({ eligible: false, reason: "entry_window_closed" });
+  });
 });

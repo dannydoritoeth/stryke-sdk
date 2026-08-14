@@ -261,7 +261,7 @@ export const runMarketTick = async ({
         positionDecisions.push({ positionId: position.positionId, action: "hold", reason: "strategy_holds_to_expiry" });
         continue;
       }
-      const window = preFeeRevalidationWindow({ quote: evaluation.sellQuote, now: nowSeconds, windowSeconds: config.polymarketLateWindowSeconds, submissionBufferSeconds: config.polymarketSubmissionBufferSeconds });
+      const window = preFeeRevalidationWindow({ quote: evaluation.sellQuote, now: nowSeconds, leadSeconds: config.polymarketPreFeeRevalidationLeadSeconds, submissionBufferSeconds: config.polymarketSubmissionBufferSeconds });
       const details = { strategy: config.strategy, opensAt: window.opensAt, closesAt: window.closesAt };
       if (!window.eligible) {
         positionDecisions.push({ positionId: position.positionId, action: "hold", reason: window.reason, details });
@@ -457,6 +457,9 @@ export const runMarketTick = async ({
       earlyWindowSeconds: config.polymarketEarlyWindowSeconds,
       lateWindowSeconds: config.polymarketLateWindowSeconds,
       submissionBufferSeconds: config.polymarketSubmissionBufferSeconds,
+      ...(mode === "polymarket_late" && config.polymarketPreFeeRevalidationEnabled
+        ? { lateEntryCloseLeadSeconds: config.polymarketPreFeeRevalidationLeadSeconds }
+        : {}),
     });
     if (!window.eligible) return event(tick, "entry", "skip", window.reason, { marketId: evaluation.market.marketId, details: { mode, opensAt: window.opensAt, closesAt: window.closesAt, now: nowSeconds } });
     if (!evaluation.polymarketPrices) {

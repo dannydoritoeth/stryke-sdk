@@ -63,6 +63,7 @@ export const configControlInventory = {
   STRYKE_POLY_MIN_WIN_PROFIT_BPS: { consumer: "executable entry win-profit gate", evidence: { file: "examples/reference-bot/test/reference-bot-runtime.test.ts", title: "early_strategy_window_exit_policy_and_return_thresholds_reach_final_consumers" } },
   STRYKE_POLY_BOOTSTRAP_EMPTY_MARKET: { consumer: "exact-empty market first-trade bootstrap", evidence: { file: "examples/reference-bot/test/reference-bot-runtime.test.ts", title: "bootstrap_is_configurable_and_never_applies_after_either_real_pool_is_funded" } },
   STRYKE_POLY_PRE_FEE_REVALIDATION_ENABLED: { consumer: "late-strategy pre-closing-fee revalidation branch", evidence: { file: "examples/reference-bot/test/reference-bot-runtime.test.ts", title: "late_strategy_revalidates_once_before_fees_and_exits_when_the_entry_signal_changed" } },
+  STRYKE_POLY_PRE_FEE_REVALIDATION_LEAD_SECONDS: { consumer: "late entry cutoff and post-entry revalidation opening boundary", evidence: { file: "examples/reference-bot/test/entry-window.test.ts", title: "reserves_a_distinct_post_entry_window_when_pre_fee_revalidation_is_enabled" } },
   STRYKE_POLY_EXIT_POLICY: { consumer: "early position lifecycle policy", evidence: { file: "examples/reference-bot/test/reference-bot-runtime.test.ts", title: "early_strategy_window_exit_policy_and_return_thresholds_reach_final_consumers" } },
   STRYKE_POLYMARKET_CLOB_URL: { consumer: "Polymarket read-only CLOB client endpoint", evidence: configEvidence("wires_polymarket_controls_from_env_and_validates_hysteresis") },
 };

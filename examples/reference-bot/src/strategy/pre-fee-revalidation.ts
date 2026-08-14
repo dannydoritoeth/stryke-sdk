@@ -2,10 +2,10 @@ import type { ExecutableQuote, QuoteSide } from "@stryketrade/sdk";
 import type { PolymarketExecutablePrice } from "../polymarket-client.js";
 import { selectExecutablePolymarketEntry } from "./polymarket-entry.js";
 
-export const preFeeRevalidationWindow = ({ quote, now, windowSeconds, submissionBufferSeconds }: {
-  quote: ExecutableQuote; now: number; windowSeconds: number; submissionBufferSeconds: number;
+export const preFeeRevalidationWindow = ({ quote, now, leadSeconds, submissionBufferSeconds }: {
+  quote: ExecutableQuote; now: number; leadSeconds: number; submissionBufferSeconds: number;
 }) => {
-  const opensAt = quote.closingProtection.closingStartsAt - windowSeconds;
+  const opensAt = quote.closingProtection.closingStartsAt - leadSeconds;
   const closesAt = quote.closingProtection.closingStartsAt - submissionBufferSeconds;
   if (now < opensAt) return { eligible: false, reason: "pre_fee_revalidation_not_open", opensAt, closesAt } as const;
   if (now >= closesAt || quote.closingProtection.phase !== "open") return { eligible: false, reason: "pre_fee_revalidation_window_closed", opensAt, closesAt } as const;
