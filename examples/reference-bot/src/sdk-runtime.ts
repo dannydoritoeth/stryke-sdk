@@ -79,6 +79,9 @@ export const shouldFetchPolymarketEntryPrices = ({
   earlyWindowSeconds: config.polymarketEarlyWindowSeconds,
   lateWindowSeconds: config.polymarketLateWindowSeconds,
   submissionBufferSeconds: config.polymarketSubmissionBufferSeconds,
+  ...(config.strategy === "polymarket_late" && config.polymarketPreFeeRevalidationEnabled
+    ? { lateEntryCloseLeadSeconds: config.polymarketPreFeeRevalidationLeadSeconds }
+    : {}),
 }).eligible;
 
 export const authoritativeActivationFor = (market: PilotMarket, configuredLimit: bigint) => {

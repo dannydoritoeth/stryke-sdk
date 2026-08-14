@@ -41,6 +41,7 @@ transaction work.
 | `STRYKE_POLY_EARLY_WINDOW_SECONDS` | seconds after interval start in which early entry is allowed, default `60` |
 | `STRYKE_POLY_LATE_WINDOW_SECONDS` | seconds before closing-fee onset at which late evaluation begins, default `20` |
 | `STRYKE_POLY_SUBMISSION_BUFFER_SECONDS` | no-entry buffer before closing-fee onset, default `3`; lower than late window |
+| `STRYKE_POLY_PRE_FEE_REVALIDATION_LEAD_SECONDS` | when revalidation is enabled, stop new late entries and begin the one-time fresh hold/exit check this many seconds before closing fees; default `15`, greater than the submission buffer and lower than the late window |
 | `STRYKE_POLY_MIN_HOLD_RETURN_BPS` | minimum Polymarket-weighted expected hold return, default `100` |
 | `STRYKE_POLY_MIN_WIN_PROFIT_BPS` | minimum profit if the selected side wins, default `100` |
 | `STRYKE_POLY_BOOTSTRAP_EMPTY_MARKET` | allow a minimum-size first trade when both real pools are exactly empty and the Polymarket edge passes; default `true` |
@@ -81,13 +82,18 @@ Native one-minute and degraded fallback rounds are skipped. The bot never
 places Polymarket orders and this is not an arbitrage guarantee.
 
 When `STRYKE_POLY_PRE_FEE_REVALIDATION_ENABLED=true`, a late-strategy position
-gets one restart-safe recheck during the same bounded window used for late
-entry. The bot requests fresh Stryke buy quotes for both sides at the original
+stops accepting new entries at the configured revalidation lead, then gets one
+restart-safe recheck before the submission buffer. The bot requests fresh Stryke buy quotes for both sides at the original
 position size and fresh Polymarket prices, then applies the same entry edge,
 expected-return, and win-profit tests. It holds only when the held side remains
 the qualifying selection; otherwise it attempts to sell the full position
 before closing fees begin. Missing, stale, or ambiguous inputs fail safe by
 holding. The bot never reverses into the opposite side.
+
+For a live rollout, set the late entry window wide enough to absorb submission,
+confirmation, indexing, and the recurring tick before the revalidation lead.
+The production canary profile uses a 45-second late window and a 20-second lead;
+the final 3 seconds remain reserved for submission before closing fees.
 
 The bundled example wallet adapter reads `STRYKE_WALLET_KEYPAIR_PATH`. Point it
 to an absolute path outside the repository for a separately funded trading

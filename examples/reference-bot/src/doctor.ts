@@ -74,6 +74,9 @@ export const classifyDoctorEvaluation = ({
       earlyWindowSeconds: config.polymarketEarlyWindowSeconds,
       lateWindowSeconds: config.polymarketLateWindowSeconds,
       submissionBufferSeconds: config.polymarketSubmissionBufferSeconds,
+      ...(config.strategy === "polymarket_late" && config.polymarketPreFeeRevalidationEnabled
+        ? { lateEntryCloseLeadSeconds: config.polymarketPreFeeRevalidationLeadSeconds }
+        : {}),
     });
     if (!window.eligible) {
       return result(profile, "WAITING_FOR_MARKET", window.reason, "Setup and matched quotes are healthy. Keep the process running for the next eligible strategy window.", { ...common, nextEligibleAt: nowSeconds < window.opensAt ? window.opensAt : market.expiryTs });

@@ -15,7 +15,7 @@ const prices = (yes: number, no: number) => ({
 
 describe("pre-closing-fee Polymarket revalidation", () => {
   it("opens_on_the_window_boundary_and_closes_on_the_submission_buffer_boundary", () => {
-    const input = { quote: pricedQuote("yes"), windowSeconds: 20, submissionBufferSeconds: 3 };
+    const input = { quote: pricedQuote("yes"), leadSeconds: 20, submissionBufferSeconds: 3 };
     expect(preFeeRevalidationWindow({ ...input, now: 979 })).toMatchObject({ eligible: false, reason: "pre_fee_revalidation_not_open" });
     expect(preFeeRevalidationWindow({ ...input, now: 980 })).toMatchObject({ eligible: true, reason: "pre_fee_revalidation_window_open" });
     expect(preFeeRevalidationWindow({ ...input, now: 997 })).toMatchObject({ eligible: false, reason: "pre_fee_revalidation_window_closed" });

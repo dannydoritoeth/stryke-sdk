@@ -1035,9 +1035,55 @@ describe("reference bot composed runtime", () => {
       hasPreFeeRevalidatedPosition: async () => completed,
       recordPreFeeRevalidatedPosition: record,
     });
-    await expect(runMarketTick({ tick: 1, config, adapter: runtime, nowSeconds: 979 })).resolves.toMatchObject({ positionDecisions: [{ reason: "pre_fee_revalidation_not_open" }] });
-    await expect(runMarketTick({ tick: 2, config, adapter: runtime, nowSeconds: 980 })).resolves.toMatchObject({ action: "sell", reason: "polymarket_pre_fee_signal_changed" });
+    await expect(runMarketTick({ tick: 1, config, adapter: runtime, nowSeconds: 984 })).resolves.toMatchObject({ positionDecisions: [{ reason: "pre_fee_revalidation_not_open" }] });
+    await expect(runMarketTick({ tick: 2, config, adapter: runtime, nowSeconds: 985 })).resolves.toMatchObject({ action: "sell", reason: "polymarket_pre_fee_signal_changed" });
     expect(runtime.executeSell).toHaveBeenCalledOnce();
+  });
+
+  it("composed_loop_reserves_time_after_confirmation_for_a_real_pre_fee_exit_decision", async () => {
+    const closingStartsAt = 1_000;
+    let nowMs = 970_000;
+    const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+    const config = parseReferenceBotConfig({
+      strategy: "polymarket_late",
+      polymarketEarlyExitPolicy: "hold_to_expiry",
+      polymarketPreFeeRevalidationEnabled: true,
+      polymarketLateWindowSeconds: 45,
+      polymarketPreFeeRevalidationLeadSeconds: 20,
+      polymarketSubmissionBufferSeconds: 3,
+      readOnlyMode: false,
+      liveTradingEnabled: true,
+      killSwitchEnabled: false,
+    });
+    const candidate = { ...market, intervalStartTs: 700, expiryTs: 1_030, reference: { alignmentStatus: "aligned" } } as never;
+    const priced = (["yes", "no"] as const).map((side) => quote({
+      side,
+      grossAmount: "100",
+      economics: { ...quote().economics, grossAmount: "100", projectedWinningPayout: "200" },
+      closingProtection: { ...quote().closingProtection, closingStartsAt, hardLockTs: 1_005 },
+    })) as [ReturnType<typeof quote>, ReturnType<typeof quote>];
+    const externalPrice = (askBps: number) => ({ tokenId: "token", bidBps: askBps - 100, askBps, spreadBps: 100, observedAtMs: nowMs });
+    let entered = false;
+    const runtime = adapter({
+      listPositions: async () => entered ? [position()] : [],
+      evaluateEntry: async () => ({ ...(await adapter().evaluateEntry()), market: candidate, buyQuotes: priced, polymarketPrices: { yes: externalPrice(6_000), no: externalPrice(3_800) } }),
+      executeBuy: vi.fn(async () => { entered = true; return { clientActionId: "buy-1", signature: "buy-signature" }; }),
+      evaluatePosition: async () => ({ ...(await adapter().evaluatePosition(position(), { side: "yes", shares: "100", costBasisCollateralUnits: "100" })), market: candidate, sellQuote: priced[0] }),
+      evaluatePreFeeRevalidation: async () => ({ buyQuotes: priced, polymarketPrices: { yes: externalPrice(3_800), no: externalPrice(6_000) }, dataFresh: true }),
+      hasEnteredRound: async () => false,
+      recordEnteredRound: async () => undefined,
+      hasPreFeeRevalidatedPosition: async () => false,
+    });
+    try {
+      const events = await runReferenceBot({ config, adapter: runtime, maximumTicks: 2, wait: async () => { nowMs += 15_000; } });
+      expect(events.map(({ action, reason }) => [action, reason])).toEqual([
+        ["buy", "polymarket_executable_edge"],
+        ["sell", "polymarket_pre_fee_signal_changed"],
+      ]);
+      expect(runtime.executeSell).toHaveBeenCalledOnce();
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it("late_strategy_holds_and_records_when_the_held_side_still_passes", async () => {
@@ -1046,7 +1092,7 @@ describe("reference bot composed runtime", () => {
     const price = (askBps: number) => ({ tokenId: "token", bidBps: askBps - 100, askBps, spreadBps: 100, observedAtMs: 1 });
     const record = vi.fn(async () => {});
     const runtime = adapter({ listPositions: async () => [position()], evaluatePosition: async () => ({ ...(await adapter().evaluatePosition(position(), { side: "yes", shares: "100", costBasisCollateralUnits: "100" })), sellQuote: quote({ action: "sell", side: "yes", amount: "100", closingProtection: { ...quote().closingProtection, closingStartsAt: 1_000 } }) }), evaluatePreFeeRevalidation: async () => ({ buyQuotes: priced, polymarketPrices: { yes: price(6000), no: price(3800) }, dataFresh: true }), hasPreFeeRevalidatedPosition: async () => false, recordPreFeeRevalidatedPosition: record });
-    await expect(runMarketTick({ tick: 1, config, adapter: runtime, nowSeconds: 980 })).resolves.toMatchObject({ positionDecisions: [{ reason: "polymarket_pre_fee_signal_confirmed" }] });
+    await expect(runMarketTick({ tick: 1, config, adapter: runtime, nowSeconds: 985 })).resolves.toMatchObject({ positionDecisions: [{ reason: "polymarket_pre_fee_signal_confirmed" }] });
     expect(record).toHaveBeenCalledWith(market, "position-1", "polymarket_pre_fee_signal_confirmed");
     expect(runtime.executeSell).not.toHaveBeenCalled();
   });

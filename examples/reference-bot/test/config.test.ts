@@ -34,8 +34,13 @@ describe("reference bot config", () => {
   });
 
   it("parses_the_pre_fee_revalidation_kill_switch", () => {
-    expect(parseReferenceBotEnv({ STRYKE_POLY_PRE_FEE_REVALIDATION_ENABLED: "true" }).polymarketPreFeeRevalidationEnabled).toBe(true);
+    expect(parseReferenceBotEnv({
+      STRYKE_POLY_PRE_FEE_REVALIDATION_ENABLED: "true",
+      STRYKE_POLY_PRE_FEE_REVALIDATION_LEAD_SECONDS: "12",
+    })).toMatchObject({ polymarketPreFeeRevalidationEnabled: true, polymarketPreFeeRevalidationLeadSeconds: 12 });
     expect(() => parseReferenceBotEnv({ STRYKE_POLY_PRE_FEE_REVALIDATION_ENABLED: "yes" })).toThrow("STRYKE_POLY_PRE_FEE_REVALIDATION_ENABLED");
+    expect(() => parseReferenceBotConfig({ polymarketPreFeeRevalidationEnabled: true, polymarketPreFeeRevalidationLeadSeconds: 3 })).toThrow("polymarketPreFeeRevalidationLeadSeconds");
+    expect(() => parseReferenceBotConfig({ polymarketPreFeeRevalidationEnabled: true, polymarketPreFeeRevalidationLeadSeconds: 20 })).toThrow("polymarketPreFeeRevalidationLeadSeconds");
   });
 
   it("kill_switch_overrides_live_enablement", async () => {
