@@ -54,6 +54,13 @@ describe("documented example contract", () => {
     expect(result.stdout.match(/buy:polymarket_executable_edge/g)).toHaveLength(2);
   }, 30_000);
 
+  it("reference_bot_revalidates_once_and_preserves_the_decision_after_cli_restart", async () => {
+    const result = await run("npm", ["run", "test:pre-fee-revalidation-fixture", "-w", "@stryketrade/reference-bot"], { cwd: workspace, encoding: "utf8" });
+    expect(result.stdout).toContain("sell:polymarket_pre_fee_signal_changed");
+    expect(result.stdout.match(/hold:position_not_economically_complete/g)).toHaveLength(2);
+    expect(result.stdout).toContain("pre_fee_revalidation_already_completed");
+  }, 30_000);
+
   it("reference_bot_bootstraps_an_exact_empty_market_through_two_cli_iterations", async () => {
     const result = await run("npm", ["run", "test:polymarket-bootstrap-fixture", "-w", "@stryketrade/reference-bot"], { cwd: workspace, encoding: "utf8" });
     expect(result.stdout).toContain("buy:polymarket_empty_market_bootstrap");

@@ -30,6 +30,12 @@ describe("reference bot config", () => {
   });
   it("defaults_read_only_live_off_and_kill_switch_on", () => {
     expect(referenceBotDefaults).toMatchObject({ readOnlyMode: true, liveTradingEnabled: false, killSwitchEnabled: true });
+    expect(referenceBotDefaults.polymarketPreFeeRevalidationEnabled).toBe(false);
+  });
+
+  it("parses_the_pre_fee_revalidation_kill_switch", () => {
+    expect(parseReferenceBotEnv({ STRYKE_POLY_PRE_FEE_REVALIDATION_ENABLED: "true" }).polymarketPreFeeRevalidationEnabled).toBe(true);
+    expect(() => parseReferenceBotEnv({ STRYKE_POLY_PRE_FEE_REVALIDATION_ENABLED: "yes" })).toThrow("STRYKE_POLY_PRE_FEE_REVALIDATION_ENABLED");
   });
 
   it("kill_switch_overrides_live_enablement", async () => {

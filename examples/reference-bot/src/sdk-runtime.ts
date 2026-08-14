@@ -293,6 +293,9 @@ export const createSdkRuntimeAdapter = ({
         if (materialization.action === "sell" && materialization.strategyReason === "polymarket_convergence" && roundDecisionStore) {
           await roundDecisionStore.recordConvergenceExit({ marketId: materialization.marketId ?? String(matching?.market.tokenMint ?? materialization.targetValue), expiryTs: materialization.expiryTs, strikePrice: materialization.targetValue });
         }
+        if (materialization.action === "sell" && materialization.strategyReason === "polymarket_pre_fee_signal_changed" && materialization.positionId && roundDecisionStore) {
+          await roundDecisionStore.recordPreFeeRevalidation({ marketId: materialization.marketId ?? String(matching?.market.tokenMint ?? materialization.targetValue), expiryTs: materialization.expiryTs, strikePrice: materialization.targetValue, positionId: materialization.positionId }, materialization.strategyReason);
+        }
         await checkpoint.clear(pending.clientActionId);
         return { state: "confirmed", clientActionId: pending.clientActionId, ...(pending.signature ? { signature: pending.signature } : {}) };
       }
@@ -369,11 +372,25 @@ export const createSdkRuntimeAdapter = ({
       const externalPrices = shouldFetchPolymarket ? await polymarketPrices(market) : undefined;
       return { market, estimatorInput: estimatorInput(market), buyQuotes: [yesQuote, noQuote], proposedSizeLamports, minimumTradeLamports, aggregateExposureLamports, openPositions, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}) };
     },
+    evaluatePreFeeRevalidation: async (_position, exposure, market) => {
+      if (!owner) throw new StrykeSdkError("position_state", "Position owner is unavailable");
+      if (!exposure.costBasisCollateralUnits || BigInt(exposure.costBasisCollateralUnits) <= 0n) throw new StrykeSdkError("position_state", "Original position sizing is unavailable");
+      const amount = exposure.costBasisCollateralUnits;
+      const [yesQuote, noQuote, externalPrices] = await Promise.all([
+        quotes.buy({ market, side: "yes", amount, maximumSlippageBps: config.maximumPriceImpactBps }),
+        quotes.buy({ market, side: "no", amount, maximumSlippageBps: config.maximumPriceImpactBps }),
+        polymarketPrices(market),
+      ]);
+      if (!externalPrices) throw new StrykeSdkError("source_unavailable", "Polymarket pricing is unavailable", true);
+      return { buyQuotes: [yesQuote, noQuote], polymarketPrices: externalPrices, dataFresh: !market.stale };
+    },
     executeBuy: (evaluation, quote) => prepareAndExecute(evaluation.market, quote),
     executeSell: (position, exposure, evaluation, reason) => prepareAndExecute(evaluation.market, evaluation.sellQuote, { positionId: position.positionId, sharesBefore: exposure.shares, strategyReason: reason }),
     hasConvergenceExitedRound: (market) => roundDecisionStore?.hasConvergenceExit({ marketId: market.marketId, expiryTs: market.expiryTs, strikePrice: market.strikePrice }) ?? Promise.resolve(false),
     hasEnteredRound: (market) => roundDecisionStore?.hasEntry({ marketId: market.marketId, expiryTs: market.expiryTs, strikePrice: market.strikePrice }) ?? Promise.resolve(false),
     recordEnteredRound: (market) => roundDecisionStore?.recordEntry({ marketId: market.marketId, expiryTs: market.expiryTs, strikePrice: market.strikePrice }) ?? Promise.resolve(),
+    hasPreFeeRevalidatedPosition: (market, positionId) => roundDecisionStore?.hasPreFeeRevalidation({ marketId: market.marketId, expiryTs: market.expiryTs, strikePrice: market.strikePrice, positionId }) ?? Promise.resolve(false),
+    recordPreFeeRevalidatedPosition: (market, positionId, outcome) => roundDecisionStore?.recordPreFeeRevalidation({ marketId: market.marketId, expiryTs: market.expiryTs, strikePrice: market.strikePrice, positionId }, outcome) ?? Promise.resolve(),
     executeTerminal: async (position, action) => {
       const live = requireLive();
       const clientActionId = `pilot-${crypto.randomUUID()}`;

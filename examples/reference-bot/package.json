@@ -1,6 +1,6 @@
 {
   "name": "@stryketrade/reference-bot",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "description": "Runnable reference bot built exclusively on the public Stryke SDK.",
   "repository": {
     "type": "git",
@@ -47,11 +47,12 @@
     "test:polymarket-fixture": "npm run build -w @stryketrade/sdk && npm run build && node dist/cli.js --fixture-polymarket",
     "test:polymarket-bootstrap-fixture": "npm run build -w @stryketrade/sdk && npm run build && node dist/cli.js --fixture-polymarket-bootstrap",
     "test:polymarket-late-fixture": "npm run build -w @stryketrade/sdk && npm run build && node dist/cli.js --fixture-polymarket-late",
+    "test:pre-fee-revalidation-fixture": "npm run build -w @stryketrade/sdk && npm run build && node dist/cli.js --fixture-pre-fee-revalidation",
     "clean": "rm -rf dist"
   },
   "dependencies": {
     "@solana/kit": "^7.0.0",
-    "@stryketrade/sdk": "0.1.22",
+    "@stryketrade/sdk": "0.1.23",
     "pg": "^8.16.3"
   },
   "devDependencies": {

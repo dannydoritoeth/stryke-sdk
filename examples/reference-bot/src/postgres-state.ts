@@ -1,7 +1,7 @@
 import type { ActionCheckpoint, ActionCheckpointStore } from "@stryketrade/sdk";
 import { Pool, type PoolConfig } from "pg";
 
-import { roundKey, type RoundDecisionStore, type RoundIdentity } from "./round-state.js";
+import { roundKey, type PositionRoundIdentity, type RoundDecisionStore, type RoundIdentity } from "./round-state.js";
 import type { RuntimeLease, RuntimeLeaseIdentity, RuntimeLeaseStore } from "./runtime-lease.js";
 import type { ReferenceBotConfig } from "./config.js";
 
@@ -108,6 +108,13 @@ export class PostgresReferenceBotState
   recordConvergenceExit(round: RoundIdentity) { return this.recordRound("exit", round); }
   hasEntry(round: RoundIdentity) { return this.hasRound("entry", round); }
   recordEntry(round: RoundIdentity) { return this.recordRound("entry", round); }
+  async hasPreFeeRevalidation(identity: PositionRoundIdentity) {
+    const result = await this.pool.query("select 1 from stryke_reference_bot_state where namespace = $1 and state_key = $2", [this.namespace, `pre-fee:${roundKey(identity)}:${identity.positionId}`]);
+    return result.rowCount === 1;
+  }
+  async recordPreFeeRevalidation(identity: PositionRoundIdentity, outcome: string) {
+    await this.pool.query(`insert into stryke_reference_bot_state (namespace, state_key, value) values ($1, $2, $3::jsonb) on conflict (namespace, state_key) do nothing`, [this.namespace, `pre-fee:${roundKey(identity)}:${identity.positionId}`, JSON.stringify({ ...identity, outcome })]);
+  }
 
   async acquire(identity: RuntimeLeaseIdentity, holderId: string): Promise<RuntimeLease | undefined> {
     const leaseKey = identityKey(identity);

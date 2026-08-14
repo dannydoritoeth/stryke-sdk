@@ -1021,6 +1021,36 @@ describe("reference bot composed runtime", () => {
     expect(runtime.executeBuy).toHaveBeenCalledTimes(1);
   });
 
+  it("late_strategy_revalidates_once_before_fees_and_exits_when_the_entry_signal_changed", async () => {
+    const closingStartsAt = 1_000;
+    const config = parseReferenceBotConfig({ strategy: "polymarket_late", polymarketEarlyExitPolicy: "hold_to_expiry", polymarketPreFeeRevalidationEnabled: true, polymarketLateWindowSeconds: 20, polymarketSubmissionBufferSeconds: 3, readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+    const buyQuotes = (["yes", "no"] as const).map((side) => quote({ side, grossAmount: "100", economics: { ...quote().economics, grossAmount: "100", projectedWinningPayout: "200" } })) as [ReturnType<typeof quote>, ReturnType<typeof quote>];
+    const price = (askBps: number) => ({ tokenId: "token", bidBps: askBps - 100, askBps, spreadBps: 100, observedAtMs: 1 });
+    let completed = false;
+    const record = vi.fn(async () => { completed = true; });
+    const runtime = adapter({
+      listPositions: async () => [position()],
+      evaluatePosition: async () => ({ ...(await adapter().evaluatePosition(position(), { side: "yes", shares: "100", costBasisCollateralUnits: "100" })), sellQuote: quote({ action: "sell", side: "yes", amount: "100", closingProtection: { ...quote().closingProtection, closingStartsAt, hardLockTs: 1_005 } }) }),
+      evaluatePreFeeRevalidation: async () => ({ buyQuotes, polymarketPrices: { yes: price(3800), no: price(6000) }, dataFresh: true }),
+      hasPreFeeRevalidatedPosition: async () => completed,
+      recordPreFeeRevalidatedPosition: record,
+    });
+    await expect(runMarketTick({ tick: 1, config, adapter: runtime, nowSeconds: 979 })).resolves.toMatchObject({ positionDecisions: [{ reason: "pre_fee_revalidation_not_open" }] });
+    await expect(runMarketTick({ tick: 2, config, adapter: runtime, nowSeconds: 980 })).resolves.toMatchObject({ action: "sell", reason: "polymarket_pre_fee_signal_changed" });
+    expect(runtime.executeSell).toHaveBeenCalledOnce();
+  });
+
+  it("late_strategy_holds_and_records_when_the_held_side_still_passes", async () => {
+    const config = parseReferenceBotConfig({ strategy: "polymarket_late", polymarketEarlyExitPolicy: "hold_to_expiry", polymarketPreFeeRevalidationEnabled: true, polymarketLateWindowSeconds: 20, polymarketSubmissionBufferSeconds: 3, readOnlyMode: false, liveTradingEnabled: true, killSwitchEnabled: false });
+    const priced = (["yes", "no"] as const).map((side) => quote({ side, grossAmount: "100", economics: { ...quote().economics, grossAmount: "100", projectedWinningPayout: "200" } })) as [ReturnType<typeof quote>, ReturnType<typeof quote>];
+    const price = (askBps: number) => ({ tokenId: "token", bidBps: askBps - 100, askBps, spreadBps: 100, observedAtMs: 1 });
+    const record = vi.fn(async () => {});
+    const runtime = adapter({ listPositions: async () => [position()], evaluatePosition: async () => ({ ...(await adapter().evaluatePosition(position(), { side: "yes", shares: "100", costBasisCollateralUnits: "100" })), sellQuote: quote({ action: "sell", side: "yes", amount: "100", closingProtection: { ...quote().closingProtection, closingStartsAt: 1_000 } }) }), evaluatePreFeeRevalidation: async () => ({ buyQuotes: priced, polymarketPrices: { yes: price(6000), no: price(3800) }, dataFresh: true }), hasPreFeeRevalidatedPosition: async () => false, recordPreFeeRevalidatedPosition: record });
+    await expect(runMarketTick({ tick: 1, config, adapter: runtime, nowSeconds: 980 })).resolves.toMatchObject({ positionDecisions: [{ reason: "polymarket_pre_fee_signal_confirmed" }] });
+    expect(record).toHaveBeenCalledWith(market, "position-1", "polymarket_pre_fee_signal_confirmed");
+    expect(runtime.executeSell).not.toHaveBeenCalled();
+  });
+
   it("early_strategy_window_exit_policy_and_return_thresholds_reach_final_consumers", async () => {
     const base = parseReferenceBotConfig({ strategy: "polymarket_early", killSwitchEnabled: false, polymarketEarlyWindowSeconds: 5, polymarketEarlyExitPolicy: "hold_to_expiry", polymarketMinimumHoldReturnBps: 2_001, polymarketMinimumWinProfitBps: 10_001 });
     const start = 1_000;
