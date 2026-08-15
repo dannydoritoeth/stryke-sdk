@@ -261,6 +261,10 @@ export const createSdkRuntimeAdapter = ({
     reconcilePending: async (pending) => {
       if (pending.materialization) {
         const materialization = pending.materialization;
+        if (pending.state === "not_submitted" && !pending.signature) {
+          await checkpoint.clear(pending.clientActionId);
+          return { state: "not_submitted", clientActionId: pending.clientActionId };
+        }
         const portfolio = owner ? await positions.list(owner) : [];
         const matching = portfolio.find((position) =>
           position.asset === materialization.asset &&
@@ -435,11 +439,24 @@ export const createSdkRuntimeAdapter = ({
         state: "not_submitted",
         materialization,
       });
-      if ((await cleanupExecutionAdapter.getBlockHeight()) > prepared.lastValidBlockHeight) {
+      let currentBlockHeight: bigint;
+      try {
+        currentBlockHeight = await cleanupExecutionAdapter.getBlockHeight();
+      } catch {
+        await checkpoint.clear(prepared.clientActionId);
+        throw new StrykeSdkError("source_unavailable", "Cleanup block-height RPC check failed", true);
+      }
+      if (currentBlockHeight > prepared.lastValidBlockHeight) {
         await checkpoint.clear(prepared.clientActionId);
         throw new StrykeSdkError("blockhash_expired", "Prepared cleanup blockhash expired");
       }
-      const simulation = await cleanupExecutionAdapter.simulate(prepared);
+      let simulation: Awaited<ReturnType<typeof cleanupExecutionAdapter.simulate>>;
+      try {
+        simulation = await cleanupExecutionAdapter.simulate(prepared);
+      } catch {
+        await checkpoint.clear(prepared.clientActionId);
+        throw new StrykeSdkError("source_unavailable", "Cleanup simulation RPC request failed", true);
+      }
       if (!simulation.ok) {
         await checkpoint.clear(prepared.clientActionId);
         throw new StrykeSdkError("simulation_failed", simulation.reason);
