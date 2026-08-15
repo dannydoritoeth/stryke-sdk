@@ -1,10 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, referenceBotDefaults, resolveReferenceBotRuntimeBindings } from "../src/config.js";
+import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, referenceBotDefaults, resolveReferenceBotRuntimeBindings, strategyNeedsPyth } from "../src/config.js";
 import { loadWalletForLiveTrading } from "../src/wallet.js";
 import { referenceBotPostgresPoolConfig } from "../src/postgres-state.js";
 
 describe("reference bot config", () => {
+  it("requires_pyth_only_for_baseline_or_paper_composition", () => {
+    expect(strategyNeedsPyth("live", "polymarket_early")).toBe(false);
+    expect(strategyNeedsPyth("live", "polymarket_late")).toBe(false);
+    expect(strategyNeedsPyth("devnet", "polymarket_late")).toBe(false);
+    expect(strategyNeedsPyth("live", "baseline")).toBe(true);
+    expect(strategyNeedsPyth("paper", "polymarket_late")).toBe(true);
+  });
   it("uses_a_conservative_edge_and_bounded_overlapping_positions", () => {
     expect(referenceBotDefaults.estimator).toBe("volatility_adjusted_probability");
     expect(referenceBotDefaults.minimumEntryEdgeBps).toBe(500);

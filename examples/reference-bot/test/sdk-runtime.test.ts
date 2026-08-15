@@ -192,7 +192,7 @@ describe("SDK runtime composition", () => {
       expect.objectContaining({ action: "buy", side: "no", amount: "1234567", maxSlippageBps: 77 }),
     ]);
     const evaluation = await adapter.evaluateEntry();
-    expect(evaluation.estimatorInput.priceHistory).toHaveLength(2);
+    expect(evaluation.estimatorInput?.priceHistory).toHaveLength(2);
     expect(config).toMatchObject({
       estimator: "distance_momentum", minimumEntryEdgeBps: 9_999,
       minimumSecondsToExpiry: 10, maximumOpenPositions: 1,

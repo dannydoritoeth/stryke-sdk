@@ -14,9 +14,9 @@ npx stryke-reference-bot doctor --profile=paper
 npx stryke-reference-bot --profile=paper
 ```
 
-Paper mode uses live production markets, Pyth data, and executable quotes. It
-never loads a wallet or submits a transaction. Stop it with Ctrl-C. For a short
-check, add `--ticks=2`.
+Paper mode uses live production markets and executable quotes, but never loads
+a wallet or submits a transaction. It also consumes Pyth observations to settle
+simulated positions. Stop it with Ctrl-C. For a short check, add `--ticks=2`.
 
 Doctor exits with:
 
@@ -62,6 +62,29 @@ The configured default is checked against the API-authoritative on-chain
 minimum for every market. A first trade may also pay one-time shared market
 initialization costs, so fund more than the quoted trade amount and review the
 doctor's required balance.
+
+## How decisions work
+
+The default `polymarket_early` and optional `polymarket_late` strategies use the
+Stryke API's current market and aligned Polymarket reference identifiers. They
+compare fresh Stryke executable buy quotes with fresh Polymarket executable
+asks, then apply the configured timing, edge, exposure, minimum-size, slippage,
+and fee-free-capacity gates. Live Polymarket strategies do not open a Pyth
+stream and do not use Pyth for entry decisions.
+
+`polymarket_early` may sell when the remaining Polymarket edge converges,
+subject to its exit policy. `polymarket_late` can revalidate shortly before
+closing fees rise: it repeats the same executable Stryke-versus-Polymarket
+economics at the position's original cost basis. It holds only when the best
+qualifying side is still the held side; otherwise it sells. If required data is
+temporarily unavailable, it retries inside the bounded revalidation window and
+holds when that window expires without a safe decision.
+
+The `baseline` strategy is different: its probability model uses fresh Pyth
+price and history, so missing or stale Pyth data correctly blocks that strategy.
+Paper mode also retains Pyth for simulated settlement. Claims, refunds, and
+position-account cleanup never use a private price opinion; they follow the
+API-authored lifecycle and reviewed transaction plan.
 
 ## What is included
 
