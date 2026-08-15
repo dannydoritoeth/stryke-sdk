@@ -264,6 +264,15 @@ export const runMarketTick = async ({
       const window = preFeeRevalidationWindow({ quote: evaluation.sellQuote, now: nowSeconds, leadSeconds: config.polymarketPreFeeRevalidationLeadSeconds, submissionBufferSeconds: config.polymarketSubmissionBufferSeconds });
       const details = { strategy: config.strategy, opensAt: window.opensAt, closesAt: window.closesAt };
       if (!window.eligible) {
+        if (window.reason === "pre_fee_revalidation_window_closed") {
+          if (await adapter.hasPreFeeRevalidatedPosition?.(evaluation.market, position.positionId)) {
+            positionDecisions.push({ positionId: position.positionId, action: "hold", reason: "pre_fee_revalidation_already_completed", details });
+            continue;
+          }
+          await adapter.recordPreFeeRevalidatedPosition?.(evaluation.market, position.positionId, "pre_fee_revalidation_exhausted");
+          positionDecisions.push({ positionId: position.positionId, action: "hold", reason: "pre_fee_revalidation_exhausted", details });
+          continue;
+        }
         positionDecisions.push({ positionId: position.positionId, action: "hold", reason: window.reason, details });
         continue;
       }
@@ -279,12 +288,10 @@ export const runMarketTick = async ({
       let revalidation: PreFeeRevalidationEvaluation;
       try { revalidation = await adapter.evaluatePreFeeRevalidation(position, exposure, evaluation.market); }
       catch {
-        await adapter.recordPreFeeRevalidatedPosition?.(evaluation.market, position.positionId, "source_unavailable");
         positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "pre_fee_revalidation_unavailable", details });
         continue;
       }
       if (!revalidation.dataFresh) {
-        await adapter.recordPreFeeRevalidatedPosition?.(evaluation.market, position.positionId, "stale");
         positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "pre_fee_revalidation_stale", details });
         continue;
       }
