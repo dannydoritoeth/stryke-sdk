@@ -82,13 +82,15 @@ Native one-minute and degraded fallback rounds are skipped. The bot never
 places Polymarket orders and this is not an arbitrage guarantee.
 
 When `STRYKE_POLY_PRE_FEE_REVALIDATION_ENABLED=true`, a late-strategy position
-stops accepting new entries at the configured revalidation lead, then gets one
+stops accepting new entries at the configured revalidation lead, then gets a
 restart-safe recheck before the submission buffer. The bot requests fresh Stryke buy quotes for both sides at the original
 position size and fresh Polymarket prices, then applies the same entry edge,
 expected-return, and win-profit tests. It holds only when the held side remains
 the qualifying selection; otherwise it attempts to sell the full position
-before closing fees begin. Missing, stale, or ambiguous inputs fail safe by
-holding. The bot never reverses into the opposite side.
+before closing fees begin. Transient missing or stale external data remains
+retryable on later ticks while the reserved interval is open. If no fresh
+decision is available by the submission buffer, the bot records the exhausted
+window and fails safe by holding. The bot never reverses into the opposite side.
 
 For a live rollout, set the late entry window wide enough to absorb submission,
 confirmation, indexing, and the recurring tick before the revalidation lead.

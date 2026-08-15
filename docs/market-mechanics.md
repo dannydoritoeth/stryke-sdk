@@ -50,11 +50,13 @@ configured expected-return and win-profit margins. Fees and curve impact are
 therefore included. Missing alignment, prices, timing or payout blocks entry.
 
 When pre-fee revalidation is enabled, late entry closes earlier at the configured
-revalidation lead. The remaining open-fee interval is reserved for exactly one
-fresh evaluation of the original side and position size. A changed signal exits
-the full position; a confirmed signal holds. Missing or stale external data holds
-conservatively and is recorded explicitly. The final submission buffer remains
-reserved before closing fees begin.
+revalidation lead. The remaining open-fee interval is reserved for a fresh
+evaluation of the original side and position size. A changed signal exits the
+full position; a confirmed signal holds. Missing or stale external data is
+retried on later ticks while the interval remains open. If the interval expires
+without fresh evidence, the bot records one exhausted outcome and holds
+conservatively. The final submission buffer remains reserved before closing
+fees begin.
 
 A signature is evidence of submission, not confirmation. Only confirmed,
 refreshed activity and position evidence completes the action.
