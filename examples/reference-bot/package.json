@@ -52,7 +52,7 @@
   },
   "dependencies": {
     "@solana/kit": "^7.0.0",
-    "@stryketrade/sdk": "0.1.27",
+    "@stryketrade/sdk": "0.1.28",
     "pg": "^8.16.3"
   },
   "devDependencies": {
