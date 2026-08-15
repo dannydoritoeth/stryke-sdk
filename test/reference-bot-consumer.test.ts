@@ -16,8 +16,9 @@ describe("external reference-bot consumer", () => {
         schemaVersion: string;
         commit: string;
         packages: Array<{ name: string; file: string; sha512: string; npmIntegrity: string }>;
-        verification: { cleanRoomInstall: string; referenceBotTicks: number; doctorInvocation: string };
+        verification: { cleanRoomInstall: string; referenceBotTicks: number; doctorInvocation: string; runtimeSdkVersion: string };
       };
+      const sdkPackage = JSON.parse(await readFile(join(root, "packages/sdk/package.json"), "utf8")) as { version: string };
       expect(manifest.schemaVersion).toBe("stryke.releaseArtifacts.v1");
       expect(manifest.commit).toMatch(/^[0-9a-f]{40}$/);
       expect(manifest.packages.map(({ name }) => name)).toEqual(["@stryketrade/sdk", "@stryketrade/reference-bot"]);
@@ -26,7 +27,7 @@ describe("external reference-bot consumer", () => {
         expect(entry.npmIntegrity).toMatch(/^sha512-/);
         expect(await readFile(join(output, entry.file))).not.toHaveLength(0);
       }
-      expect(manifest.verification).toEqual({ cleanRoomInstall: "passed", referenceBotTicks: 2, doctorInvocation: "passed" });
+      expect(manifest.verification).toEqual({ cleanRoomInstall: "passed", referenceBotTicks: 2, doctorInvocation: "passed", runtimeSdkVersion: sdkPackage.version });
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

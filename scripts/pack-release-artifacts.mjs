@@ -14,6 +14,8 @@ if (dirty && !allowDirty) {
   throw new Error("Refusing to produce release artifacts from a dirty working tree");
 }
 
+execFileSync("npm", ["run", "build"], { cwd: root, stdio: "pipe" });
+
 const releaseRoot = resolve(root, "artifacts", "release");
 mkdirSync(releaseRoot, { recursive: true });
 const outputDirectory = outputArgument
@@ -57,6 +59,14 @@ try {
   if (!smoke.includes('"event":"stryke_compatibility"') || (smoke.match(/"tick":/g) ?? []).length !== 2) {
     throw new Error("Packed reference bot clean-room smoke did not complete two ticks");
   }
+  const compatibility = smoke
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+    .find((entry) => entry.event === "stryke_compatibility");
+  if (sdk.version !== bot.version || compatibility?.sdkVersion !== sdk.version) {
+    throw new Error(`Packed runtime version mismatch: sdk=${sdk.version} bot=${bot.version} runtime=${compatibility?.sdkVersion ?? "missing"}`);
+  }
   const doctor = spawnSync(resolve(consumerDirectory, "node_modules", ".bin", "stryke-reference-bot"), ["doctor", "--profile=paper"], {
     cwd: consumerDirectory,
     encoding: "utf8",
@@ -85,6 +95,7 @@ try {
       cleanRoomInstall: "passed",
       referenceBotTicks: 2,
       doctorInvocation: "passed",
+      runtimeSdkVersion: compatibility.sdkVersion,
     },
   };
   const manifestPath = resolve(outputDirectory, "manifest.json");
