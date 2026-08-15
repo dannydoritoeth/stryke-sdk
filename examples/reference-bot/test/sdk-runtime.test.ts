@@ -7,6 +7,37 @@ import { authoritativeActivationFor, authoritativeMinimumForEntry, cleanupTransa
 import { quote } from "./fixtures.js";
 
 describe("SDK runtime composition", () => {
+  it("clears a restart checkpoint that was authoritatively never submitted", async () => {
+    const checkpoint = new MemoryActionCheckpointStore();
+    await checkpoint.save({
+      clientActionId: "cleanup-not-submitted",
+      intentHash: "cleanup-intent",
+      state: "not_submitted",
+      materialization: {
+        action: "close",
+        asset: "BTC",
+        expiryFamily: "five_minute",
+        expiryTs: 1_800_000_000,
+        targetValue: "70000",
+        positionId: "position-1",
+        lastValidBlockHeight: "123",
+      },
+    });
+    const runtime = createSdkRuntimeAdapter({
+      client: {} as never,
+      rpc: {} as never,
+      priceStore: new PriceStore(),
+      checkpoint,
+      config: parseReferenceBotConfig({ asset: "BTC", expiryFamily: "five_minute" }),
+      owner: "owner",
+    });
+    await expect(runtime.reconcilePending((await checkpoint.load())!)).resolves.toEqual({
+      state: "not_submitted",
+      clientActionId: "cleanup-not-submitted",
+    });
+    expect(await checkpoint.load()).toBeUndefined();
+  });
+
   it("selects only the cleanup chunk whose authoritative market matches the position", () => {
     const transaction = {
       review: {

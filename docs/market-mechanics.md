@@ -60,6 +60,9 @@ fees begin.
 
 A signature is evidence of submission, not confirmation. Only confirmed,
 refreshed activity and position evidence completes the action.
+If cleanup fails before signing or submission, its no-signature checkpoint is
+cleared and may be retried by the recurring lifecycle. A checkpoint carrying a
+signature remains blocked until confirmation and materialization reconcile.
 
 ## Positions, claims, refunds, and restart
 
