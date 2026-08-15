@@ -45,7 +45,8 @@ export type RuntimeEvent = {
 
 export type PositionEvaluation = {
   market: PilotMarket;
-  estimatorInput: FairProbabilityInput;
+  estimatorInput?: FairProbabilityInput;
+  secondsRemaining?: number;
   sellQuote: ExecutableQuote;
   ifWinPayout: string;
   dataFresh: boolean;
@@ -55,7 +56,8 @@ export type PositionEvaluation = {
 
 export type EntryEvaluation = {
   market: PilotMarket;
-  estimatorInput: FairProbabilityInput;
+  estimatorInput?: FairProbabilityInput;
+  secondsRemaining?: number;
   buyQuotes: readonly [ExecutableQuote, ExecutableQuote];
   proposedSizeLamports: bigint;
   aggregateExposureLamports: bigint;
@@ -101,6 +103,8 @@ const openStates = new Set(["open_position", "sellable"]);
 const isPolymarketStrategy = (config: ReferenceBotConfig) => config.strategy.startsWith("polymarket_");
 const polymarketMode = (config: ReferenceBotConfig): PolymarketTimingMode =>
   config.strategy === "polymarket_late" ? "polymarket_late" : "polymarket_early";
+const evaluationSecondsRemaining = (evaluation: PositionEvaluation | EntryEvaluation, nowSeconds: number): number =>
+  evaluation.secondsRemaining ?? evaluation.estimatorInput?.secondsRemaining ?? evaluation.market.expiryTs - nowSeconds;
 
 const isTradingLockedError = (error: unknown): boolean =>
   error instanceof StrykeSdkError &&
@@ -315,13 +319,16 @@ export const runMarketTick = async ({
         ...(evaluation.polymarketPrices ? { prices: evaluation.polymarketPrices } : {}),
         exitEdgeBps: config.polymarketExitEdgeBps,
       });
-      const details = { strategy: config.strategy, secondsRemaining: evaluation.estimatorInput.secondsRemaining, ...result.diagnostics, ...(result.decision.pnlBps === undefined ? {} : { pnlBps: result.decision.pnlBps.toString() }), ...(result.decision.sellNowValue === undefined ? {} : { sellNowValue: result.decision.sellNowValue.toString() }) };
+      const details = { strategy: config.strategy, secondsRemaining: evaluationSecondsRemaining(evaluation, nowSeconds), ...result.diagnostics, ...(result.decision.pnlBps === undefined ? {} : { pnlBps: result.decision.pnlBps.toString() }), ...(result.decision.sellNowValue === undefined ? {} : { sellNowValue: result.decision.sellNowValue.toString() }) };
       positionDecisions.push({ positionId: position.positionId, action: result.decision.action, reason: result.decision.reason, details });
       if (result.decision.action === "sell") sellCandidates.push({ position, exposure, evaluation, decision: result.decision, details });
       continue;
     }
     let model: { fairProbability: number; diagnostics: Record<string, string | number | boolean> };
-    try { model = modelEvaluation(evaluation.estimatorInput, config); }
+    try {
+      if (!evaluation.estimatorInput) throw new Error("Baseline estimator input is unavailable");
+      model = modelEvaluation(evaluation.estimatorInput, config);
+    }
     catch { positionDecisions.push({ positionId: position.positionId, action: "decision_unavailable", reason: "model_inputs_unavailable" }); continue; }
     const decision: PositionDecision = decidePositionExit({
           side: exposure.side, fairProbability: model.fairProbability, sellQuote: evaluation.sellQuote,
@@ -492,7 +499,7 @@ export const runMarketTick = async ({
         entryWindowOpensAt: window.opensAt, entryWindowClosesAt: window.closesAt,
       };
       if (!bootstrap.passes) return event(tick, "entry", "skip", bootstrap.reason, { marketId: evaluation.market.marketId, details });
-      const nativeSafety = decideBestEntry({ fairProbability: bootstrap.side === "yes" ? 1 : 0, quotes: evaluation.buyQuotes, config: { ...decisionConfig, minimumEntryEdgeBps: 0 }, secondsRemaining: evaluation.estimatorInput.secondsRemaining, tradeSizeLamports: evaluation.proposedSizeLamports, aggregateExposureLamports: evaluation.aggregateExposureLamports, openPositions: evaluation.openPositions, dataFresh: evaluation.dataFresh });
+      const nativeSafety = decideBestEntry({ fairProbability: bootstrap.side === "yes" ? 1 : 0, quotes: evaluation.buyQuotes, config: { ...decisionConfig, minimumEntryEdgeBps: 0 }, secondsRemaining: evaluationSecondsRemaining(evaluation, nowSeconds), tradeSizeLamports: evaluation.proposedSizeLamports, aggregateExposureLamports: evaluation.aggregateExposureLamports, openPositions: evaluation.openPositions, dataFresh: evaluation.dataFresh });
       const failedSafety = Object.entries(nativeSafety.safetyChecks).find(([key, passed]) => !passed && !["edge", "time", "feeFreeOpen"].includes(key));
       if (failedSafety) return event(tick, "entry", "blocked", failedSafety[0], { marketId: evaluation.market.marketId, details });
       if (!paper && (config.readOnlyMode || !config.liveTradingEnabled)) return event(tick, "entry", "dry_run", config.readOnlyMode ? "read_only" : "live_off", { marketId: evaluation.market.marketId, details });
@@ -525,7 +532,7 @@ export const runMarketTick = async ({
       entryWindowOpensAt: window.opensAt, entryWindowClosesAt: window.closesAt,
     };
     if (!relative.passes) return event(tick, "entry", "skip", relative.reason, { marketId: evaluation.market.marketId, details });
-    const nativeSafety = decideBestEntry({ fairProbability: relative.side === "yes" ? 1 : 0, quotes: evaluation.buyQuotes, config: { ...decisionConfig, minimumEntryEdgeBps: 0 }, secondsRemaining: evaluation.estimatorInput.secondsRemaining, tradeSizeLamports: evaluation.proposedSizeLamports, aggregateExposureLamports: evaluation.aggregateExposureLamports, openPositions: evaluation.openPositions, dataFresh: evaluation.dataFresh });
+    const nativeSafety = decideBestEntry({ fairProbability: relative.side === "yes" ? 1 : 0, quotes: evaluation.buyQuotes, config: { ...decisionConfig, minimumEntryEdgeBps: 0 }, secondsRemaining: evaluationSecondsRemaining(evaluation, nowSeconds), tradeSizeLamports: evaluation.proposedSizeLamports, aggregateExposureLamports: evaluation.aggregateExposureLamports, openPositions: evaluation.openPositions, dataFresh: evaluation.dataFresh });
     const failedSafety = Object.entries(nativeSafety.safetyChecks).find(([key, passed]) => !passed && !["edge", "time", "feeFreeOpen"].includes(key));
     if (failedSafety) return event(tick, "entry", "blocked", failedSafety[0], { marketId: evaluation.market.marketId, details });
     if (!paper && (config.readOnlyMode || !config.liveTradingEnabled)) return event(tick, "entry", "dry_run", config.readOnlyMode ? "read_only" : "live_off", { marketId: evaluation.market.marketId, details });
@@ -543,12 +550,15 @@ export const runMarketTick = async ({
     return event(tick, "entry", "skip", "same_round_reentry_blocked", { marketId: evaluation.market.marketId });
   }
   let model: ReturnType<typeof modelEvaluation>;
-  try { model = modelEvaluation(evaluation.estimatorInput, config); }
+  try {
+    if (!evaluation.estimatorInput) throw new Error("Baseline estimator input is unavailable");
+    model = modelEvaluation(evaluation.estimatorInput, config);
+  }
   catch { return event(tick, "entry", "decision_unavailable", "model_inputs_unavailable", { marketId: evaluation.market.marketId }); }
   const fairProbability = model.fairProbability;
   const decision: BestEntryDecision = decideBestEntry({
     fairProbability, quotes: evaluation.buyQuotes, config: decisionConfig,
-    secondsRemaining: evaluation.estimatorInput.secondsRemaining,
+    secondsRemaining: evaluationSecondsRemaining(evaluation, nowSeconds),
     tradeSizeLamports: evaluation.proposedSizeLamports,
     aggregateExposureLamports: evaluation.aggregateExposureLamports,
     openPositions: evaluation.openPositions,

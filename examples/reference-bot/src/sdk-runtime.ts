@@ -329,14 +329,13 @@ export const createSdkRuntimeAdapter = ({
       try { externalPrices = await polymarketPrices(market); }
       catch { polymarketUnavailable = true; }
       if (!owner) throw new StrykeSdkError("position_state", "Position owner is unavailable");
-      return { market, estimatorInput: estimatorInput(market), sellQuote: await quotes.sellAvailable({ market, side: exposure.side, ownedShares: exposure.shares, maximumSlippageBps: config.maximumPriceImpactBps, owner }), ifWinPayout, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}), ...(polymarketUnavailable ? { polymarketUnavailable: true } : {}) };
+      const secondsRemaining = market.expiryTs - Math.floor(now() / 1_000);
+      return { market, secondsRemaining, ...(config.strategy === "baseline" ? { estimatorInput: estimatorInput(market) } : {}), sellQuote: await quotes.sellAvailable({ market, side: exposure.side, ownedShares: exposure.shares, maximumSlippageBps: config.maximumPriceImpactBps, owner }), ifWinPayout, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}), ...(polymarketUnavailable ? { polymarketUnavailable: true } : {}) };
     },
     evaluateEntry: async () => {
-      const market = await markets.current(
-        config.asset,
-        config.expiryFamily,
-        priceStore.current(config.asset).price
-      );
+      const market = config.strategy === "baseline"
+        ? await markets.current(config.asset, config.expiryFamily, priceStore.current(config.asset).price)
+        : await markets.current(config.asset, config.expiryFamily);
       const minimumTradeLamports = authoritativeMinimumForEntry(market, config.tradeSizeLamports);
       const portfolio = owner ? await positions.list(owner) : [];
       const activePortfolio = portfolio.filter((position) =>
@@ -377,7 +376,8 @@ export const createSdkRuntimeAdapter = ({
         nowSeconds: Math.floor(now() / 1_000),
       });
       const externalPrices = shouldFetchPolymarket ? await polymarketPrices(market) : undefined;
-      return { market, estimatorInput: estimatorInput(market), buyQuotes: [yesQuote, noQuote], proposedSizeLamports, minimumTradeLamports, aggregateExposureLamports, openPositions, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}) };
+      const secondsRemaining = market.expiryTs - Math.floor(now() / 1_000);
+      return { market, secondsRemaining, ...(config.strategy === "baseline" ? { estimatorInput: estimatorInput(market) } : {}), buyQuotes: [yesQuote, noQuote], proposedSizeLamports, minimumTradeLamports, aggregateExposureLamports, openPositions, dataFresh: !market.stale, ...(externalPrices ? { polymarketPrices: externalPrices } : {}) };
     },
     evaluatePreFeeRevalidation: async (_position, exposure, market) => {
       if (!owner) throw new StrykeSdkError("position_state", "Position owner is unavailable");

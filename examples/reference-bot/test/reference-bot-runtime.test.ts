@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ActionCheckpoint, PilotPosition } from "@stryketrade/sdk";
-import { StrykeSdkError } from "@stryketrade/sdk";
+import { PYTH_FEED_IDS, PriceStore, StrykeSdkError } from "@stryketrade/sdk";
 
 import { runMarketTick, runReferenceBot, type ReferenceBotRuntimeAdapter } from "../src/bot.js";
 import { parseReferenceBotConfig } from "../src/config.js";
@@ -36,6 +36,52 @@ const adapter = (overrides: Partial<ReferenceBotRuntimeAdapter> = {}): Reference
 });
 
 describe("reference bot composed runtime", () => {
+  it("reproduces_the_production_signature_when_the_private_pyth_stream_becomes_unavailable", async () => {
+    const now = 1_800_000_000_000;
+    const prices = new PriceStore({ now: () => now });
+    prices.ingest("BTC", {
+      parsed: [{
+        id: PYTH_FEED_IDS.BTC.slice(2),
+        price: { price: "7000000000000", expo: -8, publish_time: now / 1_000 },
+      }],
+    });
+    let downstreamEvaluations = 0;
+    const runtime = adapter({
+      evaluateEntry: vi.fn(async () => {
+        prices.current("BTC");
+        downstreamEvaluations += 1;
+        return {
+          market,
+          estimatorInput: { currentPrice: 70_000, strikePrice: 70_000, secondsRemaining: 120, priceHistory: prices.history("BTC") },
+          buyQuotes: [quote({ side: "yes" }), quote({ side: "no" })],
+          proposedSizeLamports: live.tradeSizeLamports,
+          aggregateExposureLamports: 0n,
+          openPositions: 0,
+          dataFresh: true,
+        };
+      }),
+    });
+    let waits = 0;
+
+    const events = await runReferenceBot({
+      config: live,
+      adapter: runtime,
+      maximumTicks: 3,
+      wait: async () => {
+        waits += 1;
+        if (waits === 1) prices.unavailable("BTC");
+      },
+    });
+
+    expect(events.map(({ reason }) => reason)).toEqual([
+      "model_inputs_unavailable",
+      "retryable_source_unavailable",
+      "retryable_source_unavailable",
+    ]);
+    expect(downstreamEvaluations).toBe(1);
+    expect(prices.sourceState("BTC")).toBe("unavailable");
+  });
+
   it("reconciles lifecycle before blocking an underfunded new entry", async () => {
     const executeCleanup = vi.fn(async () => ({ clientActionId: "cleanup-1" }));
     const cleanupPosition = position("expired_unclaimed", {

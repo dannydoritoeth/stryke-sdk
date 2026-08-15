@@ -32,7 +32,7 @@ import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
 import { runReferenceBot } from "./bot.js";
-import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, resolveReferenceBotRuntimeBindings, type ReferenceBotProfile } from "./config.js";
+import { parseReferenceBotConfig, parseReferenceBotEnv, publicConfig, resolveReferenceBotRuntimeBindings, strategyNeedsPyth, type ReferenceBotProfile } from "./config.js";
 import { emitPreflight, requireRootEnvFile, requiredExecutionBalance, runContinuousMarketPreflight, runPreflightCheck } from "./preflight.js";
 import { createSdkRuntimeAdapter } from "./sdk-runtime.js";
 import { loadWalletForLiveTrading } from "./wallet.js";
@@ -117,8 +117,8 @@ const runPolymarketFixtureSmoke = async () => {
     loadCheckpoint: async () => undefined,
     reconcilePending: async () => ({ state: "confirmed", clientActionId: "none" }),
     listPositions: async () => { step += 1; return step === 1 || step >= 4 ? [] : [position]; },
-    evaluatePosition: async () => ({ market: market(), estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 120, priceHistory: [] }, sellQuote, ifWinPayout: "200", dataFresh: true, polymarketPrices: step === 2 ? { yes: price(6000, 6200), no: price(3500, 3800) } : { yes: price(4200, 4400), no: price(3500, 3800) } }),
-    evaluateEntry: async () => ({ market: market(), estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 120, priceHistory: [] }, buyQuotes: [buyQuote("yes", 4000), buyQuote("no", 6000)] as const, proposedSizeLamports: config.tradeSizeLamports, aggregateExposureLamports: 0n, openPositions: 0, dataFresh: true, polymarketPrices: { yes: price(5700, 6000), no: price(3500, 3800) } }),
+    evaluatePosition: async () => ({ market: market(), secondsRemaining: 120, sellQuote, ifWinPayout: "200", dataFresh: true, polymarketPrices: step === 2 ? { yes: price(6000, 6200), no: price(3500, 3800) } : { yes: price(4200, 4400), no: price(3500, 3800) } }),
+    evaluateEntry: async () => ({ market: market(), secondsRemaining: 120, buyQuotes: [buyQuote("yes", 4000), buyQuote("no", 6000)] as const, proposedSizeLamports: config.tradeSizeLamports, aggregateExposureLamports: 0n, openPositions: 0, dataFresh: true, polymarketPrices: { yes: price(5700, 6000), no: price(3500, 3800) } }),
     executeBuy: async () => ({ clientActionId: `buy-${marketId}` }),
     executeSell: async () => { await rounds.recordConvergenceExit(market()); return { clientActionId: "sell-poly-round-1" }; },
     executeTerminal: async () => ({ clientActionId: "none" }),
@@ -147,8 +147,8 @@ const runPolymarketLateFixtureSmoke = async () => {
     loadCheckpoint: async () => undefined,
     reconcilePending: async () => ({ state: "confirmed", clientActionId: "none" }),
     listPositions: async () => { step += 1; return step === 1 || step >= 4 ? [] : [step === 3 ? terminal : open]; },
-    evaluatePosition: async () => ({ market: market(), estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 10, priceHistory: [] }, sellQuote: buyQuote("yes"), ifWinPayout: "200", dataFresh: true, polymarketPrices: { yes: price(6000), no: price(3800) } }),
-    evaluateEntry: async () => ({ market: market(), estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 30, priceHistory: [] }, buyQuotes: [buyQuote("yes"), buyQuote("no")] as const, proposedSizeLamports: config.tradeSizeLamports, aggregateExposureLamports: 0n, openPositions: 0, dataFresh: true, polymarketPrices: { yes: price(6000), no: price(3800) } }),
+    evaluatePosition: async () => ({ market: market(), secondsRemaining: 10, sellQuote: buyQuote("yes"), ifWinPayout: "200", dataFresh: true, polymarketPrices: { yes: price(6000), no: price(3800) } }),
+    evaluateEntry: async () => ({ market: market(), secondsRemaining: 30, buyQuotes: [buyQuote("yes"), buyQuote("no")] as const, proposedSizeLamports: config.tradeSizeLamports, aggregateExposureLamports: 0n, openPositions: 0, dataFresh: true, polymarketPrices: { yes: price(6000), no: price(3800) } }),
     executeBuy: async () => ({ clientActionId: `buy-${marketId}` }), executeSell: async () => ({ clientActionId: "unexpected-sell" }), executeTerminal: async () => ({ clientActionId: "claim-late-round-1" }),
     hasEnteredRound: (candidate: Parameters<MemoryRoundDecisionStore["hasEntry"]>[0]) => rounds.hasEntry(candidate),
     recordEnteredRound: (candidate: Parameters<MemoryRoundDecisionStore["recordEntry"]>[0]) => rounds.recordEntry(candidate),
@@ -172,8 +172,8 @@ const runPreFeeRevalidationFixtureSmoke = async () => {
     const held = { positionId: "pre-fee-position", owner: "owner", market: { expiryTs: now + 20, targetValue: "100" }, yesShares: "100", noShares: "0", yesCostBasisCollateralUnits: "100", lifecycle: { schemaVersion: "stryke.pilotLifecycle.v1", state: "sellable", rawStatus: "active", rawReason: "position_sellable", observedAt: new Date().toISOString() }, raw: {} } as PilotPosition;
     const makeAdapter = (rounds: FileRoundDecisionStore) => ({
       loadCheckpoint: async () => undefined, reconcilePending: async () => ({ state: "confirmed", clientActionId: "none" }), listPositions: async () => [held],
-      evaluatePosition: async () => ({ market: candidate, estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 20, priceHistory: [] }, sellQuote: buyQuote("yes"), ifWinPayout: "200", dataFresh: true }),
-      evaluateEntry: async () => ({ market: candidate, estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 20, priceHistory: [] }, buyQuotes: [buyQuote("yes"), buyQuote("no")] as const, proposedSizeLamports: config.tradeSizeLamports, aggregateExposureLamports: 100n, openPositions: 1, dataFresh: true, polymarketPrices: { yes: price(3_800), no: price(6_000) } }),
+      evaluatePosition: async () => ({ market: candidate, secondsRemaining: 20, sellQuote: buyQuote("yes"), ifWinPayout: "200", dataFresh: true }),
+      evaluateEntry: async () => ({ market: candidate, secondsRemaining: 20, buyQuotes: [buyQuote("yes"), buyQuote("no")] as const, proposedSizeLamports: config.tradeSizeLamports, aggregateExposureLamports: 100n, openPositions: 1, dataFresh: true, polymarketPrices: { yes: price(3_800), no: price(6_000) } }),
       evaluatePreFeeRevalidation: async () => ({ buyQuotes: [buyQuote("yes"), buyQuote("no")] as const, polymarketPrices: { yes: price(3_800), no: price(6_000) }, dataFresh: true }),
       executeBuy: async () => ({ clientActionId: "none" }), executeTerminal: async () => ({ clientActionId: "none" }),
       executeSell: async () => { await rounds.recordPreFeeRevalidation({ ...identity, positionId: held.positionId }, "polymarket_pre_fee_signal_changed"); return { clientActionId: "pre-fee-sell" }; },
@@ -197,7 +197,7 @@ const runPolymarketBootstrapFixtureSmoke = async () => {
   const adapter = {
     loadCheckpoint: async () => undefined, reconcilePending: async () => ({ state: "confirmed", clientActionId: "none" }), listPositions: async () => [],
     evaluatePosition: async () => { throw new StrykeSdkError("configuration", "fixture has no position"); },
-    evaluateEntry: async () => ({ market, estimatorInput: { currentPrice: 100, strikePrice: 100, secondsRemaining: 280, priceHistory: [] }, buyQuotes: [buyQuote("yes"), buyQuote("no")] as const, proposedSizeLamports: config.tradeSizeLamports, aggregateExposureLamports: 0n, openPositions: 0, dataFresh: true, polymarketPrices: { yes: price(6_000), no: price(3_800) } }),
+    evaluateEntry: async () => ({ market, secondsRemaining: 280, buyQuotes: [buyQuote("yes"), buyQuote("no")] as const, proposedSizeLamports: config.tradeSizeLamports, aggregateExposureLamports: 0n, openPositions: 0, dataFresh: true, polymarketPrices: { yes: price(6_000), no: price(3_800) } }),
     executeBuy: async () => ({ clientActionId: "bootstrap-buy" }), executeSell: async () => ({ clientActionId: "none" }), executeTerminal: async () => ({ clientActionId: "none" }),
     hasEnteredRound: (candidate: Parameters<MemoryRoundDecisionStore["hasEntry"]>[0]) => rounds.hasEntry(candidate), recordEnteredRound: (candidate: Parameters<MemoryRoundDecisionStore["recordEntry"]>[0]) => rounds.recordEntry(candidate),
   };
@@ -287,26 +287,32 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
   const priceStore = new PriceStore({ maximumHistoryPoints: config.priceHistoryMaxPoints, historyWindowMs: (lookbackSeconds + 60) * 1_000 });
   const pythEndpoint = bindings.pythHermesUrl;
   const pythRemediation = "Check STRYKE_PYTH_HERMES_URL and network access, then retry; do not substitute another price source.";
-  const subscription = await runPreflightCheck(
-    profile,
-    "pyth",
-    `Connected to Pyth for ${config.asset}.`,
-    pythRemediation,
-    () => subscribeHermes({ endpoint: pythEndpoint, assets: [config.asset], store: priceStore })
-  );
+  const needsPyth = strategyNeedsPyth(profile, config.strategy);
+  const subscription = needsPyth
+    ? await runPreflightCheck(
+        profile,
+        "pyth",
+        `Connected to Pyth for ${config.asset}.`,
+        pythRemediation,
+        () => subscribeHermes({ endpoint: pythEndpoint, assets: [config.asset], store: priceStore })
+      )
+    : undefined;
+  if (!needsPyth) emitPreflight(profile, "pyth", "skipped", "Live Polymarket strategies use API market/reference state, Stryke quotes, and Polymarket executable books; Pyth is not a trading input.");
   try {
-    emitPreflight(profile, "pyth", "checking", `Waiting for two fresh ordered ${config.asset} Pyth prices.`);
-    try {
-      await waitForPriceHistory(priceStore, config.asset);
-      emitPreflight(profile, "pyth", "passed", `Received two fresh ordered ${config.asset} Pyth prices.`);
-      if (config.estimator === "volatility_adjusted_probability") {
-        emitPreflight(profile, "pyth_history", "checking", `Loading ${lookbackSeconds}s of timestamped ${config.asset} Pyth history.`);
-        await seedHermesHistory({ endpoint: pythEndpoint, asset: config.asset, store: priceStore, lookbackSeconds });
-        emitPreflight(profile, "pyth_history", "passed", `Loaded timestamped ${config.asset} Pyth history for the configured volatility window.`);
+    if (needsPyth) {
+      emitPreflight(profile, "pyth", "checking", `Waiting for two fresh ordered ${config.asset} Pyth prices.`);
+      try {
+        await waitForPriceHistory(priceStore, config.asset);
+        emitPreflight(profile, "pyth", "passed", `Received two fresh ordered ${config.asset} Pyth prices.`);
+        if (config.estimator === "volatility_adjusted_probability") {
+          emitPreflight(profile, "pyth_history", "checking", `Loading ${lookbackSeconds}s of timestamped ${config.asset} Pyth history.`);
+          await seedHermesHistory({ endpoint: pythEndpoint, asset: config.asset, store: priceStore, lookbackSeconds });
+          emitPreflight(profile, "pyth_history", "passed", `Loaded timestamped ${config.asset} Pyth history for the configured volatility window.`);
+        }
+      } catch (error) {
+        emitPreflight(profile, "pyth", "failed", error instanceof Error ? error.message : "Pyth startup failed", pythRemediation);
+        throw error;
       }
-    } catch (error) {
-      emitPreflight(profile, "pyth", "failed", error instanceof Error ? error.message : "Pyth startup failed", pythRemediation);
-      throw error;
     }
     const signer = profile !== "paper"
       ? await runPreflightCheck(profile, "wallet", "Loaded the configured wallet adapter.", "Check STRYKE_WALLET_ADAPTER_PATH and STRYKE_WALLET_KEYPAIR_PATH; follow docs/quickstart.md to configure the wallet.", () => loadSigner(config, bindings.walletAdapterPath))
@@ -489,7 +495,7 @@ const runSdkBot = async (profile: ReferenceBotProfile) => {
     } finally {
       if (postgresState) await postgresState.close();
     }
-  } finally { subscription.close(); }
+  } finally { subscription?.close(); }
 };
 
 try {

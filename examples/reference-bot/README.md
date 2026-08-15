@@ -14,10 +14,11 @@ npx stryke-reference-bot doctor --profile=paper
 npx stryke-reference-bot --profile=paper
 ```
 
-Paper mode uses production markets, Pyth prices, and executable quotes. It
-never loads a wallet or submits a transaction. Simulated positions are stored
-locally and resumed after restart. Add `--ticks=2` for a short check; otherwise
-the bot runs until Ctrl-C.
+Paper mode uses production markets and executable quotes. It never loads a
+wallet or submits a transaction. It consumes Pyth observations only where the
+selected baseline model or simulated settlement needs them. Simulated
+positions are stored locally and resumed after restart. Add `--ticks=2` for a
+short check; otherwise the bot runs until Ctrl-C.
 
 Doctor exits `0` for ready, `2` for healthy market waiting, and `1` for a
 blocked setup. Follow the printed remediation for the first failed check. No
@@ -52,13 +53,38 @@ npx stryke-reference-bot --profile=live
 
 No `.env` or additional live-enable variable is required for this default path;
 `--profile=live` applies the signed mainnet profile. Doctor validates the API,
-market, Pyth data, wallet, mainnet RPC, and required balance without signing.
-It prints the exact funding remediation when the wallet is short.
+market, strategy-required data, wallet, mainnet RPC, and required balance
+without signing. For a live Polymarket strategy, the Pyth check is explicitly
+`skipped`; for `baseline` and paper settlement it is required. Doctor prints
+the exact funding remediation when the wallet is short.
 
 Live inherits paper's market, strategy, minimum-size, exposure, and safety
 defaults. The trade size is checked against the API-authoritative minimum for
 each market. Keep additional SOL for transaction fees, position-account rent,
 and possible first-trader shared market initialization.
+
+## Strategy inputs and decisions
+
+For `polymarket_early` and `polymarket_late`, entry uses:
+
+- the current API-authored market and aligned Polymarket token identifiers;
+- fresh Stryke executable YES/NO buy quotes;
+- fresh Polymarket executable YES/NO asks; and
+- timing, edge, size, exposure, slippage, and fee-free-capacity controls.
+
+Those live strategies neither subscribe to Hermes nor read the local Pyth
+store. `polymarket_early` can sell when its configured convergence policy says
+the remaining edge is too small. With pre-fee revalidation enabled,
+`polymarket_late` reruns ordinary executable entry economics near the end of
+the trading window using the original position cost basis. It holds only if
+the held side remains the best qualifying side; otherwise it sells before fees
+rise. Unavailable inputs are retried only within the bounded window and never
+replaced with invented values.
+
+`baseline` uses fresh Pyth current price and bounded history for its probability
+model and fails closed without them. Paper mode retains Pyth observations for
+simulated settlement. After trading closes, all strategies follow the API's
+authoritative lifecycle for settlement, claim/refund, and safe cleanup.
 
 ## Continuous lifecycle
 

@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 import type { ReferenceEstimator } from "./strategy.js";
 
 export type ReferenceStrategy = "baseline" | "polymarket_early" | "polymarket_late";
+export const strategyNeedsPyth = (profile: ReferenceBotProfile, strategy: ReferenceStrategy): boolean =>
+  strategy === "baseline" || profile === "paper";
 
 export type ReferenceBotConfig = {
   profile: ReferenceBotProfile;

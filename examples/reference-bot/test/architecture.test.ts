@@ -20,4 +20,11 @@ describe("reference bot architecture", () => {
       "node dist/cli.js --profile=live"
     );
   });
+
+  it("conditionally_composes_hermes_in_the_real_cli", () => {
+    const source = readFileSync(new URL("../src/cli.ts", import.meta.url), "utf8");
+    expect(source).toContain("strategyNeedsPyth(profile, config.strategy)");
+    expect(source).toMatch(/needsPyth\s*\?\s*await runPreflightCheck/);
+    expect(source).toContain("subscription?.close()");
+  });
 });
